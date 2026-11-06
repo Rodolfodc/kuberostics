@@ -24,3 +24,4 @@ O uso do Spec Kit é opcional.
 |---|---|
 | 000-sistema | rascunho para revisão |
 | 001-esqueleto | rascunho para revisão |
+| 009a-externalizacao | rascunho para revisão |

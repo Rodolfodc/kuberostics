@@ -35,7 +35,7 @@ câmera RGB-D e bumper. O sistema cumpre os seis módulos do enunciado da discip
 | 006-agenda | Agenda manual e autônoma | 4 |
 | 007-interface | Mapa, edição de cômodos, notificações | 6 |
 | 008-fuga-rl | Ambiente Gymnasium, treino, validação, troca de implementação | 5 (inovação) |
-| 009a-fogros | Descarregamento do nó YOLO para o K3s com FogROS2 portado para Jazzy e Lyrical, com fallback local | inovação (sugestão do professor) |
+| 009a-externalizacao | Externalização do detector YOLO para o K3s, com circuit breaker e fallback local (arquitetura de referência: FogROS2) | 3 + inovação (sugestão do professor) |
 | 009b-nuvem | Ponte MQTT, K3s, ciclo de retreino | inovação |
 | 010-agente-llm | Reclamação em especificação de armadilha | opcional |
 
@@ -81,6 +81,8 @@ A lista completa, legível por máquina, está em `contracts/topics.yaml`.
 | D-12 | O sistema roda em Jazzy e em Lyrical. Cada distribuição tem seu contêiner (`docker/jazzy`, `docker/lyrical`) e a CI roda as duas. | Constituição, Art. X. Todas as dependências de terceiros já têm release nas duas: `navigation2` (1.3.14 / 1.5.3), `slam_toolbox` (2.8.5 / 2.10.0), `twist_mux` (4.5.0 / 4.5.1), `teleop_twist_keyboard`, `rmw_cyclonedds`, `rmw_zenoh` e `vision_msgs`. Fonte: `ros/rosdistro`, 05/11/2026. |
 | D-13 | O contrato de movimento é `geometry_msgs/Twist` sem carimbo de tempo, como a base do Luciano espera. Ficam explícitos `use_stamped: false` no `twist_mux` e `enable_stamped_cmd_vel: false` em todo nó do Nav2 que publique velocidade. | O `twist_mux` 4.5 usa `use_stamped = true` por padrão nas duas distribuições. O Nav2 usa `enable_stamped_cmd_vel = false` no Jazzy e `true` no Lyrical. Confiar no padrão quebraria a base num caso e o Nav2 no outro. Fecha a Q-02. |
 | D-14 | O CoppeliaSim conversa com o ROS apenas pela ZeroMQ Remote API (nós Python da ponte). O plugin simROS2 não é usado. | A ponte por ZeroMQ não depende da distribuição ROS. O simROS2 precisaria ser compilado para cada distribuição e cada versão do CoppeliaSim. O simulador roda no hospedeiro e os contêineres ROS o acessam pela rede. |
+| D-15 | A externalização de nós para a nuvem é feita com Kubernetes nativo (K3s): uma imagem por distribuição, um Deployment e um seletor no robô. O FogROS2 (Ichnowski et al., ICRA 2023) e o KubeROS (Zhang, Wurll e Hein, ICRA 2023) entram como arquitetura de referência; nenhum dos dois é usado como dependência. | O FogROS2 só tem versão para Humble, cria Pods avulsos privilegiados sem reinício e instala o ROS por SSH a cada execução. Portá-lo para Jazzy e Lyrical custaria de 4 a 7 dias. O porte completo fica como trabalho futuro, de preferência como contribuição ao repositório original. |
+| D-16 | A detecção é dividida em dois nós: o `detector` (YOLO: imagem RGB → `vision_msgs/Detection2DArray` no referencial da câmera, copiando o `header` da imagem) e o `projector` (sempre no robô: detecção 2D + profundidade + TF no carimbo da foto → posição 3D no mapa). | Só a imagem RGB comprimida sobe para a nuvem; a profundidade e o TF ficam no robô. O `header` copiado é o eco do carimbo. O `projector` consulta o TF no instante da foto e mantém a saída `/detections_markers` que o nó semântico do 2025S2 consome, que segue inalterado. |
 
 ## 6. Questões em aberto
 
@@ -91,5 +93,12 @@ A lista completa, legível por máquina, está em `contracts/topics.yaml`.
   (rclpy 10, Python 3.14). Se não rodar, a correção entra como sobreposição no nosso repositório, nunca como edição do código dele.
 - Q-05: dependências pip na versão 3.14 do Python, usadas no Lyrical: `torch`, `ultralytics` e `stable-baselines3`.
   Se alguma não tiver wheel, o treino de RL roda num ambiente Python separado do ROS, e só a inferência entra no nó.
+- Q-06: transporte robô ↔ nuvem. Duas opções:
+  - (a) `rmw_zenoh` no grafo inteiro, com o roteador do robô ligado ao roteador do cluster (0.2.13 no Jazzy, 0.10.8 no Lyrical);
+  - (b) `zenoh-bridge-ros2dds` (1.9.0), mantendo o grafo local em DDS com CycloneDDS e uma lista explícita (*allow-list*) de tópicos que sobem.
+
+  Nenhuma das duas implementa os eventos de QoS de *Deadline* e *Liveliness* do jeito que precisamos. Por isso a spec 009a implementa idade, heartbeat e limiares na aplicação, independentemente do transporte.
+  Decidir após medir as duas na semana 3.
+- Q-07 (futuro): protocolo de comunicação robô ↔ nuvem, ou seja, formato, versionamento, autenticação e a política de quando sobe o quê. Fica fora do prazo da disciplina. A spec 009a define só o mínimo necessário.
 - Q-03: odometria. O 2025S2 usa `/myrobot/odom` (verdade do simulador) e rf2o (odometria por laser).
   Definir na spec 003 qual alimenta o SLAM.

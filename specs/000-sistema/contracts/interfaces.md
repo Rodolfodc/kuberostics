@@ -45,6 +45,21 @@ string code        # identificador estável, ex.: ESCAPE_FAILED
 string text        # mensagem para o usuário
 ```
 
+## msg/OffloadStatus.msg (spec 009a)
+
+```
+uint8 CLOSED=0      # usando o detector da nuvem
+uint8 OPEN=1        # usando o detector local
+uint8 HALF_OPEN=2   # usando o local enquanto a nuvem prova estabilidade
+
+builtin_interfaces/Time stamp
+uint8 state
+float32 last_cloud_age_s       # idade da última resposta da nuvem, no relógio do robô
+uint32 dropped_stale           # respostas descartadas por idade
+uint32 dropped_watermark       # descartadas por carimbo já coberto (duplicata ou fora de ordem)
+uint32 dropped_tf              # descartadas pelo projector por falta de TF no carimbo
+```
+
 ## action/Escape.action
 
 ```

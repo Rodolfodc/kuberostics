@@ -81,6 +81,14 @@ topics:
   - {name: /myRobot/mux/docking,  type: geometry_msgs/msg/Twist, qos: luciano, owner: autodocking_server, priority: 40,  since: "001"}
   - {name: /myRobot/legacy/cleaning_cmd_vel, type: geometry_msgs/msg/Twist, qos: luciano, owner: cleaning_server, sink: true, since: "001", note: "D-04: ninguém assina"}
 
+  # ---- externalização do detector (spec 009a) ----
+  - {name: /myRobot/perception/rgb_throttled/compressed, type: sensor_msgs/msg/CompressedImage, qos: sensor, owner: image_throttle, since: "009a", note: "só RGB, comprimida, 2 Hz; a profundidade não sai do robô"}
+  - {name: /myRobot/perception/detections/cloud, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detector_cloud, since: "009a", note: "header = header da imagem (eco do carimbo); publica array vazio quando não detecta nada"}
+  - {name: /myRobot/perception/detections/local, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detector_local, since: "009a"}
+  - {name: /myRobot/perception/detections, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detection_selector, max_publishers: 1, since: "009a"}
+  - {name: /myRobot/perception/offload_status, type: aspirador_interfaces/msg/OffloadStatus, qos: luciano, owner: detection_selector, since: "009a"}
+  - {name: /detections_markers, type: visualization_msgs/msg/MarkerArray, qos: default, owner: projector, frozen: true, since: "009a", note: "formato consumido pelo nó semântico do 2025S2"}
+
 services:
   - name: /myRobot/start_stop
     type: myrobot_interfaces/srv/StartStop
