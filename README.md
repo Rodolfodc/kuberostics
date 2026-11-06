@@ -18,6 +18,10 @@ Desenvolvimento guiado por especificação. A ordem de leitura é:
 O layout segue o do GitHub Spec Kit, então os comandos `/specify`, `/plan` e `/tasks` dele funcionam aqui.
 O uso do Spec Kit é opcional.
 
+## Diagramas
+
+`docs/arquitetura.md` reúne os diagramas de arquitetura e os fluxos de comunicação em Mermaid, que o GitHub renderiza direto. As fontes ficam em `docs/diagramas/*.mmd` e as imagens geradas em `docs/diagramas/render/`.
+
 ## Estado
 
 | Spec | Status |

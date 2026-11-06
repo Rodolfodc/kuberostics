@@ -1,0 +1,46 @@
+flowchart TB
+  subgraph K3S["Cluster K3s local · provisionado por Terraform"]
+    ZC["Zenoh do cluster"]
+    DET["detector_cloud<br/>yolo11x · Deployment"]
+    MQ["Mosquitto"]
+    DATA["MinIO · DynamoDB Local"]
+    TREINO["Jobs de treino + gêmeo digital"]
+    PAINEL["Painel"]
+    LLM["Agente LLM (opcional)"]
+  end
+
+  subgraph ROBO["Contêiner ROS 2 · Jazzy ou Lyrical · namespace /myRobot"]
+    SRV["Serviços<br/>agenda · interface · notificações"]
+    ORQ["Orquestrador do Luciano (inalterado)<br/>CLEANING · AUTODOCKING · CHARGING · CHARGED · IDLE"]
+    SUP["Supervisor de submodos<br/>COVERING · ESCAPING · ESCAPE_FAILED ..."]
+    MOV["Atuadores + twist_mux<br/>único publicador de /myRobot/cmd_vel"]
+    PONTES["Pontes ZeroMQ (2025S2)<br/>laser · câmera · odometria · rodas"]
+    PER["Percepção<br/>SLAM · cômodos · detecção · seletor · projetor"]
+    ZR["Transporte para a nuvem<br/>rmw_zenoh ou ponte Zenoh (Q-06)"]
+    MQB["Ponte MQTT<br/>(opcional, só na base)"]
+  end
+
+  subgraph HOST["Hospedeiro"]
+    SIM["CoppeliaSim<br/>cena House"]
+  end
+
+  SRV -->|"start / stop"| ORQ
+  ORQ -->|"modo"| SUP
+  SUP -->|"ações e lock"| MOV
+  MOV -->|"/myRobot/cmd_vel"| PONTES
+  PONTES -->|"sensores"| PER
+  PER -->|"travamento"| SUP
+  PONTES <-->|"ZeroMQ :23000"| SIM
+  PER <--> ZR
+  ZR <-->|"TCP 7447"| ZC
+  ZC <--> DET
+  MQB <-->|"MQTT"| MQ
+  MQ --> DATA --> TREINO --> PAINEL
+  LLM -.->|"armadilhas"| TREINO
+
+  classDef luciano fill:#ECEAE4,stroke:#8A8880,color:#2C2C2A
+  classDef novo fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+  classDef opcional fill:#FFFFFF,stroke:#0F6E56,stroke-dasharray:4 3,color:#04342C
+  class ORQ,PONTES luciano
+  class SUP,MOV,PER,SRV,ZR,ZC,DET,MQ,DATA,TREINO,PAINEL novo
+  class MQB,LLM opcional
