@@ -16,7 +16,9 @@ aspirador-ia368ii/
 │   ├── aspirador_stubs/             # coverage_server, escape_server, stuck_detector, teleop_fake
 │   └── aspirador_contract_tests/    # testes gerados a partir de topics.yaml
 ├── tools/sim_bench/                 # medição de passos/s
-└── .github/workflows/ci.yaml
+├── docker/{jazzy,lyrical}/Dockerfile  # um contêiner por distribuição (D-12)
+├── compose.yaml                     # sobe o contêiner escolhido com network_mode: host
+└── .github/workflows/ci.yaml        # matriz distro: [jazzy, lyrical]
 ```
 
 O código do Luciano entra por `vcs import src/deps < deps.repos` e fica em `src/deps/`, que é ignorado pelo git.
@@ -58,6 +60,7 @@ O `LifecycleNode` só faz a ligação entre essa classe e os tópicos e ações.
 ```yaml
 twist_mux:
   ros__parameters:
+    use_stamped: false        # D-13: o padrão do twist_mux 4.5 é true nas duas distribuições
     topics:
       teleop:   {topic: /myRobot/mux/teleop,   timeout: 0.5, priority: 100}
       escape:   {topic: /myRobot/mux/escape,   timeout: 0.5, priority: 80}
@@ -67,7 +70,16 @@ twist_mux:
       stop:     {topic: /myRobot/mux/lock_stop, timeout: 0.0, priority: 255}
 ```
 
-Saída `cmd_vel_out` remapeada para `/myRobot/cmd_vel`. A Q-02 (tipo da saída no Jazzy) precisa ser confirmada na T007.
+Saída `cmd_vel_out` remapeada para `/myRobot/cmd_vel`. Com `use_stamped: false`, as entradas e a saída são `Twist`.
+
+## Duas distribuições
+
+- **Contêineres:** `docker/jazzy` parte da imagem oficial `ros:jazzy` e `docker/lyrical` da imagem oficial de Lyrical
+  (confirmar a tag na T003). Os dois instalam as mesmas dependências por `rosdep`.
+- **Rede:** o CoppeliaSim roda no hospedeiro. O contêiner usa `network_mode: host` para alcançar a porta ZeroMQ
+  (23000) e para o DDS descobrir os nós.
+- **CI:** a mesma sequência de passos em `strategy.matrix.distro: [jazzy, lyrical]`.
+- **Contrato:** o teste de contrato roda nas duas e verifica explicitamente o tipo `Twist` em `/myRobot/cmd_vel` (001-R18).
 
 ## Teste de contrato
 

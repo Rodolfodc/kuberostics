@@ -7,7 +7,8 @@ Uma tarefa só está pronta quando o teste que verifica o requisito passa.
 
 - [ ] **T001** Criar `deps.repos` com `lucianovk/IA368II` no commit `51a5fa2c…`. Escrever `scripts/setup.sh`, que roda `vcs import` e `rosdep install`. (D-10)
 - [ ] **T002** [P] Criar `aspirador_interfaces` com `Submode`, `StuckEvent`, `Notification`, `Escape` e `CoverRoom`, copiados de `contracts/interfaces.md`. Verificar com `colcon build` e `ros2 interface show`. (001-R04)
-- [ ] **T003** [P] Criar `.github/workflows/ci.yaml` em contêiner `ros:jazzy`: setup, `colcon build`, `colcon test`. (001-R15)
+- [ ] **T003** [P] Criar `docker/jazzy` e `docker/lyrical` (confirmar a tag da imagem oficial de Lyrical) e `.github/workflows/ci.yaml` com matriz `[jazzy, lyrical]`: setup, `colcon build`, `colcon test`. (001-R15, 001-R17)
+- [ ] **T003b** [P] Compilar e subir o `myrobot_bringup` e o `my_robot_pkg` do Luciano no contêiner Lyrical e registrar o resultado em Q-04. (001-R17)
 - [ ] **T004** [P] Escrever `tools/sim_bench/bench.py`, rodar na cena *House* e registrar D-11. Responder Q-01 no caminho. (001-R14)
 
 ## Fase 1: testes primeiro
@@ -17,7 +18,7 @@ Uma tarefa só está pronta quando o teste que verifica o requisito passa.
 
 ## Fase 2: implementação
 
-- [ ] **T007** Criar `aspirador_bringup/config/twist_mux.yaml` e confirmar o tipo da saída do `twist_mux` no Jazzy (Q-02). (001-R10, 001-R11)
+- [ ] **T007** Criar `aspirador_bringup/config/twist_mux.yaml` com `use_stamped: false` (D-13). (001-R10, 001-R11, 001-R18)
 - [ ] **T008** Implementar `SubmodeMachine` até a T006 passar. (001-R05 a 001-R09)
 - [ ] **T009** Implementar o `LifecycleNode` `supervisor`: assina o modo, publica o submodo a 5 Hz, cliente das ações, lock e notificações. (001-R05 a 001-R09)
 - [ ] **T010** [P] Stub `coverage_server`: servidor de `CoverRoom` que publica um `Twist` constante em `mux/coverage` enquanto o objetivo está ativo. (001-R06)
