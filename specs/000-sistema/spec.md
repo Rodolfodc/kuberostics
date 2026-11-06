@@ -35,7 +35,8 @@ câmera RGB-D e bumper. O sistema cumpre os seis módulos do enunciado da discip
 | 006-agenda | Agenda manual e autônoma | 4 |
 | 007-interface | Mapa, edição de cômodos, notificações | 6 |
 | 008-fuga-rl | Ambiente Gymnasium, treino, validação, troca de implementação | 5 (inovação) |
-| 009-nuvem | Ponte MQTT, K3s, ciclo de retreino | inovação |
+| 009a-fogros | Descarregamento do nó YOLO para o K3s com FogROS2 portado para Jazzy e Lyrical, com fallback local | inovação (sugestão do professor) |
+| 009b-nuvem | Ponte MQTT, K3s, ciclo de retreino | inovação |
 | 010-agente-llm | Reclamação em especificação de armadilha | opcional |
 
 ## 4. Contrato herdado (congelado)
@@ -76,11 +77,19 @@ A lista completa, legível por máquina, está em `contracts/topics.yaml`.
 | D-08 | Até a spec de doca, o `myrobot_server` do Luciano continua simulando bateria e sinal da base. | Mantém o ciclo do orquestrador funcionando desde a semana 1. A substituição por um nó ligado ao CoppeliaSim fica para depois. |
 | D-09 | Dois lifecycle managers próprios: `lifecycle_manager_core` (supervisor, stubs, módulos) e `lifecycle_manager_optional` (ponte MQTT). O lifecycle manager do Luciano permanece como ele o configurou. | Constituição, Art. VII. A ausência de um opcional não trava o núcleo. |
 | D-10 | O Luciano é trazido por `vcs import` de `deps.repos`, fixado por commit. | Reprodutibilidade; o código dele não é copiado nem editado. |
+| D-11 | (reservada para a medição de passos/s, tarefa T004 da spec 001) | |
+| D-12 | O sistema roda em Jazzy e em Lyrical. Cada distribuição tem seu contêiner (`docker/jazzy`, `docker/lyrical`) e a CI roda as duas. | Constituição, Art. X. Todas as dependências de terceiros já têm release nas duas: `navigation2` (1.3.14 / 1.5.3), `slam_toolbox` (2.8.5 / 2.10.0), `twist_mux` (4.5.0 / 4.5.1), `teleop_twist_keyboard`, `rmw_cyclonedds`, `rmw_zenoh` e `vision_msgs`. Fonte: `ros/rosdistro`, 05/11/2026. |
+| D-13 | O contrato de movimento é `geometry_msgs/Twist` sem carimbo de tempo, como a base do Luciano espera. Ficam explícitos `use_stamped: false` no `twist_mux` e `enable_stamped_cmd_vel: false` em todo nó do Nav2 que publique velocidade. | O `twist_mux` 4.5 usa `use_stamped = true` por padrão nas duas distribuições. O Nav2 usa `enable_stamped_cmd_vel = false` no Jazzy e `true` no Lyrical. Confiar no padrão quebraria a base num caso e o Nav2 no outro. Fecha a Q-02. |
+| D-14 | O CoppeliaSim conversa com o ROS apenas pela ZeroMQ Remote API (nós Python da ponte). O plugin simROS2 não é usado. | A ponte por ZeroMQ não depende da distribuição ROS. O simROS2 precisaria ser compilado para cada distribuição e cada versão do CoppeliaSim. O simulador roda no hospedeiro e os contêineres ROS o acessam pela rede. |
 
 ## 6. Questões em aberto
 
 - Q-01: versão do CoppeliaSim e caminho da cena *House*. Os nomes de objetos (`/myRobot/leftMotor`)
   precisam bater com a cena do 2025S2.
-- Q-02: `twist_mux` no Jazzy publica `Twist` ou `TwistStamped`? A base espera `Twist`. Verificar na tarefa T007 da spec 001.
+- ~~Q-02~~: fechada por D-13.
+- Q-04: o `my_robot_pkg` do Luciano foi escrito para Jazzy. É preciso confirmar que ele compila e roda em Lyrical
+  (rclpy 10, Python 3.14). Se não rodar, a correção entra como sobreposição no nosso repositório, nunca como edição do código dele.
+- Q-05: dependências pip na versão 3.14 do Python, usadas no Lyrical: `torch`, `ultralytics` e `stable-baselines3`.
+  Se alguma não tiver wheel, o treino de RL roda num ambiente Python separado do ROS, e só a inferência entra no nó.
 - Q-03: odometria. O 2025S2 usa `/myrobot/odom` (verdade do simulador) e rf2o (odometria por laser).
   Definir na spec 003 qual alimenta o SLAM.

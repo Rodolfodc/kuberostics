@@ -71,12 +71,23 @@ Uma especificação que contradiga um artigo é inválida até que o artigo seja
 3. Ordem de corte em caso de atraso: (1) agente LLM; (2) retreino na nuvem; (3) política RL, mantendo a fuga por roteiro fixo.
    Os seis módulos do enunciado não são cortados.
 
+## Artigo X. Duas distribuições: Jazzy e Lyrical
+
+1. Todo pacote deste repositório compila, passa nos testes e roda em ROS 2 Jazzy (Ubuntu 24.04, Python 3.12)
+   e em ROS 2 Lyrical Luth (Ubuntu 26.04, Python 3.14).
+2. A integração contínua roda a matriz completa. Um teste que passa numa distribuição e falha na outra conta como falha.
+3. Nenhum comportamento depende de valor padrão de parâmetro de terceiros que mude entre distribuições.
+   Esses parâmetros são sempre declarados explicitamente na configuração. Exemplo: `use_stamped` do `twist_mux`
+   e `enable_stamped_cmd_vel` do Nav2.
+4. Código específico de uma distribuição só é aceito atrás de um teste de `ROS_DISTRO`, com justificativa na spec.
+5. Cada execução usa uma única distribuição. Um grafo que mistura nós Jazzy e Lyrical não é suportado.
+
 ## Pilha técnica
 
-- ROS 2 Jazzy, Ubuntu 24.04, Python (`rclpy`).
-- CoppeliaSim com ZeroMQ Remote API.
+- ROS 2 Jazzy e ROS 2 Lyrical Luth, Python (`rclpy`), cada uma em contêiner próprio.
+- CoppeliaSim com ZeroMQ Remote API, no hospedeiro e independente da distribuição ROS.
 - Nav2, SLAM Toolbox, `twist_mux`.
 - Gymnasium e Stable-Baselines3.
 - K3s, Mosquitto, MinIO, DynamoDB Local, Terraform.
 
-**Versão:** 1.0 · 2026-11-04
+**Versão:** 1.1 · 2026-11-06. Artigo X incluído: suporte a Jazzy e Lyrical.

@@ -1,7 +1,7 @@
 # Robô aspirador autônomo (IA368II 2026S2)
 
 Projeto final da disciplina IA368II (FEEC/UNICAMP). Robô aspirador na cena *House* do CoppeliaSim,
-integrado ao *Robot LifeCycle manager* de Luciano (lucianovk/IA368II) sem alterar o código dele, com
+em ROS 2 Jazzy e ROS 2 Lyrical Luth, integrado ao *Robot LifeCycle manager* de Luciano (lucianovk/IA368II) sem alterar o código dele, com
 política de fuga aprendida por reforço e serviço em nuvem emulado em K3s.
 
 ## Como o repositório é desenvolvido

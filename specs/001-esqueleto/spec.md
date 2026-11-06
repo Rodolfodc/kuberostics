@@ -43,11 +43,13 @@ stub por uma implementação real sem mexer no restante.
 | 001-R12 | O sistema deve remapear a saída do `cleaning_server` do Luciano para `/myRobot/legacy/cleaning_cmd_vel` e a do `autodocking_server` para `/myRobot/mux/docking`, sem alterar o código desses nós. | contrato |
 | 001-R13 | Onde o CoppeliaSim estiver em execução, a ponte de rodas deve converter `/myRobot/cmd_vel` em velocidades das rodas do robô na cena. | manual (vídeo curto) |
 | 001-R14 | O repositório deve conter um script que mede passos de simulação por segundo da cena *House* em modo síncrono e sem interface gráfica, e o resultado deve ser registrado na decisão D-11. | manual |
-| 001-R15 | Quando houver push, a integração contínua deve executar `colcon build` e `colcon test` em contêiner `ros:jazzy` sem CoppeliaSim. | CI |
+| 001-R15 | Quando houver push, a integração contínua deve executar `colcon build` e `colcon test` numa matriz com contêineres Jazzy e Lyrical, sem CoppeliaSim. | CI |
+| 001-R17 | O sistema deve satisfazer 001-R01 a 001-R12 e 001-R16 tanto em Jazzy quanto em Lyrical, com o mesmo código e a mesma configuração. | CI (matriz) |
+| 001-R18 | A configuração deve declarar explicitamente `use_stamped: false` no `twist_mux`, e o teste de contrato deve falhar se `/myRobot/cmd_vel` tiver tipo diferente de `geometry_msgs/msg/Twist`. | contrato |
 | 001-R16 | O stub `escape_server` deve aceitar o parâmetro `outcome` (`succeed`, `fail`, `hang`) para que os cenários 2 e 3 sejam testáveis sem simulador. | unitário |
 
 ## Critério de pronto
 
-- Todos os testes automáticos de 001-R01 a 001-R12 e 001-R16 passando na CI.
+- Todos os testes automáticos de 001-R01 a 001-R12, 001-R16 e 001-R18 passando na CI, em Jazzy e em Lyrical.
 - Vídeo de até 1 minuto mostrando os cenários 1 a 4 no CoppeliaSim.
 - D-11 registrada em `specs/000-sistema/spec.md` com a medição de passos/s.
