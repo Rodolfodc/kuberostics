@@ -1,0 +1,52 @@
+flowchart TB
+  subgraph ROBO["Robô"]
+    STK["stuck_detector<br/>StuckEvent com laser e pose"]
+    LOG[("registro local<br/>de travamentos")]
+    MQB["ponte MQTT<br/>só em CHARGED"]
+    ESC["escape_rl<br/>carrega pesos só em CHARGED"]
+    HMI["interface<br/>reclamação do usuário"]
+  end
+
+  subgraph K3S["K3s local (módulo Terraform local)"]
+    MQ["Mosquitto"]
+    ING["ingestão"]
+    RAW[("MinIO<br/>travamentos brutos")]
+    IDX[("DynamoDB Local<br/>índice e histórico")]
+    LLM["agente LLM (opcional)<br/>reclamação → armadilha em JSON validado"]
+    GEN["gerador de armadilhas"]
+    JOB["Job de treino<br/>Gymnasium + Stable-Baselines3"]
+    TWIN["gêmeo digital<br/>CoppeliaSim headless · armadilhas não vistas"]
+    PAI["painel<br/>aprovação humana"]
+    W[("MinIO<br/>pesos versionados (ETag)")]
+  end
+
+  subgraph AWS["Mesmo desenho na AWS (módulo Terraform aws)"]
+    A1["IoT Core"]
+    A2["S3"]
+    A3["DynamoDB"]
+    A4["EKS Jobs"]
+    A5["Bedrock"]
+  end
+
+  STK --> LOG --> MQB
+  MQB -->|"MQTT QoS 1"| MQ --> ING
+  ING --> RAW
+  ING --> IDX
+  HMI -.-> LLM
+  LLM -.-> GEN
+  RAW --> GEN --> JOB --> TWIN --> PAI --> W
+  W -->|"GET com If-None-Match<br/>200 com pesos novos ou 304"| MQB
+  MQB --> ESC
+
+  MQ ~~~ A1
+  RAW ~~~ A2
+  IDX ~~~ A3
+  JOB ~~~ A4
+  LLM ~~~ A5
+
+  classDef novo fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+  classDef opcional fill:#FFFFFF,stroke:#0F6E56,stroke-dasharray:4 3,color:#04342C
+  classDef aws fill:#F1EFE8,stroke:#888780,color:#2C2C2A
+  class STK,MQB,ESC,HMI,MQ,ING,GEN,JOB,TWIN,PAI novo
+  class LLM opcional
+  class A1,A2,A3,A4,A5 aws

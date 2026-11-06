@@ -1,0 +1,59 @@
+flowchart TB
+  subgraph LMLUC["lifecycle_manager do Luciano (inalterado)"]
+    BEH["behaviour_server"]
+    MYR["myrobot<br/>bateria e base (simulados)"]
+    CLE["cleaning_server<br/>stub"]
+    DOC["autodocking_server"]
+    CHG["charging_server · charged_server"]
+  end
+
+  subgraph LMCORE["lifecycle_manager_core"]
+    SUP["supervisor"]
+    STK["stuck_detector"]
+    ESC["escape_server<br/>roteiro fixo ou RL"]
+    COV["coverage_server"]
+  end
+
+  subgraph LMOPT["lifecycle_manager_optional"]
+    MQB["ponte MQTT"]
+  end
+
+  NAV["Nav2 controller<br/>enable_stamped_cmd_vel: false"]
+  TEL["teleop_twist_keyboard"]
+  AGE["agenda (módulo 4)"]
+  HMI["interface (módulo 6)"]
+  MUX["twist_mux<br/>use_stamped: false"]
+  WHEEL["ponte de rodas (2025S2)<br/>/cmd_vel → /myRobot/cmd_vel"]
+  SIM["CoppeliaSim"]
+  SINK(["/myRobot/legacy/cleaning_cmd_vel<br/>sem assinante (D-04)"])
+
+  BEH -->|"/myRobot/behaviour/mode"| SUP
+  BEH -->|"modo"| MYR
+  BEH -->|"modo"| CLE
+  BEH -->|"modo"| DOC
+  MYR -->|"battery_state · charging_base"| BEH
+  AGE -->|"/myRobot/start_stop"| BEH
+  STK -->|"/myRobot/stuck"| SUP
+  SUP -->|"ação cover_room"| COV
+  SUP -->|"ação escape"| ESC
+  SUP -->|"/myRobot/notifications"| HMI
+
+  TEL -->|"mux/teleop · 100"| MUX
+  ESC -->|"mux/escape · 80"| MUX
+  NAV -->|"mux/nav · 60"| MUX
+  COV -->|"mux/coverage · 50"| MUX
+  DOC -->|"mux/docking · 40 (remap D-05)"| MUX
+  SUP -->|"mux/lock_stop · 255"| MUX
+  CLE -->|"remap D-04"| SINK
+
+  MUX -->|"/myRobot/cmd_vel (Twist)"| WHEEL
+  WHEEL -->|"ZeroMQ"| SIM
+
+  classDef luciano fill:#ECEAE4,stroke:#8A8880,color:#2C2C2A
+  classDef novo fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+  classDef reuso fill:#FAEEDA,stroke:#BA7517,color:#412402
+  classDef opcional fill:#FFFFFF,stroke:#0F6E56,stroke-dasharray:4 3,color:#04342C
+  class BEH,MYR,CLE,DOC,CHG luciano
+  class SUP,STK,ESC,COV,AGE,HMI,MUX,NAV,TEL novo
+  class WHEEL reuso
+  class MQB opcional
