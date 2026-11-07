@@ -31,6 +31,10 @@ Using Spec Kit is optional.
 | 001-skeleton | draft for review |
 | 009a-offload | draft for review |
 
+## Working with Claude Code
+
+The project agents, permissions and protection hook live in `.claude/` (tracked). Start Claude Code in this folder. To start it from the folder above instead, run `scripts/link-workspace.sh` once (it creates symlinks to `.claude` and `CLAUDE.md`); `--remove` undoes it.
+
 ## Installing on another machine
 
 Ubuntu 24.04 or 26.04.
