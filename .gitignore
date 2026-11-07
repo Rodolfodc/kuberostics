@@ -3,3 +3,11 @@ install/
 log/
 src/deps/
 __pycache__/
+.sim/
+.k3s/
+.terraform/
+*.tfstate*
+rl/runs/
+
+# Modelo de terceiros (projeto 2025S2): não redistribuir; ver models/README.md
+models/*.ttm
