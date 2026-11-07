@@ -1,0 +1,7 @@
+# Dependência de terceiros, somente leitura (Art. II), fixada por commit (D-10).
+# Uso: vcs import src/deps < deps.repos
+repositories:
+  lucianovk/IA368II:
+    type: git
+    url: https://github.com/lucianovk/IA368II.git
+    version: 51a5fa2c816c7ee712c963843e5d747b3ed2a98f
