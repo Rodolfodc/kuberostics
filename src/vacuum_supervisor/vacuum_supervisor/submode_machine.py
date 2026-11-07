@@ -68,6 +68,9 @@ class SubmodeMachine:
         return []
 
     def on_stuck(self) -> List[Effect]:
+        if self.locked:                                       # 001-R22: the lock blocks every escape anyway
+            self._log.debug('stuck event ignored: stop lock is on')
+            return []
         if self.submode == COVERING:                          # 001-R07
             self._metrics['stuck_events'] += 1
             self.resume_submode = COVERING
