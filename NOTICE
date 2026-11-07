@@ -9,6 +9,6 @@ redistribuições e obras derivadas devem manter este arquivo NOTICE e o aviso
 de copyright acima.
 
 Material de terceiros (não coberto pelo copyright acima):
-- models/myRobot.ttm: modelo do robô do projeto 2025S2 (repositório lucianovk/IA368II),
+- models/myRobot.ttm (não versionado, gerado localmente): modelo do robô do projeto 2025S2 (repositório lucianovk/IA368II),
   exportado de pega_banana.ttt. Pertence aos autores originais.
 - src/deps/ (não versionado): código de lucianovk/IA368II, obtido por deps.repos.
