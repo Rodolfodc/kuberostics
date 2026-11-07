@@ -17,3 +17,5 @@ How to work:
 - Commit messages cite the task ID (e.g. `T008`).
 
 Run `colcon build` and `colcon test` (inside the distro container when it exists). Do not run CoppeliaSim yourself; ask for the sim-operator. When you finish a task or a coherent group of tasks, report what changed and which requirement IDs are covered; the reviewer runs only on completed deliverables.
+
+Setup note: ROS 2 (Lyrical or Jazzy) must already be installed by the user; if `/opt/ros/*` is missing, stop and report it. llama.cpp is optional, never depend on it.

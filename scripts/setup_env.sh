@@ -77,7 +77,7 @@ for c in git curl jq unzip pdfinfo ss colcon vcs rosdep docker kubectl k3d terra
   have "$c" && ok "$c" || miss "$c"
 done
 d=""; for x in lyrical jazzy; do [[ -f /opt/ros/$x/setup.bash ]] && d="$d $x"; done
-[[ -n "$d" ]] && ok "ROS 2 no host:$d" || miss "ROS 2 (/opt/ros/{lyrical,jazzy}); o Jazzy também roda por Docker"
+[[ -n "$d" ]] && ok "ROS 2 no host:$d" || miss "ROS 2 é OBRIGATÓRIO e não é instalado por este script: instale o Lyrical (ou o Jazzy) em /opt/ros pelo guia oficial"
 docker image inspect osrf/ros:jazzy-desktop-full >/dev/null 2>&1 && ok "imagem osrf/ros:jazzy-desktop-full" \
   || echo "  [opcional] imagem Jazzy ausente (use --pull-jazzy)"
 if [[ $COPPELIA -eq 1 ]]; then
@@ -85,6 +85,8 @@ if [[ $COPPELIA -eq 1 ]]; then
 fi
 [[ -x .venv/bin/python ]] && .venv/bin/python -c "import coppeliasim_zmqremoteapi_client, zmq, pytest" 2>/dev/null \
   && ok ".venv com cliente ZMQ, pyzmq e pytest" || miss ".venv com os pacotes de requirements.txt"
+(have llama-server || [[ -x "$HOME/Tools/llama.cpp/build/bin/llama-server" ]]) && ok "llama.cpp (opcional)" \
+  || echo "  [opcional] llama.cpp ausente: o projeto funciona sem ele"
 [[ -d src/deps/lucianovk/IA368II ]] && ok "src/deps/lucianovk/IA368II (código do Luciano, somente leitura)" || miss "src/deps (rode scripts/setup.sh)"
 sudo -n iptables -C INPUT -p tcp --dport 23000:23099 ! -i lo -j DROP 2>/dev/null && ok "firewall 23000-23099 fechado" \
   || echo "  [aviso]   regra de firewall não confirmada (vale até o reboot; precisa de sudo para checar: rode sem --check)"

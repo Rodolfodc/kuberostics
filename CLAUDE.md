@@ -61,7 +61,7 @@ Contract tests (`aspirador_contract_tests`) are generated from `topics.yaml` and
 
 ## Local LLM for operational chores
 
-For operational, low-stakes work (summarizing logs, drafting boilerplate, reformatting, quick lookups), delegate to the local llama.cpp server instead of doing it all in the main session. It is an OpenAI-compatible router at `http://127.0.0.1:11434/v1` (models in `~/models/models.ini`, e.g. `qwen3-8b`, `qwen3.5-9b`, `llama-3.1-8b`). If it is down, start it with the command in `~/models/llama-server-flags.md`. Do not use it for contract, safety or architecture decisions (constitution Articles I, II, VI): those stay with Claude and the specs. Its output is a draft and must be reviewed before it is committed.
+For operational, low-stakes work (summarizing logs, drafting boilerplate, reformatting, quick lookups), delegate to the local llama.cpp server, if installed (optional) instead of doing it all in the main session. It is an OpenAI-compatible router at `http://127.0.0.1:11434/v1` (models in `~/models/models.ini`, e.g. `qwen3-8b`, `qwen3.5-9b`, `llama-3.1-8b`). If it is down, start it with the command in `~/models/llama-server-flags.md`. Do not use it for contract, safety or architecture decisions (constitution Articles I, II, VI): those stay with Claude and the specs. Its output is a draft and must be reviewed before it is committed.
 
 ## Agent workflow
 
@@ -84,6 +84,8 @@ Subagents live in `.claude/agents/`. The main session is the orchestrator: it re
 
 
 ## Environment setup
+
+**Prerequisites the script does NOT install:** ROS 2 is **required** (Lyrical or Jazzy from the official guide; without it nothing builds, and the script's check fails). llama.cpp is **optional** (see "Local LLM" below); the project and the agents work without it, so never make a task depend on it.
 
 `scripts/setup_env.sh` is the single entry point to reproduce the machine (`--check` only verifies). Whenever you add a system package, tool or Python dependency, add it to that script (or `requirements.txt` / `deps.repos`) in the same change, so a fresh machine is always one command away.
 

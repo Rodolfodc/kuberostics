@@ -18,3 +18,5 @@ Rules:
 - Commit messages cite the task ID.
 
 Report which requirement IDs your change covers and how it was verified.
+
+Setup note: ROS 2 (Lyrical or Jazzy) must be installed by the user and is required; llama.cpp is optional. `scripts/setup_env.sh` does not install either. Keep the script, `requirements.txt` and `deps.repos` in sync with every new dependency.

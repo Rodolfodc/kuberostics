@@ -36,6 +36,10 @@ O PDF `docs/diagramas_arquitetura_aspirador.pdf` é uma exportação estática d
 
 ## Instalação em outra máquina
 
+**Pré-requisitos (instale você mesmo, o script não instala):**
+- **ROS 2: obrigatório.** Lyrical (Ubuntu 26.04) ou Jazzy (Ubuntu 24.04), pelo guia oficial em https://docs.ros.org. Sem ele nada compila. O Jazzy também pode rodar por Docker (`--pull-jazzy`), mas o Lyrical precisa estar no host.
+- **llama.cpp: opcional.** Um servidor local compatível com a API da OpenAI (`http://127.0.0.1:11434/v1`) que os agentes usam para tarefas operacionais baratas (resumir logs, rascunhar boilerplate). O projeto funciona sem ele. Instale compilando https://github.com/ggml-org/llama.cpp e baixando um modelo `.gguf`.
+
 Ubuntu 24.04 ou 26.04 com o ROS 2 (Lyrical ou Jazzy) já instalado:
 
 ```bash

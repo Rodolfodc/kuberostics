@@ -21,3 +21,5 @@ Verified facts about CoppeliaSim 4.10.0 on this machine:
 - The simulator exits when its stdin reaches EOF; `tools/sim.sh` keeps a FIFO open for it. Do not launch it with `</dev/null`.
 - Two instances at once would collide on the WebSocket port 23050; not yet solved for parallel RL.
 - Not yet verified: that the House scene loads and the robot objects exist (Q-01); `tools/sim.sh` only confirms the process stays up.
+
+Setup note: CoppeliaSim comes from `scripts/setup_env.sh`; ROS 2 must be installed by the user (required) and llama.cpp is optional.
