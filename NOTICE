@@ -1,14 +1,14 @@
 Kuberostics
 Copyright 2026 Rodolfo Dalla Costa
 
-Projeto final de IA368II (FEEC/UNICAMP).
+Final project of IA368II (FEEC/UNICAMP).
 
-Este produto inclui software desenvolvido por Rodolfo Dalla Costa
-(https://github.com/Rodolfodc/kuberostics). Conforme a Licença Apache 2.0,
-redistribuições e obras derivadas devem manter este arquivo NOTICE e o aviso
-de copyright acima.
+This product includes software developed by Rodolfo Dalla Costa
+(https://github.com/Rodolfodc/kuberostics). Under the Apache License 2.0,
+redistributions and derivative works must keep this NOTICE file and the
+copyright notice above.
 
-Material de terceiros (não coberto pelo copyright acima):
-- models/myRobot.ttm (não versionado, gerado localmente): modelo do robô do projeto 2025S2 (repositório lucianovk/IA368II),
-  exportado de pega_banana.ttt. Pertence aos autores originais.
-- src/deps/ (não versionado): código de lucianovk/IA368II, obtido por deps.repos.
+Third-party material (not covered by the copyright above):
+- models/myRobot.ttm (not versioned, generated locally): robot model from the 2025S2 project (the IA368II repository),
+  exported from pega_banana.ttt. It belongs to the original authors.
+- src/deps/ (not versioned): code of the IA368II repository, fetched through deps.repos.

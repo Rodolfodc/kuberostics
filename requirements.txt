@@ -1,5 +1,5 @@
-# Dependências Python das ferramentas (tools/sim_bench) e dos testes fora do ROS.
-# O ROS 2 e o colcon vêm do apt (ver scripts/setup_env.sh). Instalado em .venv.
+# Python dependencies of the tools (tools/sim_bench) and of the tests outside ROS.
+# ROS 2 and colcon come from apt (see scripts/setup_env.sh). Installed into .venv.
 coppeliasim-zmqremoteapi-client==2.0.4
 pyzmq>=27
 cbor>=1.0

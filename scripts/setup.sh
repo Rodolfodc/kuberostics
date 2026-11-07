@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# T001: baixa a dependência fixada e instala as dependências ROS do workspace.
-# Uso: scripts/setup.sh   (rodar na raiz do repositório, com o ROS 2 carregado)
+# T001: fetches the pinned dependency and installs the workspace ROS dependencies.
+# Usage: scripts/setup.sh   (run from the repository root, with ROS 2 sourced)
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 mkdir -p src/deps

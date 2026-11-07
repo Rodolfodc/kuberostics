@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# kubectl pinned to the local k3d cluster "aspirador". Never touches the user's own kubeconfig.
+# kubectl pinned to the local k3d cluster "kuberostics". Never touches the user's own kubeconfig.
 # Usage: tools/k3s.sh up | down | <kubectl args...>
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-NAME="aspirador"
+NAME="kuberostics"
 export KUBECONFIG="$REPO/.k3s/kubeconfig"
 mkdir -p "$REPO/.k3s"
 

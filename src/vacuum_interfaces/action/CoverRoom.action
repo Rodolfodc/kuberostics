@@ -1,0 +1,10 @@
+# Goal
+string room_id      # empty = current room
+uint8 passes
+---
+# Result
+bool success
+float32 covered_ratio
+---
+# Feedback
+float32 covered_ratio

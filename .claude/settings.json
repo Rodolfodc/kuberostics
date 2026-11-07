@@ -13,12 +13,8 @@
       "Bash(tools/k3s.sh logs *)",
       "Bash(tools/tf.sh plan*)",
       "Bash(tools/tf.sh validate*)",
-      "Bash(tools/tf.sh fmt*)"
-    ],
-    "ask": [
-      "Bash(git push*)",
-      "Bash(pip install*)",
-      "Bash(pip3 install*)",
+      "Bash(tools/tf.sh fmt*)",
+      "Bash(npx -y @mermaid-js/mermaid-cli@12.2.0 *)",
       "Bash(docker *)",
       "Bash(tools/k3s.sh up*)",
       "Bash(tools/k3s.sh down*)",
@@ -26,6 +22,11 @@
       "Bash(tools/k3s.sh apply *)",
       "Bash(tools/tf.sh apply*)",
       "Bash(tools/tf.sh destroy*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(pip install*)",
+      "Bash(pip3 install*)"
     ],
     "deny": [
       "Bash(sudo *)",

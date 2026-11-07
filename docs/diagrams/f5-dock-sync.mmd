@@ -1,0 +1,21 @@
+sequenceDiagram
+  autonumber
+  participant BEH as behaviour_server (IA368II)
+  participant MQB as MQTT bridge
+  participant MQ as Mosquitto (K3s)
+  participant W as MinIO (weights)
+  participant ESC as escape_rl
+
+  BEH->>MQB: /myRobot/behaviour/mode = CHARGED
+  Note over MQB: syncs only at the dock
+  MQB->>MQ: publishes recorded stuck events (MQTT QoS 1)
+  MQ-->>MQB: PUBACK
+  MQB->>W: GET weights with If-None-Match: current ETag
+  alt weights unchanged
+    W-->>MQB: 304 Not Modified
+  else new approved weights
+    W-->>MQB: 200 + weights + new ETag
+    MQB->>ESC: reload weights (still in CHARGED)
+    ESC-->>MQB: weights loaded (version recorded)
+  end
+  Note over BEH,ESC: if the network fails, tries again the next time it is at the dock<br/>the robot never waits for the cloud to clean

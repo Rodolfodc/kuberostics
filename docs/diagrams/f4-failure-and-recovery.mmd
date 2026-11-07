@@ -1,0 +1,25 @@
+sequenceDiagram
+  autonumber
+  participant K8S as Kubernetes
+  participant DC as detector_cloud
+  participant SEL as detection_selector
+  participant DL as detector_local
+  participant HMI as interface
+
+  Note over SEL: CLOSED, forwarding the cloud
+  K8S-xDC: Pod deleted (failure test)
+  Note over SEL: cloud silence
+  SEL->>SEL: 1.5 s without a response ≤ 1.5 s → OPEN
+  SEL->>HMI: Notification WARN CLOUD_DETECTOR_DOWN
+  DL->>SEL: detections/local (forwarded)
+  Note over SEL: the robot keeps cleaning<br/>orchestrator mode does not change
+  K8S->>DC: Deployment recreates the Pod
+  DC->>SEL: late responses about old photos
+  Note over SEL: age > max_age_s → dropped_stale
+  DC->>SEL: response with age ≤ 0.5 s
+  SEL->>SEL: OPEN → HALF_OPEN
+  DC->>SEL: stable responses for 3 s
+  SEL->>SEL: HALF_OPEN → CLOSED
+  SEL->>HMI: Notification INFO CLOUD_DETECTOR_RECOVERED
+  DC->>SEL: response about a photo already covered by the local one
+  Note over SEL: stamp ≤ watermark → dropped_watermark<br/>(no duplicate on the map)

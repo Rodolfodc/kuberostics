@@ -1,0 +1,59 @@
+flowchart TB
+  subgraph LMIA["IA368II lifecycle_manager (unchanged)"]
+    BEH["behaviour_server"]
+    MYR["myrobot<br/>battery and base (simulated)"]
+    CLE["cleaning_server<br/>stub"]
+    DOC["autodocking_server"]
+    CHG["charging_server · charged_server"]
+  end
+
+  subgraph LMCORE["lifecycle_manager_core"]
+    SUP["supervisor"]
+    STK["stuck_detector"]
+    ESC["escape_server<br/>scripted or RL"]
+    COV["coverage_server"]
+  end
+
+  subgraph LMOPT["lifecycle_manager_optional"]
+    MQB["MQTT bridge"]
+  end
+
+  NAV["Nav2 controller<br/>enable_stamped_cmd_vel: false"]
+  TEL["teleop_twist_keyboard"]
+  SCHED["schedule (module 4)"]
+  HMI["interface (module 6)"]
+  MUX["twist_mux<br/>use_stamped: false"]
+  WHEEL["wheel bridge (2025S2)<br/>/cmd_vel → /myRobot/cmd_vel"]
+  SIM["CoppeliaSim"]
+  SINK(["/myRobot/legacy/cleaning_cmd_vel<br/>no subscriber (D-04)"])
+
+  BEH -->|"/myRobot/behaviour/mode"| SUP
+  BEH -->|"mode"| MYR
+  BEH -->|"mode"| CLE
+  BEH -->|"mode"| DOC
+  MYR -->|"battery_state · charging_base"| BEH
+  SCHED -->|"/myRobot/start_stop"| BEH
+  STK -->|"/myRobot/stuck"| SUP
+  SUP -->|"cover_room action"| COV
+  SUP -->|"escape action"| ESC
+  SUP -->|"/myRobot/notifications"| HMI
+
+  TEL -->|"mux/teleop · 100"| MUX
+  ESC -->|"mux/escape · 80"| MUX
+  NAV -->|"mux/nav · 60"| MUX
+  COV -->|"mux/coverage · 50"| MUX
+  DOC -->|"mux/docking · 40 (remap D-05)"| MUX
+  SUP -->|"mux/lock_stop · 255"| MUX
+  CLE -->|"remap D-04"| SINK
+
+  MUX -->|"/myRobot/cmd_vel (Twist)"| WHEEL
+  WHEEL -->|"ZeroMQ"| SIM
+
+  classDef ia368ii fill:#ECEAE4,stroke:#8A8880,color:#2C2C2A
+  classDef added fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+  classDef reused fill:#FAEEDA,stroke:#BA7517,color:#412402
+  classDef optional fill:#FFFFFF,stroke:#0F6E56,stroke-dasharray:4 3,color:#04342C
+  class BEH,MYR,CLE,DOC,CHG ia368ii
+  class SUP,STK,ESC,COV,SCHED,HMI,MUX,NAV,TEL added
+  class WHEEL reused
+  class MQB optional

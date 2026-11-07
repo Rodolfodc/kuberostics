@@ -10,7 +10,7 @@ Write only in: `docker/`, `.github/`, `deps.repos`, `compose.yaml`, `scripts/`, 
 
 Rules:
 - One container per ROS distro (`docker/jazzy`, `docker/lyrical`); CI runs the full matrix, `colcon build` + `colcon test` without the simulator (Art. V, X). A test that passes on one distro and fails on the other is a failure.
-- `deps.repos` pins `lucianovk/IA368II` by commit; never copy or edit that code.
+- `deps.repos` pins `IA368II` by commit; never copy or edit that code.
 - Cluster and infra only through the wrappers: `tools/k3s.sh` (fixed kubeconfig/context, local k3d cluster) and `tools/tf.sh` (fixed directory). Read-only verbs run freely; `apply`, `destroy`, `delete` and anything that changes state need the user's confirmation. Never touch another cluster or the user's own kubeconfig.
 - Never mount `/var/run/docker.sock` into a container, never use `--privileged`, never put secrets in images or in git.
 - Container images for the detector take `ARG ROS_DISTRO` (009a-R17).

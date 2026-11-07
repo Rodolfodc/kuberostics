@@ -1,11 +1,11 @@
-# Modelos do CoppeliaSim
+# CoppeliaSim models
 
-Esta pasta não versiona arquivos `.ttm` (ver `.gitignore`): o modelo do robô é do projeto 2025S2 (`lucianovk/IA368II`) e não é redistribuído aqui.
+This folder does not version `.ttm` files (see `.gitignore`): the robot model comes from the 2025S2 project (the `IA368II` repository) and is not redistributed here.
 
-Para gerar `myRobot.ttm` localmente:
+To generate `myRobot.ttm` locally:
 
-1. `scripts/setup.sh` baixa o repositório do Luciano em `src/deps/` (somente leitura, Art. II).
-2. `python3 tools/sim_bench/bench.py --model-src <caminho>/pega_banana.ttt` exporta `/myRobot` para `.sim/myRobot.ttm`. O padrão do `--model-src` é um caminho local do autor; ajuste-o para onde está o `pega_banana.ttt` (no repositório do Luciano, `IA368_ws/src/ia368_pkg/yolo_detector/`).
-3. Opcional: copie o arquivo para esta pasta. Ele fica ignorado pelo git.
+1. `scripts/setup.sh` fetches the `IA368II` repository into `src/deps/` (read-only, Art. II).
+2. `python3 tools/sim_bench/bench.py --model-src <path>/pega_banana.ttt` exports `/myRobot` to `.sim/myRobot.ttm`. The default of `--model-src` is a local path of the author; set it to where `pega_banana.ttt` is (in the `IA368II` repository, `IA368_ws/src/ia368_pkg/yolo_detector/`).
+3. Optional: copy the file into this folder. It stays ignored by git.
 
-O modelo contém `/myRobot/{leftMotor,rightMotor,kinect,bumper,odometry,battery,dockingSensor,proximitySensor,...}`.
+The model contains `/myRobot/{leftMotor,rightMotor,kinect,bumper,odometry,battery,dockingSensor,proximitySensor,...}`.
