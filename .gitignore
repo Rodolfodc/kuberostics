@@ -12,3 +12,4 @@ rl/runs/
 # Cenas e modelos do CoppeliaSim (.ttt/.ttm): material de terceiros, nunca versionar; ver models/README.md
 *.ttt
 *.ttm
+.venv/
