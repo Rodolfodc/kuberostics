@@ -87,6 +87,7 @@ The complete machine-readable list is in `contracts/topics.yaml`.
 | D-19 | Reusable components (controllers, filters, planners, detectors) are toolboxes: the class only does its computation, without publishing, reading topics or holding policy. Whoever invokes it decides configuration, limits, when to call and what to do with the result. | The caller knows the context (map, mode, safety) and the class stays testable and reusable. Style example: a `PID` that only computes `u` from error and `dt`. |
 | D-20 | Every node and module logs and emits telemetry whenever possible: `rclpy` logger with levels, state transitions and events (stuck, escape, lock) always logged, and periodic metrics on `/myRobot/telemetry/<node>` or `diagnostic_msgs/DiagnosticArray`. Pure logic receives a logger and/or a metrics callback and does not import ROS. | Without this there is no way to debug in the simulator, measure D-11 or feed the training (spec 008). |
 | D-21 | All repository text is in English: documentation, comments, docstrings, commit messages, spec directory names and file names. The third-party orchestrator is referred to by its repository name, `IA368II`, never by its author's name. | A single language keeps the repository consistent and accessible to external contributors (public repository). |
+| D-22 | The stop lock is made effective by a `stop_guard` actuator: while `/myRobot/mux/lock_stop` is true it publishes a zero `Twist` at 10 Hz on `/myRobot/mux/stop` (priority 250); the `twist_mux` lock has priority 200. `twist_mux` stays the sole publisher on `/myRobot/cmd_vel`. | `twist_mux` publishes nothing while locked (verified on the real node, `tools/probes/mux_lock_probe.sh`), so the base would keep its last command. See `docs/stop-guard.md`. Closes Q-08. |
 
 ## 6. Open questions
 
@@ -106,10 +107,4 @@ The complete machine-readable list is in `contracts/topics.yaml`.
 - Q-07 (future): robot ↔ cloud communication protocol, that is, format, versioning, authentication and the policy of what goes up and when. Out of scope for the course deadline. Spec 009a defines only the minimum needed.
 - Q-03: odometry. 2025S2 uses `/myrobot/odom` (simulator ground truth) and rf2o (laser odometry).
   Decide in spec 003 which one feeds SLAM.
-- Q-08 (safety, found while doing T007): with `/myRobot/mux/lock_stop` active, `twist_mux` (4.5, tested on Jazzy)
-  publishes **nothing** on `/myRobot/cmd_vel`; it does not publish zero. The wheel base would keep the last command,
-  so 001-R10 ("publish zero velocity while locked") is not met by the mux alone. Proposal: a tiny actuator node
-  `stop_guard` that publishes a zero `Twist` at 10 Hz on a new input `/myRobot/mux/stop` (priority 250) only while
-  `lock_stop` is `true`, with the lock priority lowered to 200 so that it blocks every other input but not `stop`.
-  `twist_mux` stays the sole publisher (Art. VI). Needs a decision before T013/T014, and a check of whether the
-  2025S2 `my_robot_cmd_vel_node` has its own command timeout (Q-01 inspection).
+- ~~Q-08~~: closed by D-22. Still open from it: whether the 2025S2 `my_robot_cmd_vel_node` has its own command timeout (check with Q-01).

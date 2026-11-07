@@ -13,9 +13,11 @@ kuberostics/
 │   ├── vacuum_interfaces/        # .msg and .action, no code (Art. I)
 │   ├── vacuum_bringup/           # launch, twist_mux.yaml, lifecycle_core.yaml
 │   ├── vacuum_supervisor/        # submode state machine
+│   ├── vacuum_safety/            # stop_guard (D-22)
 │   ├── vacuum_stubs/             # coverage_server, escape_server, stuck_detector, teleop_fake
 │   └── vacuum_contract_tests/    # tests generated from topics.yaml
 ├── tools/sim_bench/                 # steps/s measurement
+├── tools/probes/                    # checks of third-party nodes (mux_lock_probe.sh)
 ├── docker/{jazzy,lyrical}/Dockerfile  # one container per distribution (D-12)
 ├── compose.yaml                     # starts the chosen container with network_mode: host
 └── .github/workflows/ci.yaml        # matrix distro: [jazzy, lyrical]
@@ -66,11 +68,12 @@ twist_mux:
       escape:   {topic: /myRobot/mux/escape,   timeout: 0.5, priority: 80}
       coverage: {topic: /myRobot/mux/coverage, timeout: 0.5, priority: 50}
       docking:  {topic: /myRobot/mux/docking,  timeout: 0.5, priority: 40}
+      stop:     {topic: /myRobot/mux/stop,     timeout: 0.5, priority: 250}   # D-22: zero velocity from stop_guard
     locks:
-      stop:     {topic: /myRobot/mux/lock_stop, timeout: 0.0, priority: 255}
+      stop:     {topic: /myRobot/mux/lock_stop, timeout: 0.0, priority: 200}  # blocks every input below 200
 ```
 
-The `cmd_vel_out` output is remapped to `/myRobot/cmd_vel`. With `use_stamped: false`, the inputs and the output are `Twist`.
+While a lock is active `twist_mux` publishes **nothing**, so `stop_guard` (D-22, `docs/stop-guard.md`) publishes a zero `Twist` on the `stop` input, which outranks the lock. The `cmd_vel_out` output is remapped to `/myRobot/cmd_vel`. With `use_stamped: false`, the inputs and the output are `Twist`.
 
 ## Two distributions
 
@@ -106,6 +109,6 @@ Decision rule of spec 008:
 
 ## Risks
 
-- `twist_mux` publishes nothing (not zero) while the stop lock is active, so 001-R10 needs a zero-velocity publisher (Q-08). The T014 test must assert zero on `/myRobot/cmd_vel`, not only silence from the inputs.
+- `twist_mux` publishes nothing (not zero) while the stop lock is active; solved by `stop_guard` (D-22). If `stop_guard` is not running, a locked robot keeps its last command: it must be in `lifecycle_manager_core` and in the launch file, and the T014 test must assert zero on `/myRobot/cmd_vel`, not only silence from the inputs.
 - Object names in the *House* scene differ from the 2025S2 scene (Q-01). Mitigation: the names become parameters in the wheel bridge, through remapping or parameters of the 2025S2 node.
 - Start-up order between the IA368II lifecycle manager and `lifecycle_manager_core`. Mitigation: the new nodes do not depend on its nodes to activate, only to receive the mode.
