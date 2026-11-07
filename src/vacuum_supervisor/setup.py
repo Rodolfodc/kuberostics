@@ -16,7 +16,7 @@ setup(
     zip_safe=True,
     maintainer='Rodolfo Dalla Costa',
     maintainer_email='rodolfo.dalla.costa@hotmail.com',
-    description='Supervisor de submodos',
+    description='Submode supervisor',
     license='Apache-2.0',
-    entry_points={'console_scripts': []},
+    entry_points={'console_scripts': ['supervisor = vacuum_supervisor.supervisor_node:main']},
 )

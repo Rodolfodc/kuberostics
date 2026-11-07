@@ -106,3 +106,10 @@ The complete machine-readable list is in `contracts/topics.yaml`.
 - Q-07 (future): robot ↔ cloud communication protocol, that is, format, versioning, authentication and the policy of what goes up and when. Out of scope for the course deadline. Spec 009a defines only the minimum needed.
 - Q-03: odometry. 2025S2 uses `/myrobot/odom` (simulator ground truth) and rf2o (laser odometry).
   Decide in spec 003 which one feeds SLAM.
+- Q-08 (safety, found while doing T007): with `/myRobot/mux/lock_stop` active, `twist_mux` (4.5, tested on Jazzy)
+  publishes **nothing** on `/myRobot/cmd_vel`; it does not publish zero. The wheel base would keep the last command,
+  so 001-R10 ("publish zero velocity while locked") is not met by the mux alone. Proposal: a tiny actuator node
+  `stop_guard` that publishes a zero `Twist` at 10 Hz on a new input `/myRobot/mux/stop` (priority 250) only while
+  `lock_stop` is `true`, with the lock priority lowered to 200 so that it blocks every other input but not `stop`.
+  `twist_mux` stays the sole publisher (Art. VI). Needs a decision before T013/T014, and a check of whether the
+  2025S2 `my_robot_cmd_vel_node` has its own command timeout (Q-01 inspection).

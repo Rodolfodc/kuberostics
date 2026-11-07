@@ -73,6 +73,13 @@ topics:
     owner: supervisor
     since: "001"
 
+  - name: /myRobot/telemetry/supervisor
+    type: diagnostic_msgs/msg/DiagnosticArray
+    qos: default
+    owner: supervisor
+    since: "001"
+    note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz"
+
   # twist_mux inputs (higher priority wins)
   - {name: /myRobot/mux/teleop,   type: geometry_msgs/msg/Twist, qos: ia368ii, owner: teleop,             priority: 100, since: "001"}
   - {name: /myRobot/mux/escape,   type: geometry_msgs/msg/Twist, qos: ia368ii, owner: escape_server,      priority: 80,  since: "001"}
