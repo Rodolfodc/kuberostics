@@ -83,6 +83,10 @@ Subagents live in `.claude/agents/`. The main session is the orchestrator: it re
 **Dangerous tools** go through wrappers, never raw: `tools/sim.sh` (headless CoppeliaSim on a copy of the scene, kills only its own PID), `tools/k3s.sh` (local k3d cluster `kuberostics`, own kubeconfig), `tools/tf.sh` (fixed to `infra/`). `.claude/settings.json` allows read-only verbs and asks for `apply`, `destroy`, `delete`, `docker`, `pip install` and `git push`; `.claude/hooks/protect.sh` blocks writes to `src/deps/`, `scene_house.ttt`, `.git/` and the constitution, force pushes, killing processes by name, `docker.sock` and `--privileged`.
 
 
+## Where to start Claude Code
+
+Claude Code reads `.claude/` (agents, settings, hooks) and `CLAUDE.md` from the folder where it starts. The easiest place is this repository. If you start from the folder above it (the one that holds the House scene file, which is not under git), run `scripts/link-workspace.sh` once: it creates symlinks `../.claude` and `../CLAUDE.md` to the tracked files here, so the six agents and the protection hook load from either place. The real files stay in this repository. Agents load only when a session starts, so restart Claude Code after creating or changing them. From the parent folder, commands are `aspirador-ia368ii/tools/...`, so the relative allow rules in `.claude/settings.json` (e.g. `Bash(tools/sim.sh *)`) do not match and those commands ask for permission.
+
 ## Environment setup
 
 **Prerequisites the script does NOT install:** ROS 2 is **required** (Lyrical or Jazzy from the official guide; without it nothing builds, and the script's check fails). llama.cpp is **optional** (see "Local LLM" below); the project and the agents work without it, so never make a task depend on it.
