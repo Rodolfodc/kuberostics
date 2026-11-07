@@ -39,9 +39,11 @@ The project agents, permissions and protection hook live in `.claude/` (tracked)
 
 Ubuntu 24.04 or 26.04.
 
-**Prerequisites (install them yourself, the script does not):**
-- **ROS 2: required.** Lyrical (Ubuntu 26.04) or Jazzy (Ubuntu 24.04), from the official guide at https://docs.ros.org. Nothing builds without it. Jazzy can also run through Docker (`--pull-jazzy`), but Lyrical must be on the host.
-- **llama.cpp: optional.** A local server compatible with the OpenAI API (`http://127.0.0.1:11434/v1`) that the agents use for cheap operational tasks (summarizing logs, drafting boilerplate). The project works without it. Install it by building https://github.com/ggml-org/llama.cpp and downloading a `.gguf` model.
+The project is **Docker-first**: building, testing, probing and rendering diagrams all run in containers, so a machine only needs Docker (installed by the script) and network access to pull the images. ROS 2 on the host is **optional**.
+
+**Optional, not installed by the script:**
+- **ROS 2 on the host** (Lyrical or Jazzy, from https://docs.ros.org): only to build outside Docker.
+- **llama.cpp:** a local server compatible with the OpenAI API (`http://127.0.0.1:11434/v1`) that the agents use for cheap operational tasks (summarizing logs, drafting boilerplate). The project works without it. Install it by building https://github.com/ggml-org/llama.cpp and downloading a `.gguf` model.
 
 Then:
 
@@ -51,9 +53,16 @@ scripts/setup_env.sh            # installs what is missing (asks for sudo) and v
 scripts/setup_env.sh --check    # only verifies, installs nothing
 ```
 
-It installs apt packages, Docker, kubectl, k3d, terraform, the firewall for ports 23000-23099, CoppeliaSim 4.10.0,
-the `.venv` (`requirements.txt`) and the third-party code (`deps.repos`). The *House* scene (`scene_house.ttt`) lives
-outside the repository: put it one folder above the project root. ROS 2 and llama.cpp (optional) are not installed by it.
+It installs apt packages, Docker, the Docker images (`osrf/ros:jazzy-desktop-full`, `ros:lyrical-ros-base`, `minlag/mermaid-cli`),
+kubectl, k3d, terraform, the firewall for ports 23000-23099, CoppeliaSim 4.10.0, the `.venv` (`requirements.txt`) and the
+third-party code (`deps.repos`). The *House* scene (`scene_house.ttt`) lives outside the repository: put it one folder
+above the project root. Dependencies of the ROS packages are tracked in their `package.xml` files and installed by rosdep
+inside the containers. To build and test:
+
+```bash
+scripts/test-docker.sh            # Jazzy and Lyrical, each in a clean container
+scripts/render-diagrams.sh        # regenerate docs/diagrams/render/*.svg
+```
 
 ## License
 
