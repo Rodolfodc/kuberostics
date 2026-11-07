@@ -1,0 +1,33 @@
+# twist_mux configuration (T007, spec 001). Inputs and priorities mirror
+# specs/000-system/contracts/topics.yaml; the contract test of T005 and
+# test/test_twist_mux_config.py keep them in sync.
+#
+# The output (cmd_vel_out) is remapped to /myRobot/cmd_vel in the launch file (D-03): twist_mux is the
+# sole publisher on that topic (Art. VI).
+twist_mux:
+  ros__parameters:
+    # D-13: the twist_mux 4.5 default is true on both distributions; the base expects an unstamped Twist.
+    use_stamped: false
+    topics:
+      teleop:
+        topic: /myRobot/mux/teleop
+        timeout: 0.5
+        priority: 100
+      escape:
+        topic: /myRobot/mux/escape
+        timeout: 0.5
+        priority: 80
+      coverage:
+        topic: /myRobot/mux/coverage
+        timeout: 0.5
+        priority: 50
+      docking:
+        topic: /myRobot/mux/docking
+        timeout: 0.5
+        priority: 40
+      # /myRobot/mux/nav (priority 60) enters with spec 005.
+    locks:
+      stop:
+        topic: /myRobot/mux/lock_stop
+        timeout: 0.0
+        priority: 255

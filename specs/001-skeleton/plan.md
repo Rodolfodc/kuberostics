@@ -106,5 +106,6 @@ Decision rule of spec 008:
 
 ## Risks
 
+- `twist_mux` publishes nothing (not zero) while the stop lock is active, so 001-R10 needs a zero-velocity publisher (Q-08). The T014 test must assert zero on `/myRobot/cmd_vel`, not only silence from the inputs.
 - Object names in the *House* scene differ from the 2025S2 scene (Q-01). Mitigation: the names become parameters in the wheel bridge, through remapping or parameters of the 2025S2 node.
 - Start-up order between the IA368II lifecycle manager and `lifecycle_manager_core`. Mitigation: the new nodes do not depend on its nodes to activate, only to receive the mode.

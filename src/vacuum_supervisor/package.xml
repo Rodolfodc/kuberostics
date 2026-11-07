@@ -11,6 +11,10 @@
   <exec_depend>vacuum_interfaces</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>lifecycle_msgs</exec_depend>
+  <exec_depend>action_msgs</exec_depend>
+  <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
 

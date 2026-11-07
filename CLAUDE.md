@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## State of the repo
 
-Spec-driven project (final project of IA368II, FEEC/UNICAMP: autonomous vacuum robot in CoppeliaSim's *House* scene, ROS 2). **Implementation has started** (spec 001): `deps.repos`, `scripts/setup.sh`, `src/vacuum_interfaces`, `src/vacuum_supervisor` (`SubmodeMachine` + tests, T001/T002/T006/T008 done). Dockerfiles, CI, the supervisor node, stubs and launch are still *planned* in `specs/001-skeleton/plan.md` (tasks in `tasks.md`; done tasks are checked in `tasks.md`). Do not assume a command exists until its task is implemented.
+Spec-driven project (final project of IA368II, FEEC/UNICAMP: autonomous vacuum robot in CoppeliaSim's *House* scene, ROS 2). **Implementation has started** (spec 001): `deps.repos`, `scripts/setup.sh`, `scripts/setup_env.sh`, `src/vacuum_interfaces`, `src/vacuum_supervisor` (`SubmodeMachine` + the `supervisor` LifecycleNode, with tests) and `src/vacuum_bringup` (`twist_mux.yaml`); T001, T002, T006 to T009 are done. Dockerfiles, CI, the stubs, the launch file and the contract tests are still *planned* in `specs/001-skeleton/tasks.md`.
 
 This is its own git repo, nested inside the outer folder `projeto_final_ia386ii/` (not a repo, no `CLAUDE.md`). That folder also holds two files outside version control:
 - `scene_house.ttt` (~29 MB): the CoppeliaSim *House* scene; the open question about scene object names (spec 000 §6) is answered by inspecting it.
 - `aspirador_specs.zip` and `aspirador-ia368ii-updated.zip`: packaged snapshots of this repo (the second includes `docs/`). They are not sources of truth; never edit them, change the files in this repo instead.
 
-Specs and docs are written in Portuguese; keep that language.
+Everything in the repository is written in **English** (D-21): specs, docs, comments, commit messages, file and directory names. The third-party orchestrator is called `IA368II` (its repository name), never by its author's name.
 
 **Keep this file current:** once the tasks in `specs/001-skeleton/tasks.md` produce real code, replace the "Planned commands" section with the actual build, lint, test and single-test commands, and update "State of the repo".
 

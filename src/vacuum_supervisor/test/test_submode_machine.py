@@ -20,28 +20,28 @@ def machine_covering():
 
 
 # --- 001-R05 ---------------------------------------------------------------
-@pytest.mark.parametrize('mode', ['IDLE', 'CHARGING', 'CHARGED', 'DESCONHECIDO', ''])
-def test_001_R05_modo_fora_de_cleaning_e_autodocking_fica_none(mode):
+@pytest.mark.parametrize('mode', ['IDLE', 'CHARGING', 'CHARGED', 'UNKNOWN', ''])
+def test_001_R05_mode_outside_cleaning_and_autodocking_gives_none(mode):
     m = SubmodeMachine()
     m.on_mode(mode)
     assert m.submode == NONE
 
 
 # --- 001-R06 ---------------------------------------------------------------
-def test_001_R06_cleaning_inicia_covering_e_envia_cover_room():
+def test_001_R06_cleaning_starts_covering_and_sends_cover_room():
     m = SubmodeMachine()
     fx = m.on_mode('CLEANING')
     assert m.submode == COVERING
     assert fx == [Effect('send_cover_room')]
 
 
-def test_001_R06_modo_republicado_e_idempotente():
+def test_001_R06_republished_mode_is_idempotent():
     m = machine_covering()
     assert m.on_mode('CLEANING') == []
     assert m.submode == COVERING
 
 
-def test_001_R05_sair_de_cleaning_cancela_e_volta_a_none():
+def test_001_R05_leaving_cleaning_cancels_and_returns_to_none():
     m = machine_covering()
     fx = m.on_mode('IDLE')
     assert m.submode == NONE
@@ -49,14 +49,14 @@ def test_001_R05_sair_de_cleaning_cancela_e_volta_a_none():
 
 
 # --- 001-R07 ---------------------------------------------------------------
-def test_001_R07_stuck_em_covering_cancela_e_escapa():
+def test_001_R07_stuck_in_covering_cancels_and_escapes():
     m = machine_covering()
     fx = m.on_stuck()
     assert m.submode == ESCAPING
     assert kinds(fx) == ['cancel_actions', 'send_escape']
 
 
-def test_001_R07_stuck_em_autodocking_escapa_com_retorno_none():
+def test_001_R07_stuck_in_autodocking_escapes_and_resumes_none():
     m = SubmodeMachine()
     m.on_mode('AUTODOCKING')
     assert m.submode == NONE
@@ -68,14 +68,14 @@ def test_001_R07_stuck_em_autodocking_escapa_com_retorno_none():
 
 
 @pytest.mark.parametrize('mode', ['IDLE', 'CHARGING', 'CHARGED'])
-def test_001_R07_stuck_fora_de_covering_e_autodocking_e_ignorado(mode):
+def test_001_R07_stuck_outside_covering_and_autodocking_is_ignored(mode):
     m = SubmodeMachine()
     m.on_mode(mode)
     assert m.on_stuck() == []
     assert m.submode == NONE
 
 
-def test_001_R07_stuck_durante_escaping_e_ignorado():
+def test_001_R07_stuck_during_escaping_is_ignored():
     m = machine_covering()
     m.on_stuck()
     assert m.on_stuck() == []
@@ -83,7 +83,7 @@ def test_001_R07_stuck_durante_escaping_e_ignorado():
 
 
 # --- 001-R08 ---------------------------------------------------------------
-def test_001_R08_fuga_com_sucesso_retorna_a_covering_e_reenvia_cover_room():
+def test_001_R08_successful_escape_returns_to_covering_and_resends_cover_room():
     m = machine_covering()
     m.on_stuck()
     fx = m.on_escape_result(success=True)
@@ -92,7 +92,7 @@ def test_001_R08_fuga_com_sucesso_retorna_a_covering_e_reenvia_cover_room():
 
 
 # --- 001-R09 ---------------------------------------------------------------
-def test_001_R09_fuga_falha_trava_e_notifica():
+def test_001_R09_failed_escape_locks_and_notifies():
     m = machine_covering()
     m.on_stuck()
     fx = m.on_escape_result(success=False)
@@ -103,7 +103,7 @@ def test_001_R09_fuga_falha_trava_e_notifica():
     assert notes[0].value == ('ERROR', 'ESCAPE_FAILED')
 
 
-def test_001_R09_escape_timeout_do_supervisor_equivale_a_falha():
+def test_001_R09_supervisor_escape_timeout_equals_failure():
     m = machine_covering()
     m.on_stuck()
     fx = m.on_escape_timeout()
@@ -111,7 +111,7 @@ def test_001_R09_escape_timeout_do_supervisor_equivale_a_falha():
     assert Effect('lock_stop', True) in fx
 
 
-def test_001_R09_reset_libera_lock_e_volta_a_none():
+def test_001_R09_reset_releases_lock_and_returns_to_none():
     m = machine_covering()
     m.on_stuck()
     m.on_escape_result(success=False)
@@ -120,13 +120,13 @@ def test_001_R09_reset_libera_lock_e_volta_a_none():
     assert fx == [Effect('lock_stop', False)]
 
 
-def test_001_R09_reset_sem_falha_nao_faz_nada():
+def test_001_R09_reset_without_failure_does_nothing():
     m = machine_covering()
     assert m.reset() == []
     assert m.submode == COVERING
 
 
-def test_001_R09_cleaning_nao_reinicia_enquanto_escape_failed():
+def test_001_R09_cleaning_does_not_restart_while_escape_failed():
     m = machine_covering()
     m.on_stuck()
     m.on_escape_result(success=False)
@@ -135,16 +135,89 @@ def test_001_R09_cleaning_nao_reinicia_enquanto_escape_failed():
 
 
 # --- robustez (resultado atrasado depois de cancelar) ----------------------
-def test_resultado_de_fuga_fora_de_escaping_e_ignorado():
+def test_escape_result_outside_escaping_is_ignored():
     m = machine_covering()
     assert m.on_escape_result(success=False) == []
     assert m.submode == COVERING
 
 
-def test_001_R05_sair_de_cleaning_durante_escaping_cancela_a_fuga():
+def test_001_R05_leaving_cleaning_during_escaping_cancels_the_escape():
     m = machine_covering()
     m.on_stuck()
     fx = m.on_mode('IDLE')
     assert m.submode == NONE
     assert kinds(fx) == ['cancel_actions']
     assert m.on_escape_result(success=True) == []   # a late result revives nothing
+
+
+# --- D-20: logs and telemetry (injected logger, metrics snapshot) ------------
+class FakeLogger:
+    def __init__(self):
+        self.records = []
+
+    def _add(self, level, msg):
+        self.records.append((level, msg))
+
+    def debug(self, msg):
+        self._add('debug', msg)
+
+    def info(self, msg):
+        self._add('info', msg)
+
+    def warning(self, msg):
+        self._add('warning', msg)
+
+    def error(self, msg):
+        self._add('error', msg)
+
+    def messages(self, level):
+        return [m for lv, m in self.records if lv == level]
+
+
+def test_D20_every_transition_is_logged_with_its_reason():
+    log = FakeLogger()
+    m = SubmodeMachine(logger=log)
+    m.on_mode('CLEANING')
+    assert any('NONE -> COVERING' in msg for msg in log.messages('info'))
+    assert m.reason == 'mode CLEANING'
+
+
+def test_D20_failed_escape_is_logged_as_error():
+    log = FakeLogger()
+    m = SubmodeMachine(logger=log)
+    m.on_mode('CLEANING')
+    m.on_stuck()
+    m.on_escape_result(success=False)
+    assert any('ESCAPING -> ESCAPE_FAILED' in msg for msg in log.messages('error'))
+
+
+def test_D20_ignored_events_are_logged_at_debug():
+    log = FakeLogger()
+    m = SubmodeMachine(logger=log)
+    m.on_stuck()
+    assert log.messages('debug')
+
+
+def test_D20_works_without_a_logger():
+    m = SubmodeMachine()
+    m.on_mode('CLEANING')
+    m.on_stuck()
+    assert m.submode == ESCAPING
+
+
+def test_D20_metrics_count_events_and_outcomes():
+    m = SubmodeMachine()
+    m.on_mode('CLEANING')
+    m.on_stuck()
+    m.on_escape_result(success=True)
+    m.on_stuck()
+    m.on_escape_timeout()
+    m.reset()
+    snap = m.snapshot()
+    assert snap['submode'] == NONE
+    assert snap['stuck_events'] == 2
+    assert snap['escapes_succeeded'] == 1
+    assert snap['escapes_failed'] == 1
+    assert snap['escape_timeouts'] == 1
+    assert snap['resets'] == 1
+    assert snap['transitions'] >= 5

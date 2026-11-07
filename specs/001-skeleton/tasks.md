@@ -18,9 +18,9 @@ A task is only done when the test that verifies the requirement passes.
 
 ## Phase 2: implementation
 
-- [ ] **T007** Create `vacuum_bringup/config/twist_mux.yaml` with `use_stamped: false` (D-13). (001-R10, 001-R11, 001-R18)
+- [x] **T007** Create `vacuum_bringup/config/twist_mux.yaml` with `use_stamped: false` (D-13). (001-R10, 001-R11, 001-R18)
 - [x] **T008** Implement `SubmodeMachine` until T006 passes. (001-R05 to 001-R09)
-- [ ] **T009** Implement the `supervisor` `LifecycleNode`: subscribes to the mode, publishes the submode at 5 Hz, action client, lock and notifications. (001-R05 to 001-R09)
+- [x] **T009** Implement the `supervisor` `LifecycleNode`: subscribes to the mode, publishes the submode at 5 Hz, action client, lock and notifications. (001-R05 to 001-R09)
 - [ ] **T010** [P] `coverage_server` stub: `CoverRoom` server that publishes a constant `Twist` on `mux/coverage` while the goal is active. (001-R06)
 - [ ] **T011** [P] `escape_server` stub with the parameter `outcome` (`succeed`, `fail`, `hang`): reverses and turns for 2 s on `mux/escape`. (001-R07, 001-R16)
 - [ ] **T012** [P] `stuck_detector` stub: publishes a `StuckEvent` when the `~/trigger` service is called. Real detection is left to spec 005. (001-R07)
