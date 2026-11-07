@@ -24,9 +24,9 @@ A task is only done when the test that verifies the requirement passes.
 - [x] **T017** [P] Write the pytest tests of `StopGuard`. (001-R19)
 - [x] **T018** Implement `StopGuard` and the `stop_guard` `LifecycleNode`; add the `stop` input and the lock priority 200 to `twist_mux.yaml`. (001-R10, 001-R19, 001-R20)
 - [x] **T019** [P] `tools/probes/mux_lock_probe.sh`: probe of the real `twist_mux` with our config. (001-R10, 001-R19)
-- [ ] **T010** [P] `coverage_server` stub: `CoverRoom` server that publishes a constant `Twist` on `mux/coverage` while the goal is active. (001-R06)
-- [ ] **T011** [P] `escape_server` stub with the parameter `outcome` (`succeed`, `fail`, `hang`): reverses and turns for 2 s on `mux/escape`. (001-R07, 001-R16)
-- [ ] **T012** [P] `stuck_detector` stub: publishes a `StuckEvent` when the `~/trigger` service is called. Real detection is left to spec 005. (001-R07)
+- [x] **T010** [P] `coverage_server` stub: `CoverRoom` server that publishes a constant `Twist` on `mux/coverage` while the goal is active. (001-R06)
+- [x] **T011** [P] `escape_server` stub with the parameter `outcome` (`succeed`, `fail`, `hang`): reverses and turns for 2 s on `mux/escape`. (001-R07, 001-R16)
+- [x] **T012** [P] `stuck_detector` stub: publishes a `StuckEvent` when the `~/trigger` service is called. Real detection is left to spec 005. (001-R07)
 - [ ] **T013** Create `skeleton.launch.py`, with:
   - the six IA368II nodes and its lifecycle manager, with the remappings of D-04 and D-05;
   - `lifecycle_manager_core`, managing `supervisor` and `stop_guard`;
