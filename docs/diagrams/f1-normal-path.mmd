@@ -1,0 +1,21 @@
+sequenceDiagram
+  autonumber
+  participant CAM as Camera (vision_node)
+  participant THR as image_throttle
+  participant DC as detector_cloud (K3s)
+  participant DL as detector_local
+  participant SEL as detection_selector
+  participant PROJ as projector
+  participant SEM as semantic segmentation
+
+  CAM->>THR: /camera (stamp = t0)
+  CAM->>DL: /camera (stamp = t0)
+  Note over CAM,PROJ: /camera_depth (t0) stays in the projector cache
+  THR->>DC: compressed RGB (stamp = t0)
+  DL-->>SEL: detections/local (header.stamp = t0)
+  Note over SEL: state CLOSED: local response ignored
+  DC->>SEL: detections/cloud (header.stamp = t0, echo)
+  Note over SEL: age = now − t0 ≤ max_age_s<br/>t0 > watermark → forwards<br/>watermark = t0
+  SEL->>PROJ: /myRobot/perception/detections (t0)
+  Note over PROJ: depth from cache at t0<br/>TF queried at t0
+  PROJ->>SEM: /detections_markers (position on the map)

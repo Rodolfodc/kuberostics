@@ -1,0 +1,38 @@
+flowchart LR
+  subgraph CLOUD["K3s"]
+    DC["detector_cloud<br/>yolo11x · Deployment + livenessProbe"]
+  end
+
+  subgraph ROBOT["Robot"]
+    VIS["my_robot_vision_node (2025S2)<br/>/camera · /camera_depth"]
+    THR["image_throttle<br/>compressed RGB · 2 Hz"]
+    DL["detector_local<br/>yolo11n · hot standby"]
+    SEL["detection_selector<br/>circuit breaker · age · watermark"]
+    CACHE[("depth cache<br/>by timestamp")]
+    TF[("TF")]
+    PROJ["projector<br/>2D + depth + TF<br/>at the photo timestamp"]
+    SEM["semantic segmentation (2025S2)<br/>/semantic_map"]
+    subgraph MAPPING["Mapping (module 2)"]
+      SCAN["my_robot_scan_node (2025S2)<br/>/scan"]
+      SLAM["SLAM Toolbox<br/>/map"]
+      TOPO["topological segmentation (2025S2)<br/>/topologic_map"]
+    end
+  end
+
+  VIS -->|"/camera"| THR
+  THR -->|"rgb_throttled/compressed<br/>via Zenoh"| DC
+  DC -->|"detections/cloud<br/>header = photo header"| SEL
+  VIS -->|"/camera"| DL
+  DL -->|"detections/local"| SEL
+  SEL -->|"/myRobot/perception/detections"| PROJ
+  VIS -->|"/camera_depth"| CACHE
+  CACHE --> PROJ
+  TF --> PROJ
+  PROJ -->|"/detections_markers"| SEM
+  SCAN --> SLAM --> TOPO -->|"/topologic_map"| SEM
+  SEL -->|"offload_status<br/>notifications"| OUT(["interface and logs"])
+
+  classDef reused fill:#FAEEDA,stroke:#BA7517,color:#412402
+  classDef added fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+  class VIS,SCAN,TOPO,SEM reused
+  class THR,DL,SEL,PROJ,DC,SLAM added

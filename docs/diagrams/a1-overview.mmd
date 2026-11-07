@@ -1,0 +1,46 @@
+flowchart TB
+  subgraph K3S["Local K3s cluster · provisioned by Terraform"]
+    ZC["Cluster Zenoh"]
+    DET["detector_cloud<br/>yolo11x · Deployment"]
+    MQ["Mosquitto"]
+    DATA["MinIO · DynamoDB Local"]
+    TRAINING["Training jobs + digital twin"]
+    DASH["Dashboard"]
+    LLM["LLM agent (optional)"]
+  end
+
+  subgraph ROBOT["ROS 2 container · Jazzy or Lyrical · namespace /myRobot"]
+    SRV["Services<br/>schedule · interface · notifications"]
+    ORCH["IA368II orchestrator (unchanged)<br/>CLEANING · AUTODOCKING · CHARGING · CHARGED · IDLE"]
+    SUP["Submode supervisor<br/>COVERING · ESCAPING · ESCAPE_FAILED ..."]
+    MOTION["Actuators + twist_mux<br/>sole publisher of /myRobot/cmd_vel"]
+    BRIDGES["ZeroMQ bridges (2025S2)<br/>laser · camera · odometry · wheels"]
+    PERC["Perception<br/>SLAM · rooms · detection · selector · projector"]
+    ZR["Transport to the cloud<br/>rmw_zenoh or Zenoh bridge (Q-06)"]
+    MQB["MQTT bridge<br/>(optional, at the dock only)"]
+  end
+
+  subgraph HOST["Host"]
+    SIM["CoppeliaSim<br/>House scene"]
+  end
+
+  SRV -->|"start / stop"| ORCH
+  ORCH -->|"mode"| SUP
+  SUP -->|"actions and lock"| MOTION
+  MOTION -->|"/myRobot/cmd_vel"| BRIDGES
+  BRIDGES -->|"sensors"| PERC
+  PERC -->|"stuck"| SUP
+  BRIDGES <-->|"ZeroMQ :23000"| SIM
+  PERC <--> ZR
+  ZR <-->|"TCP 7447"| ZC
+  ZC <--> DET
+  MQB <-->|"MQTT"| MQ
+  MQ --> DATA --> TRAINING --> DASH
+  LLM -.->|"traps"| TRAINING
+
+  classDef ia368ii fill:#ECEAE4,stroke:#8A8880,color:#2C2C2A
+  classDef added fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+  classDef optional fill:#FFFFFF,stroke:#0F6E56,stroke-dasharray:4 3,color:#04342C
+  class ORCH,BRIDGES ia368ii
+  class SUP,MOTION,PERC,SRV,ZR,ZC,DET,MQ,DATA,TRAINING,DASH added
+  class MQB,LLM optional

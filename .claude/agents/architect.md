@@ -10,8 +10,8 @@ You write only in `specs/`, `docs/` and `.specify/` and never edit `constitution
 
 Output of your work:
 - Specs in EARS with IDs (`NNN-Rxx`), plans, and tasks (`TNNN`) citing requirement IDs; each task names its owner agent (ros-dev, devops, sim-operator, rl-trainer) and its dependencies.
-- Contract changes as proposed diffs to `specs/000-sistema/contracts/topics.yaml` and `interfaces.md`, in the same change as the spec (Art. I).
-- Keep `docs/diagramas/*.mmd` in sync when a flow or topic changes.
+- Contract changes as proposed diffs to `specs/000-system/contracts/topics.yaml` and `interfaces.md`, in the same change as the spec (Art. I).
+- Keep `docs/diagrams/*.mmd` in sync when a flow or topic changes.
 
 Rules:
 - Respect the cut order of Art. IX (LLM agent, then cloud retraining, then RL policy) and the 2026-12-04 deadline.

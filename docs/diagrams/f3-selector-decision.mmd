@@ -1,0 +1,17 @@
+flowchart TB
+  IN(["Detection2DArray arrives<br/>(cloud or local)"]) --> CLD{"From the cloud?"}
+  CLD -->|yes| HEALTH["Update cloud health:<br/>cloud_age = now − header.stamp"]
+  CLD -->|no| SOURCE
+  HEALTH --> TRANS["Evaluate circuit breaker transitions<br/>(state table)"]
+  TRANS --> SOURCE{"Is the source the one of the current state?<br/>CLOSED → cloud<br/>OPEN or HALF_OPEN → local"}
+  SOURCE -->|no| DROP0(["Ignore<br/>(inactive source)"])
+  SOURCE -->|yes| AGE{"now − header.stamp<br/>≤ max_age_s?"}
+  AGE -->|no| DROP1(["Drop<br/>dropped_stale += 1"])
+  AGE -->|yes| MARK{"header.stamp ><br/>watermark?"}
+  MARK -->|no| DROP2(["Drop<br/>dropped_watermark += 1"])
+  MARK -->|yes| PUB["Publish on<br/>/myRobot/perception/detections"]
+  PUB --> UPD(["watermark = header.stamp"])
+
+  TICK(["10 Hz timer"]) --> SIL{"CLOSED and no cloud response<br/>with age ≤ 1.5 s for 1.5 s?"}
+  SIL -->|yes| OPENS(["Change to OPEN<br/>Notification WARN"])
+  SIL -->|no| STAT(["Publish OffloadStatus at 1 Hz"])

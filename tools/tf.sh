@@ -9,6 +9,6 @@ command -v terraform >/dev/null 2>&1 || { echo "terraform is not installed" >&2;
 [[ -f "$REPO/.k3s/kubeconfig" ]] || { echo "local cluster missing; run: tools/k3s.sh up" >&2; exit 1; }
 
 export KUBE_CONFIG_PATH="$REPO/.k3s/kubeconfig"
-export KUBE_CTX="k3d-aspirador"
+export KUBE_CTX="k3d-kuberostics"
 cd "$REPO/infra"
 exec terraform "$@"

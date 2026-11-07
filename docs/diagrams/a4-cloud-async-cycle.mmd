@@ -1,0 +1,52 @@
+flowchart TB
+  subgraph ROBOT["Robot"]
+    STK["stuck_detector<br/>StuckEvent with laser and pose"]
+    LOG[("local stuck<br/>log")]
+    MQB["MQTT bridge<br/>only in CHARGED"]
+    ESC["escape_rl<br/>loads weights only in CHARGED"]
+    HMI["interface<br/>user complaint"]
+  end
+
+  subgraph K3S["Local K3s (Terraform local module)"]
+    MQ["Mosquitto"]
+    ING["ingestion"]
+    RAW[("MinIO<br/>raw stuck events")]
+    IDX[("DynamoDB Local<br/>index and history")]
+    LLM["LLM agent (optional)<br/>complaint → trap as validated JSON"]
+    GEN["trap generator"]
+    JOB["Training Job<br/>Gymnasium + Stable-Baselines3"]
+    TWIN["digital twin<br/>headless CoppeliaSim · unseen traps"]
+    DASH["dashboard<br/>human approval"]
+    W[("MinIO<br/>versioned weights (ETag)")]
+  end
+
+  subgraph AWS["Same design on AWS (Terraform aws module)"]
+    A1["IoT Core"]
+    A2["S3"]
+    A3["DynamoDB"]
+    A4["EKS Jobs"]
+    A5["Bedrock"]
+  end
+
+  STK --> LOG --> MQB
+  MQB -->|"MQTT QoS 1"| MQ --> ING
+  ING --> RAW
+  ING --> IDX
+  HMI -.-> LLM
+  LLM -.-> GEN
+  RAW --> GEN --> JOB --> TWIN --> DASH --> W
+  W -->|"GET with If-None-Match<br/>200 with new weights or 304"| MQB
+  MQB --> ESC
+
+  MQ ~~~ A1
+  RAW ~~~ A2
+  IDX ~~~ A3
+  JOB ~~~ A4
+  LLM ~~~ A5
+
+  classDef added fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+  classDef optional fill:#FFFFFF,stroke:#0F6E56,stroke-dasharray:4 3,color:#04342C
+  classDef aws fill:#F1EFE8,stroke:#888780,color:#2C2C2A
+  class STK,MQB,ESC,HMI,MQ,ING,GEN,JOB,TWIN,DASH added
+  class LLM optional
+  class A1,A2,A3,A4,A5 aws

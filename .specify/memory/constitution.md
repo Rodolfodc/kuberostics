@@ -1,93 +1,93 @@
-# Constituição do projeto: robô aspirador autônomo (IA368II 2026S2)
+# Project constitution: autonomous vacuum robot (IA368II 2026S2)
 
-Princípios que valem para toda especificação, plano, tarefa e linha de código deste repositório.
-Uma especificação que contradiga um artigo é inválida até que o artigo seja emendado explicitamente.
+Principles that apply to every specification, plan, task and line of code in this repository.
+A specification that contradicts an article is invalid until the article is explicitly amended.
 
-## Artigo I. O contrato vem antes do código
+## Article I. The contract comes before the code
 
-1. Toda interface ROS 2 (tópico, serviço, ação, parâmetro público) existe primeiro em
-   `specs/000-sistema/contracts/`, com nome, tipo, QoS (*Quality of Service*), quem publica e quem consome.
-2. Os tipos novos são definidos em arquivos `.msg`, `.srv` e `.action` do pacote `aspirador_interfaces`.
-   Esse pacote não contém implementação.
-3. Mudar um contrato exige mudar a especificação no mesmo commit.
+1. Every ROS 2 interface (topic, service, action, public parameter) exists first in
+   `specs/000-system/contracts/`, with name, type, QoS (*Quality of Service*), who publishes and who consumes.
+2. New types are defined in `.msg`, `.srv` and `.action` files of the `vacuum_interfaces` package.
+   That package contains no implementation.
+3. Changing a contract requires changing the specification in the same commit.
 
-## Artigo II. O código de terceiros não é alterado
+## Article II. Third-party code is not modified
 
-1. `lucianovk/IA368II` (pacotes `myrobot_bringup`, `myrobot_interfaces` e `my_robot_pkg`) é uma dependência
-   somente leitura, fixada por commit em `deps.repos`.
-2. A adaptação usa só estes mecanismos, nesta ordem de preferência:
-   1. submodos publicados por um nó próprio;
-   2. remapeamento de nomes no launch;
-   3. substituição de um nó por outro de mesmo nome que cumpra o mesmo contrato;
-   4. herança pontual.
-3. É proibido herdar ou substituir `BehaviourManager` (o orquestrador) e estender o enum `Mode`.
-   O orquestrador continua publicando exatamente CLEANING, AUTODOCKING, CHARGING, CHARGED e IDLE.
+1. `IA368II` (packages `myrobot_bringup`, `myrobot_interfaces` and `my_robot_pkg`) is a read-only
+   dependency, pinned by commit in `deps.repos`.
+2. Adaptation uses only these mechanisms, in this order of preference:
+   1. submodes published by a node of our own;
+   2. name remapping in the launch file;
+   3. replacing a node with another of the same name that fulfils the same contract;
+   4. targeted inheritance.
+3. Inheriting from or replacing `BehaviourManager` (the orchestrator) and extending the `Mode` enum are forbidden.
+   The orchestrator keeps publishing exactly CLEANING, AUTODOCKING, CHARGING, CHARGED and IDLE.
 
-## Artigo III. Todo módulo é plugável
+## Article III. Every module is pluggable
 
-1. Cada módulo é um pacote ROS 2 com launch próprio. Ele sobe sozinho, alimentado por stubs ou rosbag.
-2. Nós novos são `LifecycleNode`, gerenciados por um lifecycle manager do Nav2.
-3. **Atuador** é o nó que move o robô. Ele publica apenas na sua entrada do `twist_mux`.
-4. **Serviço** é o nó que percebe, calcula ou mostra. Ele nunca publica comando de movimento.
-5. Duas implementações da mesma interface devem poder trocar de lugar só pelo launch.
+1. Each module is a ROS 2 package with its own launch file. It comes up on its own, fed by stubs or a rosbag.
+2. New nodes are `LifecycleNode`s, managed by a Nav2 lifecycle manager.
+3. An **actuator** is a node that moves the robot. It publishes only to its own `twist_mux` input.
+4. A **service** is a node that perceives, computes or displays. It never publishes a motion command.
+5. Two implementations of the same interface must be swappable through the launch file alone.
 
-## Artigo IV. O sistema sempre roda
+## Article IV. The system always runs
 
-1. A primeira entrega é o esqueleto andante (*walking skeleton*, Cockburn): todos os módulos presentes como stubs,
-   integrados de ponta a ponta.
-2. Um stub só é removido quando a implementação real passa nos mesmos testes de contrato.
+1. The first delivery is the walking skeleton (Cockburn): all modules present as stubs,
+   integrated end to end.
+2. A stub is only removed when the real implementation passes the same contract tests.
 
-## Artigo V. Teste de contrato é obrigatório
+## Article V. Contract tests are mandatory
 
-1. Cada interface do contrato tem teste automático de existência, tipo e QoS.
-2. Cada módulo tem ao menos um teste com `launch_testing`.
-3. A integração contínua roda `colcon build` e `colcon test` sem simulador.
-   Os testes com CoppeliaSim rodam localmente e são marcados como tal.
+1. Each interface of the contract has an automatic test of existence, type and QoS.
+2. Each module has at least one `launch_testing` test.
+3. Continuous integration runs `colcon build` and `colcon test` without a simulator.
+   Tests with CoppeliaSim run locally and are marked as such.
 
-## Artigo VI. Segurança de movimento
+## Article VI. Motion safety
 
-1. Somente o `twist_mux` publica em `/myRobot/cmd_vel`.
-2. Existe um lock de parada de prioridade máxima.
-3. Todo comportamento de recuperação tem tempo limite e fallback determinístico.
-   Quando ambos falham, o robô para e notifica.
+1. Only `twist_mux` publishes on `/myRobot/cmd_vel`.
+2. A maximum-priority stop lock exists.
+3. Every recovery behaviour has a timeout and a deterministic fallback.
+   When both fail, the robot stops and notifies.
 
-## Artigo VII. A nuvem é opcional
+## Article VII. The cloud is optional
 
-1. O robô limpa a casa sem rede.
-2. Os componentes de nuvem (ponte MQTT, serviços em K3s) sobem por um lifecycle manager separado.
-3. Pesos de política novos só são carregados com o orquestrador no modo CHARGED.
+1. The robot cleans the house without a network.
+2. Cloud components (MQTT bridge, K3s services) come up under a separate lifecycle manager.
+3. New policy weights are only loaded with the orchestrator in CHARGED mode.
 
-## Artigo VIII. Rastreabilidade
+## Article VIII. Traceability
 
-1. Cada requisito tem um identificador (por exemplo, `001-R04`), escrito em notação EARS
+1. Each requirement has an identifier (for example, `001-R04`), written in EARS notation
    (*Easy Approach to Requirements Syntax*, Mavin et al., 2009).
-2. Cada tarefa cita os requisitos que atende, e cada teste cita o requisito que verifica.
-3. As mensagens de commit citam o identificador da tarefa.
+2. Each task cites the requirements it meets, and each test cites the requirement it verifies.
+3. Commit messages cite the task identifier.
 
-## Artigo IX. Simplicidade e prazo
+## Article IX. Simplicity and deadline
 
-1. Todo módulo chega primeiro em versão mínima funcional e só depois ganha profundidade.
-2. Prazo final: 4 de dezembro de 2026, 23:59.
-3. Ordem de corte em caso de atraso: (1) agente LLM; (2) retreino na nuvem; (3) política RL, mantendo a fuga por roteiro fixo.
-   Os seis módulos do enunciado não são cortados.
+1. Every module first arrives in a minimal working version and only later gains depth.
+2. Final deadline: December 4, 2026, 23:59.
+3. Cut order in case of delay: (1) LLM agent; (2) cloud retraining; (3) RL policy, keeping the scripted escape.
+   The six modules of the assignment are not cut.
 
-## Artigo X. Duas distribuições: Jazzy e Lyrical
+## Article X. Two distributions: Jazzy and Lyrical
 
-1. Todo pacote deste repositório compila, passa nos testes e roda em ROS 2 Jazzy (Ubuntu 24.04, Python 3.12)
-   e em ROS 2 Lyrical Luth (Ubuntu 26.04, Python 3.14).
-2. A integração contínua roda a matriz completa. Um teste que passa numa distribuição e falha na outra conta como falha.
-3. Nenhum comportamento depende de valor padrão de parâmetro de terceiros que mude entre distribuições.
-   Esses parâmetros são sempre declarados explicitamente na configuração. Exemplo: `use_stamped` do `twist_mux`
-   e `enable_stamped_cmd_vel` do Nav2.
-4. Código específico de uma distribuição só é aceito atrás de um teste de `ROS_DISTRO`, com justificativa na spec.
-5. Cada execução usa uma única distribuição. Um grafo que mistura nós Jazzy e Lyrical não é suportado.
+1. Every package in this repository builds, passes its tests and runs on ROS 2 Jazzy (Ubuntu 24.04, Python 3.12)
+   and on ROS 2 Lyrical Luth (Ubuntu 26.04, Python 3.14).
+2. Continuous integration runs the full matrix. A test that passes on one distribution and fails on the other counts as a failure.
+3. No behaviour depends on a third-party parameter default that changes between distributions.
+   Such parameters are always declared explicitly in the configuration. Example: `use_stamped` of `twist_mux`
+   and `enable_stamped_cmd_vel` of Nav2.
+4. Distribution-specific code is only accepted behind a `ROS_DISTRO` check, with a justification in the spec.
+5. Each run uses a single distribution. A graph that mixes Jazzy and Lyrical nodes is not supported.
 
-## Pilha técnica
+## Technical stack
 
-- ROS 2 Jazzy e ROS 2 Lyrical Luth, Python (`rclpy`), cada uma em contêiner próprio.
-- CoppeliaSim com ZeroMQ Remote API, no hospedeiro e independente da distribuição ROS.
+- ROS 2 Jazzy and ROS 2 Lyrical Luth, Python (`rclpy`), each in its own container.
+- CoppeliaSim with the ZeroMQ Remote API, on the host and independent of the ROS distribution.
 - Nav2, SLAM Toolbox, `twist_mux`.
-- Gymnasium e Stable-Baselines3.
+- Gymnasium and Stable-Baselines3.
 - K3s, Mosquitto, MinIO, DynamoDB Local, Terraform.
 
-**Versão:** 1.1 · 2026-11-06. Artigo X incluído: suporte a Jazzy e Lyrical.
+**Version:** 1.2 · 2026-11-06. Translated to English (decision D-21 of spec 000). Article X: Jazzy and Lyrical support.

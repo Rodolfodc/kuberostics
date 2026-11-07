@@ -1,0 +1,11 @@
+# Goal
+StuckEvent event
+float32 timeout_s
+---
+# Result
+bool success
+float32 duration_s
+string strategy     # "scripted" or "rl", to compare implementations
+---
+# Feedback
+float32 elapsed_s
