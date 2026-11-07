@@ -83,6 +83,10 @@ Subagents live in `.claude/agents/`. The main session is the orchestrator: it re
 **Dangerous tools** go through wrappers, never raw: `tools/sim.sh` (headless CoppeliaSim on a copy of the scene, kills only its own PID), `tools/k3s.sh` (local k3d cluster `aspirador`, own kubeconfig), `tools/tf.sh` (fixed to `infra/`). `.claude/settings.json` allows read-only verbs and asks for `apply`, `destroy`, `delete`, `docker`, `pip install` and `git push`; `.claude/hooks/protect.sh` blocks writes to `src/deps/`, `scene_house.ttt`, `.git/` and the constitution, force pushes, killing processes by name, `docker.sock` and `--privileged`.
 
 
+## Environment setup
+
+`scripts/setup_env.sh` is the single entry point to reproduce the machine (`--check` only verifies). Whenever you add a system package, tool or Python dependency, add it to that script (or `requirements.txt` / `deps.repos`) in the same change, so a fresh machine is always one command away.
+
 ## Building and testing here (verified)
 
 Host has ROS 2 **Lyrical** at `/opt/ros/lyrical`; Jazzy runs via `osrf/ros:jazzy-desktop-full`. The shell is zsh: source ROS with `bash -c 'source /opt/ros/lyrical/setup.bash && ...'`. `~/.local/bin/python3.11` shadows the system Python and breaks `rosidl`, so build with `--cmake-args -DPython3_EXECUTABLE=/usr/bin/python3`.
