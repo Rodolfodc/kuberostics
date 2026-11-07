@@ -19,7 +19,7 @@ from std_srvs.srv import Trigger
 from vacuum_interfaces.action import CoverRoom, Escape
 from vacuum_interfaces.msg import Notification, StuckEvent, Submode
 
-from vacuum_supervisor.submode_machine import ESCAPE_FAILED, Effect, SubmodeMachine
+from vacuum_supervisor.submode_machine import Effect, SubmodeMachine
 
 # QoS of the IA368II contract (specs/000-system/contracts/topics.yaml, profile ia368ii).
 QOS_IA368II = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -250,7 +250,7 @@ class SupervisorNode(LifecycleNode):
         snap = self._machine.snapshot()
         status = DiagnosticStatus(
             name=self.get_name(), hardware_id='vacuum',
-            level=DiagnosticStatus.ERROR if snap['submode'] == ESCAPE_FAILED else DiagnosticStatus.OK,
+            level=DiagnosticStatus.ERROR if snap['locked'] else DiagnosticStatus.OK,
             message=snap['submode'],
             values=[KeyValue(key=k, value=str(v)) for k, v in snap.items()])
         array = DiagnosticArray(status=[status])

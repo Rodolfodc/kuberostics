@@ -277,3 +277,16 @@ def test_001_R21_autodocking_to_cleaning_during_escaping_resumes_coverage():
     m.on_mode('CLEANING')
     assert kinds(m.on_escape_result(success=True)) == ['send_cover_room']
     assert m.submode == COVERING
+
+
+# --- review round 2, remark 1: no escape while the stop lock is on -----------------------------
+def test_001_R22_stuck_event_is_ignored_while_locked():
+    m = SubmodeMachine()
+    m.on_mode('AUTODOCKING')
+    m.on_stuck()
+    m.on_escape_result(success=False)               # ESCAPE_FAILED, locked
+    m.on_mode('IDLE')                               # submode back to NONE, the lock stays
+    m.on_mode('AUTODOCKING')
+    assert m.submode == NONE and m.snapshot()['locked'] is True
+    assert m.on_stuck() == []
+    assert m.submode == NONE
