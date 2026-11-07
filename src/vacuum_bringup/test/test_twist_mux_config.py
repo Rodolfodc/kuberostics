@@ -10,7 +10,8 @@ import yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
 CONFIG = HERE.parent / 'config' / 'twist_mux.yaml'
-CONTRACT = next(p for p in HERE.parents if (p / 'specs').is_dir()) / 'specs' / '000-system' / 'contracts' / 'topics.yaml'
+CONTRACT = next((p / 'specs' / '000-system' / 'contracts' / 'topics.yaml' for p in HERE.parents
+                 if (p / 'specs' / '000-system' / 'contracts' / 'topics.yaml').is_file()), None)
 
 
 @pytest.fixture(scope='module')
@@ -20,6 +21,8 @@ def params():
 
 @pytest.fixture(scope='module')
 def contract():
+    if CONTRACT is None:
+        pytest.skip('specs/ not found: mount the whole repository, not only src/ (see CLAUDE.md)')
     return yaml.safe_load(CONTRACT.read_text())
 
 

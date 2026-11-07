@@ -40,17 +40,19 @@ cleaning_server (IA368II) ──remap──▶ /myRobot/legacy/cleaning_cmd_vel 
 ## Supervisor: state machine
 
 Inputs: orchestrator mode, `StuckEvent`, action results.
-Internal state: `submode` and `resume_submode`, which stores where to return after the escape.
+Internal state: `submode`, `resume_submode` (where to return after the escape) and `locked` (the stop lock, independent of the submode).
 
 | Current state | Event | Action | Next |
 |---|---|---|---|
-| any | mode ∉ {CLEANING, AUTODOCKING} | cancels ongoing actions | NONE |
-| NONE | mode = CLEANING | sends `cover_room` | COVERING |
+| any | mode ∉ {CLEANING, AUTODOCKING} | cancels ongoing actions; **does not touch the lock** (001-R22) | NONE |
+| NONE | mode = CLEANING | sends `cover_room`, unless the lock is on (001-R22) | COVERING |
+| COVERING | mode = AUTODOCKING | cancels `cover_room` (001-R21) | NONE |
 | COVERING | `StuckEvent` | cancels `cover_room`; `resume_submode = COVERING`; sends `escape` | ESCAPING |
 | NONE with mode AUTODOCKING | `StuckEvent` | `resume_submode = NONE`; sends `escape` | ESCAPING |
 | ESCAPING | `escape` succeeded | resends the action of `resume_submode`, if any | `resume_submode` |
 | ESCAPING | `escape` failed or timed out | `lock_stop = true`; ERROR `Notification` | ESCAPE_FAILED |
-| ESCAPE_FAILED | service `~/reset` (from the user) | `lock_stop = false` | NONE |
+| any, lock on | service `/myRobot/supervisor/reset` (from the user) | `lock_stop = false` (001-R22) | NONE if it was ESCAPE_FAILED, else unchanged |
+| ESCAPING | mode changes | the escape continues; `resume_submode` = COVERING for CLEANING, NONE for AUTODOCKING (001-R21) | ESCAPING |
 
 EXPLORING and GOTO_ROOM exist in the type but only come into use in specs 003 and 005.
 
