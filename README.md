@@ -22,6 +22,10 @@ O uso do Spec Kit é opcional.
 
 `docs/arquitetura.md` reúne os diagramas de arquitetura e os fluxos de comunicação em Mermaid, que o GitHub renderiza direto. As fontes ficam em `docs/diagramas/*.mmd` e as imagens geradas em `docs/diagramas/render/`.
 
+## Documentação
+
+O PDF `docs/diagramas_arquitetura_aspirador.pdf` é uma exportação estática dos mesmos diagramas.
+
 ## Estado
 
 | Spec | Status |
@@ -29,3 +33,9 @@ O uso do Spec Kit é opcional.
 | 000-sistema | rascunho para revisão |
 | 001-esqueleto | rascunho para revisão |
 | 009a-externalizacao | rascunho para revisão |
+
+## Licença
+
+Apache License 2.0 (ver `LICENSE`). Você pode usar, modificar e contribuir, desde que mantenha o aviso de
+copyright e o arquivo `NOTICE`, que atribuem o trabalho a Rodolfo Dalla Costa. Material de terceiros
+está listado no `NOTICE`.
