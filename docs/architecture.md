@@ -78,6 +78,7 @@ flowchart TB
     STK["stuck_detector"]
     ESC["escape_server<br/>scripted or RL"]
     COV["coverage_server"]
+    STOPG["stop_guard<br/>zero velocity while locked"]
   end
 
   subgraph LMOPT["lifecycle_manager_optional"]
@@ -109,7 +110,9 @@ flowchart TB
   NAV -->|"mux/nav · 60"| MUX
   COV -->|"mux/coverage · 50"| MUX
   DOC -->|"mux/docking · 40 (remap D-05)"| MUX
-  SUP -->|"mux/lock_stop · 255"| MUX
+  SUP -->|"mux/lock_stop · lock 200"| MUX
+  SUP -->|"lock_stop"| STOPG
+  STOPG -->|"mux/stop · 250 (D-22)"| MUX
   CLE -->|"remap D-04"| SINK
 
   MUX -->|"/myRobot/cmd_vel (Twist)"| WHEEL
@@ -120,7 +123,7 @@ flowchart TB
   classDef reused fill:#FAEEDA,stroke:#BA7517,color:#412402
   classDef optional fill:#FFFFFF,stroke:#0F6E56,stroke-dasharray:4 3,color:#04342C
   class BEH,MYR,CLE,DOC,CHG ia368ii
-  class SUP,STK,ESC,COV,SCHED,HMI,MUX,NAV,TEL added
+  class SUP,STK,ESC,COV,STOPG,SCHED,HMI,MUX,NAV,TEL added
   class WHEEL reused
   class MQB optional
 ```

@@ -80,8 +80,16 @@ topics:
     since: "001"
     note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz"
 
+  - name: /myRobot/telemetry/stop_guard
+    type: diagnostic_msgs/msg/DiagnosticArray
+    qos: default
+    owner: stop_guard
+    since: "001"
+    note: "D-20: lock state and counters at 1 Hz"
+
   # twist_mux inputs (higher priority wins)
   - {name: /myRobot/mux/teleop,   type: geometry_msgs/msg/Twist, qos: ia368ii, owner: teleop,             priority: 100, since: "001"}
+  - {name: /myRobot/mux/stop,     type: geometry_msgs/msg/Twist, qos: ia368ii, owner: stop_guard,         priority: 250, since: "001", note: "D-22: zero velocity, published only while lock_stop is true"}
   - {name: /myRobot/mux/escape,   type: geometry_msgs/msg/Twist, qos: ia368ii, owner: escape_server,      priority: 80,  since: "001"}
   - {name: /myRobot/mux/nav,      type: geometry_msgs/msg/Twist, qos: ia368ii, owner: controller_server,  priority: 60,  since: "005"}
   - {name: /myRobot/mux/coverage, type: geometry_msgs/msg/Twist, qos: ia368ii, owner: coverage_server,    priority: 50,  since: "001"}
@@ -114,5 +122,5 @@ actions:
 
 lifecycle:
   ia368ii_manager: [myrobot, behaviour_server, cleaning_server, autodocking_server, charging_server, charged_server]
-  lifecycle_manager_core: [supervisor, stuck_detector, escape_server, coverage_server]
+  lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]
   lifecycle_manager_optional: []      # MQTT bridge enters in spec 009

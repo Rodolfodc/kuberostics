@@ -38,18 +38,20 @@ stub for a real implementation without touching the rest.
 | 001-R07 | When it receives a `StuckEvent` with submode COVERING or with mode AUTODOCKING, the supervisor shall cancel the ongoing action, publish ESCAPING within 0.5 s and send a goal to `/myRobot/escape`. | launch_testing |
 | 001-R08 | When the escape action ends successfully, the supervisor shall return to the submode it had before the stuck event. | launch_testing |
 | 001-R09 | If the escape action fails or exceeds `escape_timeout_s` (default 20 s), the supervisor shall publish ESCAPE_FAILED, publish `true` on `/myRobot/mux/lock_stop` and emit a `Notification` of severity ERROR with code `ESCAPE_FAILED`. | launch_testing |
-| 001-R10 | While `/myRobot/mux/lock_stop` is `true`, `twist_mux` shall publish zero velocity, whatever the input. | launch_testing |
+| 001-R10 | While `/myRobot/mux/lock_stop` is `true`, the velocity on `/myRobot/cmd_vel` shall be exactly zero, whatever the driving inputs, and `twist_mux` shall remain its only publisher. | launch_testing + `tools/probes/mux_lock_probe.sh` |
 | 001-R11 | While there are messages on `/myRobot/mux/teleop` within the input timeout, `twist_mux` shall forward the teleoperation and ignore lower-priority inputs. | launch_testing |
 | 001-R12 | The system shall remap the IA368II `cleaning_server` output to `/myRobot/legacy/cleaning_cmd_vel` and the `autodocking_server` output to `/myRobot/mux/docking`, without changing the code of those nodes. | contract |
 | 001-R13 | Where CoppeliaSim is running, the wheel bridge shall convert `/myRobot/cmd_vel` into wheel velocities of the robot in the scene. | manual (short video) |
 | 001-R14 | The repository shall contain a script that measures simulation steps per second of the *House* scene in synchronous, headless mode, and the result shall be recorded in decision D-11. | manual |
 | 001-R15 | When there is a push, continuous integration shall run `colcon build` and `colcon test` on a matrix of Jazzy and Lyrical containers, without CoppeliaSim. | CI |
-| 001-R17 | The system shall satisfy 001-R01 to 001-R12 and 001-R16 on both Jazzy and Lyrical, with the same code and the same configuration. | CI (matrix) |
+| 001-R17 | The system shall satisfy 001-R01 to 001-R12, 001-R16 and 001-R18 to 001-R20 on both Jazzy and Lyrical, with the same code and the same configuration. | CI (matrix) |
 | 001-R18 | The configuration shall explicitly declare `use_stamped: false` on `twist_mux`, and the contract test shall fail if `/myRobot/cmd_vel` has a type other than `geometry_msgs/msg/Twist`. | contract |
+| 001-R19 | While `/myRobot/mux/lock_stop` is `true`, the `stop_guard` shall publish a zero `Twist` on `/myRobot/mux/stop` at 10 Hz or faster, and while it is `false` it shall publish nothing. The lock shall be latched: if `lock_stop` stops arriving, the guard keeps publishing zero. | unit + node |
+| 001-R20 | The `twist_mux` configuration shall order the priorities `stop input > stop lock > every driving input` and give the `stop` input a timeout of at most 1 s. | contract (config) |
 | 001-R16 | The `escape_server` stub shall accept the parameter `outcome` (`succeed`, `fail`, `hang`) so that scenarios 2 and 3 are testable without the simulator. | unit |
 
 ## Definition of done
 
-- All automatic tests for 001-R01 to 001-R12, 001-R16 and 001-R18 passing in CI, on Jazzy and Lyrical.
+- All automatic tests for 001-R01 to 001-R12, 001-R16 and 001-R18 to 001-R20 passing in CI, on Jazzy and Lyrical.
 - Video of up to 1 minute showing scenarios 1 to 4 in CoppeliaSim.
 - D-11 recorded in `specs/000-system/spec.md` with the steps/s measurement.

@@ -3,7 +3,8 @@
 # test/test_twist_mux_config.py keep them in sync.
 #
 # The output (cmd_vel_out) is remapped to /myRobot/cmd_vel in the launch file (D-03): twist_mux is the
-# sole publisher on that topic (Art. VI).
+# sole publisher on that topic (Art. VI). While a lock is active twist_mux publishes NOTHING, which is why
+# stop_guard feeds the `stop` input (see docs/stop-guard.md).
 twist_mux:
   ros__parameters:
     # D-13: the twist_mux 4.5 default is true on both distributions; the base expects an unstamped Twist.
@@ -25,9 +26,15 @@ twist_mux:
         topic: /myRobot/mux/docking
         timeout: 0.5
         priority: 40
+      # D-22: zero velocity from stop_guard, only while lock_stop is true. Priority above the lock, so the
+      # lock silences every driving input but not this one; the timeout stops a dead guard from pinning the mux.
+      stop:
+        topic: /myRobot/mux/stop
+        timeout: 0.5
+        priority: 250
       # /myRobot/mux/nav (priority 60) enters with spec 005.
     locks:
       stop:
         topic: /myRobot/mux/lock_stop
         timeout: 0.0
-        priority: 255
+        priority: 200          # D-22: below `stop` (250), above every driving input (max 100)

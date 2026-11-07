@@ -38,8 +38,8 @@ def test_001_R11_inputs_match_the_contract_names_and_priorities(params, contract
     assert configured == expected
 
 
-def test_001_R11_teleop_has_the_highest_input_priority(params):
-    prio = {k: v['priority'] for k, v in params['topics'].items()}
+def test_001_R11_teleop_has_the_highest_priority_among_the_driving_inputs(params):
+    prio = {k: v['priority'] for k, v in params['topics'].items() if k != 'stop'}
     assert prio['teleop'] == max(prio.values())
 
 
@@ -47,10 +47,21 @@ def test_001_R11_every_input_has_a_positive_timeout(params):
     assert all(v['timeout'] > 0 for v in params['topics'].values())
 
 
-def test_001_R10_stop_lock_uses_the_contract_topic_and_beats_every_input(params, contract):
+def test_001_R20_stop_input_beats_the_lock_and_the_lock_beats_everything_else(params):
+    """D-22: the lock silences every driving input; only the zero-velocity `stop` input passes it."""
+    lock = params['locks']['stop']['priority']
+    stop = params['topics']['stop']['priority']
+    others = [v['priority'] for k, v in params['topics'].items() if k != 'stop']
+    assert stop > lock > max(others)
+
+
+def test_001_R20_stop_input_times_out_so_a_dead_guard_does_not_pin_the_mux(params):
+    assert 0 < params['topics']['stop']['timeout'] <= 1.0
+
+
+def test_001_R10_stop_lock_uses_the_contract_topic(params, contract):
     lock = params['locks']['stop']
     assert lock['topic'] == '/myRobot/mux/lock_stop'
-    assert lock['priority'] > max(v['priority'] for v in params['topics'].values())
     assert lock['topic'] in {t['name'] for t in contract['topics']}
 
 
