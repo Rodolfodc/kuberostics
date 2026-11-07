@@ -87,6 +87,27 @@ topics:
     since: "001"
     note: "D-20: lock state and counters at 1 Hz"
 
+  - name: /myRobot/telemetry/coverage_server
+    type: diagnostic_msgs/msg/DiagnosticArray
+    qos: default
+    owner: coverage_server
+    since: "001"
+    note: "D-20: stub state and counters at 1 Hz"
+
+  - name: /myRobot/telemetry/escape_server
+    type: diagnostic_msgs/msg/DiagnosticArray
+    qos: default
+    owner: escape_server
+    since: "001"
+    note: "D-20: stub state and counters at 1 Hz"
+
+  - name: /myRobot/telemetry/stuck_detector
+    type: diagnostic_msgs/msg/DiagnosticArray
+    qos: default
+    owner: stuck_detector
+    since: "001"
+    note: "D-20: stub state and counters at 1 Hz"
+
   # twist_mux inputs (higher priority wins)
   - {name: /myRobot/mux/teleop,   type: geometry_msgs/msg/Twist, qos: ia368ii, owner: teleop,             priority: 100, since: "001"}
   - {name: /myRobot/mux/stop,     type: geometry_msgs/msg/Twist, qos: ia368ii, owner: stop_guard,         priority: 250, since: "001", note: "D-22: zero velocity, published only while lock_stop is true"}
@@ -150,13 +171,17 @@ parameters:
     publish_rate_hz: {type: double, default: 10.0, note: "must stay above 1 / timeout of the mux stop input (0.5 s)"}
     telemetry_rate_hz: {type: double, default: 1.0}
   coverage_server:
+    telemetry_rate_hz: {type: double, default: 1.0}
     linear_x: {type: double, default: 0.15, note: "constant forward speed while a CoverRoom goal is active (stub, T010)"}
     angular_z: {type: double, default: 0.0}
     publish_rate_hz: {type: double, default: 10.0}
   escape_server:
+    telemetry_rate_hz: {type: double, default: 1.0}
     outcome: {type: string, default: succeed, values: [succeed, fail, hang], requirement: 001-R16}
     reverse_s: {type: double, default: 1.0, note: "stub script: reverse for reverse_s, then turn for turn_s (T011)"}
     turn_s: {type: double, default: 1.0}
     reverse_linear_x: {type: double, default: -0.1}
     turn_angular_z: {type: double, default: 0.8}
     publish_rate_hz: {type: double, default: 10.0}
+  stuck_detector:
+    telemetry_rate_hz: {type: double, default: 1.0}
