@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(colcon *)",
+      "Bash(pytest *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(tools/sim.sh *)",
+      "Bash(tools/k3s.sh get *)",
+      "Bash(tools/k3s.sh describe *)",
+      "Bash(tools/k3s.sh logs *)",
+      "Bash(tools/tf.sh plan*)",
+      "Bash(tools/tf.sh validate*)",
+      "Bash(tools/tf.sh fmt*)"
+    ],
+    "ask": [
+      "Bash(git push*)",
+      "Bash(pip install*)",
+      "Bash(pip3 install*)",
+      "Bash(docker *)",
+      "Bash(tools/k3s.sh up*)",
+      "Bash(tools/k3s.sh down*)",
+      "Bash(tools/k3s.sh delete *)",
+      "Bash(tools/k3s.sh apply *)",
+      "Bash(tools/tf.sh apply*)",
+      "Bash(tools/tf.sh destroy*)"
+    ],
+    "deny": [
+      "Bash(sudo *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Edit(src/deps/**)",
+      "Write(src/deps/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          { "type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect.sh" }
+        ]
+      }
+    ]
+  }
+}

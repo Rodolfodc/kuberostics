@@ -1,0 +1,99 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## State of the repo
+
+Spec-driven project (final project of IA368II, FEEC/UNICAMP: autonomous vacuum robot in CoppeliaSim's *House* scene, ROS 2). **Implementation has started** (spec 001): `deps.repos`, `scripts/setup.sh`, `src/aspirador_interfaces`, `src/aspirador_supervisor` (`SubmodeMachine` + tests, T001/T002/T006/T008 done). Dockerfiles, CI, the supervisor node, stubs and launch are still *planned* in `specs/001-esqueleto/plan.md` (tasks in `tasks.md`; done tasks are checked in `tasks.md`). Do not assume a command exists until its task is implemented.
+
+This is its own git repo, nested inside the outer folder `projeto_final_ia386ii/` (not a repo, no `CLAUDE.md`). That folder also holds two files outside version control:
+- `scene_house.ttt` (~29 MB): the CoppeliaSim *House* scene; the open question about scene object names (spec 000 §6) is answered by inspecting it.
+- `aspirador_specs.zip` and `aspirador-ia368ii-updated.zip`: packaged snapshots of this repo (the second includes `docs/`). They are not sources of truth; never edit them, change the files in this repo instead.
+
+Specs and docs are written in Portuguese; keep that language.
+
+**Keep this file current:** once the tasks in `specs/001-esqueleto/tasks.md` produce real code, replace the "Planned commands" section with the actual build, lint, test and single-test commands, and update "State of the repo".
+
+## Reading order (authoritative)
+
+1. `.specify/memory/constitution.md` — Articles I–X. A spec that contradicts an article is invalid until the article is explicitly amended.
+2. `specs/000-sistema/spec.md` — system boundaries, frozen inherited contract, decisions `D-xx`, open questions `Q-xx`, spec map (001…010).
+3. `specs/000-sistema/contracts/topics.yaml` — machine-readable interface contract (name, type, QoS profile, owner, `frozen`, `max_publishers`); `interfaces.md` holds the draft `.msg/.action` definitions.
+4. `docs/arquitetura.md` — Mermaid architecture and communication-flow diagrams (overview, motion control, offload perception, cloud cycle, selector, failure/recovery, sync at base). Sources are `docs/diagramas/*.mmd` (source of truth); `docs/diagramas/render/` is generated with `mmdc` (see the header of `arquitetura.md`); `docs/diagramas_arquitetura_aspirador.pdf` is a static export. When a spec changes a topic or flow, update the matching `.mmd` and re-render.
+5. `specs/NNN-*/{spec.md, plan.md, tasks.md}` — per feature (layout compatible with GitHub Spec Kit, optional use). Existing: 000, 001-esqueleto, 009a-externalizacao.
+
+## Rules that shape every change
+
+- **Contract first (Art. I):** any new topic/service/action/public parameter goes into `contracts/topics.yaml` (+ `.msg/.srv/.action` in `aspirador_interfaces`, which has no implementation) **in the same commit** as the code.
+- **Third-party code is read-only (Art. II):** `lucianovk/IA368II` (`myrobot_bringup`, `myrobot_interfaces`, `my_robot_pkg`) is pulled via `vcs import src/deps < deps.repos`, pinned by commit (`51a5fa2c…`), and `src/deps/` is gitignored. Adapt only via, in order: submodes published by our own node, launch remapping, same-name replacement node honoring the contract, targeted inheritance. Never subclass/replace `BehaviourManager` or extend the `Mode` enum (CLEANING, AUTODOCKING, CHARGING, CHARGED, IDLE); new behaviours are *submodes* on `/myRobot/behaviour/submode` (D-01), and behaviours with a result are ROS 2 actions (D-02).
+- **Motion safety (Art. VI, D-03):** only `twist_mux` publishes `/myRobot/cmd_vel`. *Actuator* nodes publish only to their own mux input (`/myRobot/mux/{teleop,escape,coverage,docking}`, priorities 100/80/50/40, plus `lock_stop` at 255); *service* nodes never publish motion. Luciano's `cleaning_server` is remapped to a sink (`/myRobot/legacy/cleaning_cmd_vel`, D-04).
+- **Two ROS distros (Art. X):** every package must build and pass tests on both Jazzy (Ubuntu 24.04, Py 3.12) and Lyrical Luth (Ubuntu 26.04, Py 3.14); one distro per run, no mixed graphs. Third-party defaults that differ across distros must be set explicitly: `use_stamped: false` on `twist_mux` and `enable_stamped_cmd_vel: false` on every Nav2 node that publishes velocity (D-13). Motion contract is unstamped `geometry_msgs/Twist`.
+- **Modules are pluggable (Art. III):** each module is a ROS 2 package with its own launch, runnable alone with stubs/rosbag; new nodes are `LifecycleNode`s under our own Nav2-style lifecycle manager `lifecycle_manager_core` (cloud/MQTT under the separate `lifecycle_manager_optional`, D-09). Stubs are replaced only when the real implementation passes the same contract tests (Art. IV).
+- **Cloud is optional (Art. VII):** the robot must clean without network; new policy weights load only in mode CHARGED.
+- **Traceability (Art. VIII):** requirements are EARS with IDs (e.g. `001-R04`); tasks cite requirements, tests cite the requirement they verify, commit messages cite the task ID (e.g. `T004`).
+- **Deadline 2026-12-04 23:59; cut order if late:** LLM agent → cloud retraining → RL policy (keep the scripted escape). The six core modules are never cut.
+
+## Design directives (D-18 to D-20, spec 000)
+
+- Modular code: pure-Python logic with no ROS imports, thin ROS nodes, dependencies injected by the caller.
+- Reusable components (controllers, filters, planners, detectors) are toolbox classes: they only compute, with no publishing, topic reads or policy. The caller chooses configuration, limits, timing and what to do with the result (style example: a `PID` that only turns error and `dt` into an output).
+- Logs and telemetry everywhere possible: log every state transition and event, publish periodic metrics; pure logic takes a logger/metrics callback.
+
+## Architecture (big picture, per plan 001/009a)
+
+- CoppeliaSim runs on the **host**, reached only through the ZeroMQ Remote API (port 23000) by Python bridge nodes — the simROS2 plugin is not used (D-14). ROS containers (`docker/jazzy`, `docker/lyrical`) use `network_mode: host`.
+- Chain: `behaviour_server` (Luciano, publishes mode every 0.2 s) → our `supervisor` (hierarchical state machine → submode) → actions `CoverRoom` / `Escape` on `coverage_server` / `escape_server` → `twist_mux` → `/myRobot/cmd_vel` → 2025S2 wheel bridge (`my_robot_cmd_vel_node`, `/cmd_vel` remapped, D-06) → CoppeliaSim. `stuck_detector` emits `StuckEvent` to the supervisor.
+- Sensor topic names keep the 2025S2 ones (`/scan`, `/camera`, `/camera_depth`, `/myrobot/odom` lowercase); new modules take them as parameters (D-07). Battery/charging-base signals are still simulated by Luciano's `myrobot_server` (D-08).
+- Transition logic lives in pure-Python classes with no ROS imports (`SubmodeMachine`, `selector_core.py` circuit breaker) tested with pytest; the `LifecycleNode` is thin glue. Follow this pattern for new state logic.
+- Spec 009a splits detection: `detector` (YOLO, RGB → `Detection2DArray`, copying the image header; runs local `yolo11n` or in K3s `yolo11x`), `detection_selector` (circuit breaker + age/watermark filters), and `projector` (always on the robot: 2D detection + depth + TF at the photo timestamp → `/detections_markers` for the unchanged 2025S2 semantic node, D-16). Only compressed RGB leaves the robot; robot↔cloud transport (Q-06: `rmw_zenoh` vs `zenoh-bridge-ros2dds`) is undecided and health is measured at the application layer.
+- Open questions that affect code are tracked in `specs/000-sistema/spec.md` §6 (CoppeliaSim version/scene object names, Lyrical compatibility of Luciano's package, pip wheels on Python 3.14, odometry source for SLAM).
+
+## Planned commands (from the plans; not yet runnable)
+
+```bash
+vcs import src/deps < deps.repos          # fetch pinned Luciano dependency
+colcon build && colcon test               # CI runs these without the simulator, matrix distro: [jazzy, lyrical]
+python tools/sim_bench/bench.py           # steps/s via ZeroMQ; run CoppeliaSim headless (-h); ≥200 steps/s ⇒ train RL in-sim (spec 008)
+tools/chaos/kill_detector.sh              # 009a fault injection: delete detector Pod 5×, records OffloadStatus to rosbag
+```
+
+Contract tests (`aspirador_contract_tests`) are generated from `topics.yaml` and check existence, type, QoS, `max_publishers` and `sink` topics, including `Twist` on `/myRobot/cmd_vel`. Tests needing CoppeliaSim run locally and must be marked as such (Art. V).
+
+## Local LLM for operational chores
+
+For operational, low-stakes work (summarizing logs, drafting boilerplate, reformatting, quick lookups), delegate to the local llama.cpp server instead of doing it all in the main session. It is an OpenAI-compatible router at `http://127.0.0.1:11434/v1` (models in `~/models/models.ini`, e.g. `qwen3-8b`, `qwen3.5-9b`, `llama-3.1-8b`). If it is down, start it with the command in `~/models/llama-server-flags.md`. Do not use it for contract, safety or architecture decisions (constitution Articles I, II, VI): those stay with Claude and the specs. Its output is a draft and must be reviewed before it is committed.
+
+## Agent workflow
+
+Subagents live in `.claude/agents/`. The main session is the orchestrator: it reads the task, picks the owner by the paths below, and routes work. Each agent writes only in its own paths.
+
+| Agent | Writes in |
+|---|---|
+| architect | `specs/`, `docs/`, `.specify/` (never `constitution.md`) |
+| ros-dev | `src/aspirador_*` |
+| devops | `docker/`, `.github/`, `deps.repos`, `compose.yaml`, `scripts/`, `deploy/`, `infra/`, `tools/chaos/`, `tools/k3s.sh`, `tools/tf.sh` |
+| sim-operator | `tools/sim_bench/`, `tools/sim.sh`, `.sim/` |
+| rl-trainer | `rl/` (starts only after D-11 and spec 008 exist) |
+| reviewer | nothing (read-only) |
+
+**Review gate:** the reviewer runs only on a *completed* deliverable (a finished task group, spec or artifact), not on each iteration. It returns `APPROVED` or `CHANGES_REQUESTED` with findings (`file:line`, article/requirement, owner). On `CHANGES_REQUESTED` the orchestrator sends the findings back to the owning agent, and the re-review checks the previous findings plus the delta. After 3 rounds without approval, escalate to the user. Nothing is merged without `APPROVED`.
+
+**Contract changes** (`topics.yaml`, `interfaces.md`) are serialized: one in flight at a time.
+
+**Dangerous tools** go through wrappers, never raw: `tools/sim.sh` (headless CoppeliaSim on a copy of the scene, kills only its own PID), `tools/k3s.sh` (local k3d cluster `aspirador`, own kubeconfig), `tools/tf.sh` (fixed to `infra/`). `.claude/settings.json` allows read-only verbs and asks for `apply`, `destroy`, `delete`, `docker`, `pip install` and `git push`; `.claude/hooks/protect.sh` blocks writes to `src/deps/`, `scene_house.ttt`, `.git/` and the constitution, force pushes, killing processes by name, `docker.sock` and `--privileged`.
+
+
+## Building and testing here (verified)
+
+Host has ROS 2 **Lyrical** at `/opt/ros/lyrical`; Jazzy runs via `osrf/ros:jazzy-desktop-full`. The shell is zsh: source ROS with `bash -c 'source /opt/ros/lyrical/setup.bash && ...'`. `~/.local/bin/python3.11` shadows the system Python and breaks `rosidl`, so build with `--cmake-args -DPython3_EXECUTABLE=/usr/bin/python3`.
+
+```bash
+bash -c 'source /opt/ros/lyrical/setup.bash && colcon build --base-paths src --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 && colcon test --base-paths src && colcon test-result'
+# one test: cd src/aspirador_supervisor && /usr/bin/python3 -m pytest test/test_submode_machine.py -k R07
+# Jazzy:
+docker run --rm -v "$PWD/src":/ws/src:ro osrf/ros:jazzy-desktop-full bash -c 'source /opt/ros/jazzy/setup.bash && cp -r /ws /tmp/ws && cd /tmp/ws && colcon build && colcon test && colcon test-result'
+```
+
+`ament_python` packages need `tests_require` **and** `extras_require={'test': ['pytest']}` in `setup.py`, or colcon reports "0 tests" on Lyrical's newer setuptools. `geometry_msgs/Pose2D` does not exist in Lyrical (D-17); check message types on both distros before using them.
+
+The CoppeliaSim model of the robot is `models/myRobot.ttm` (exported from the 2025S2 `pega_banana.ttt`); the House scene has no robot. D-11 (steps/s) is **not** measured yet: the full robot ran at ~3.5 steps/s with the GUI and `-h` crashes on the Kinect render, so use `SIM_HEADLESS=0 tools/sim.sh start`.
