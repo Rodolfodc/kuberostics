@@ -221,3 +221,59 @@ def test_D20_metrics_count_events_and_outcomes():
     assert snap['escape_timeouts'] == 1
     assert snap['resets'] == 1
     assert snap['transitions'] >= 5
+
+
+# --- review round 1: B2 (lock must stay releasable) and B3 (mode changes) -----
+def machine_escape_failed():
+    m = machine_covering()
+    m.on_stuck()
+    m.on_escape_result(success=False)
+    assert m.submode == ESCAPE_FAILED
+    return m
+
+
+def test_001_R22_reset_still_releases_the_lock_after_the_mode_left_cleaning():
+    m = machine_escape_failed()
+    m.on_mode('IDLE')
+    assert m.submode == NONE
+    assert m.snapshot()['locked'] is True          # the lock is independent of the submode
+    assert m.reset() == [Effect('lock_stop', False)]
+    assert m.snapshot()['locked'] is False
+
+
+def test_001_R22_cleaning_while_locked_does_not_start_coverage_until_reset():
+    m = machine_escape_failed()
+    m.on_mode('IDLE')
+    assert m.on_mode('CLEANING') == []
+    assert m.submode == NONE
+    m.reset()
+    assert m.on_mode('CLEANING') == [Effect('send_cover_room')]
+
+
+def test_001_R22_reset_without_a_lock_does_nothing():
+    assert machine_covering().reset() == []
+
+
+def test_001_R21_autodocking_while_covering_cancels_coverage():
+    m = machine_covering()
+    fx = m.on_mode('AUTODOCKING')
+    assert m.submode == NONE
+    assert kinds(fx) == ['cancel_actions']
+
+
+def test_001_R21_mode_change_during_escaping_updates_where_to_resume():
+    m = machine_covering()
+    m.on_stuck()                                   # ESCAPING, resume COVERING
+    assert m.on_mode('AUTODOCKING') == []          # the escape keeps running
+    assert m.submode == ESCAPING
+    assert m.on_escape_result(success=True) == []  # docking does not want coverage
+    assert m.submode == NONE
+
+
+def test_001_R21_autodocking_to_cleaning_during_escaping_resumes_coverage():
+    m = SubmodeMachine()
+    m.on_mode('AUTODOCKING')
+    m.on_stuck()                                   # ESCAPING, resume NONE
+    m.on_mode('CLEANING')
+    assert kinds(m.on_escape_result(success=True)) == ['send_cover_room']
+    assert m.submode == COVERING

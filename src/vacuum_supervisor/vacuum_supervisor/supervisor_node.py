@@ -37,12 +37,14 @@ class SupervisorNode(LifecycleNode):
         self.declare_parameter('cover_room_action', '/myRobot/cover_room')
         self.declare_parameter('escape_action', '/myRobot/escape')
         self._active = False
-        self._machine: Optional[SubmodeMachine] = None
-        self._lock = False
+        # Created once, not per configure: the stop lock must survive a deactivate/activate or
+        # cleanup/configure cycle (001-R22). Only a process restart starts unlocked.
+        self._machine = SubmodeMachine(logger=self.get_logger())
         self._last_stuck: Optional[StuckEvent] = None
         self._cover_handle = None
         self._escape_handle = None
         self._escape_seq = 0               # identifies the escape goal whose result still matters
+        self._cover_seq = 0                # same for cover_room: a late acceptance must not outlive a cancel
         self._escape_timer = None
         self._pending_cover = False        # goal to send as soon as the server is up
         self._timers = []
@@ -50,8 +52,6 @@ class SupervisorNode(LifecycleNode):
     # ---------------------------------------------------------------- lifecycle
     def on_configure(self, state) -> TransitionCallbackReturn:
         log = self.get_logger()
-        self._machine = SubmodeMachine(logger=log)
-        self._lock = False
         self._pub_submode = self.create_lifecycle_publisher(Submode, '/myRobot/behaviour/submode', QOS_IA368II)
         self._pub_lock = self.create_lifecycle_publisher(Bool, '/myRobot/mux/lock_stop', QOS_IA368II)
         self._pub_notify = self.create_lifecycle_publisher(Notification, '/myRobot/notifications', 10)
@@ -62,7 +62,7 @@ class SupervisorNode(LifecycleNode):
         self._sub_stuck = self.create_subscription(StuckEvent, '/myRobot/stuck', self._on_stuck, 10)
         self._cover_client = ActionClient(self, CoverRoom, self.get_parameter('cover_room_action').value)
         self._escape_client = ActionClient(self, Escape, self.get_parameter('escape_action').value)
-        self._srv_reset = self.create_service(Trigger, '~/reset', self._on_reset)
+        self._srv_reset = self.create_service(Trigger, '/myRobot/supervisor/reset', self._on_reset)
         log.info('configured')
         return TransitionCallbackReturn.SUCCESS
 
@@ -79,6 +79,7 @@ class SupervisorNode(LifecycleNode):
     def on_deactivate(self, state) -> TransitionCallbackReturn:
         self._active = False
         self._cancel_actions()
+        self._machine.on_mode('')          # back to NONE; the lock is kept
         for t in self._timers:
             self.destroy_timer(t)
         self._timers = []
@@ -94,7 +95,6 @@ class SupervisorNode(LifecycleNode):
         self.destroy_service(self._srv_reset)
         self._cover_client.destroy()
         self._escape_client.destroy()
-        self._machine = None
         return TransitionCallbackReturn.SUCCESS
 
     # ---------------------------------------------------------------- inputs
@@ -129,9 +129,8 @@ class SupervisorNode(LifecycleNode):
         elif effect.kind == 'send_escape':
             self._send_escape()
         elif effect.kind == 'lock_stop':
-            self._lock = bool(effect.value)
-            self.get_logger().warning(f'lock_stop = {self._lock}')
-            self._pub_lock.publish(Bool(data=self._lock))
+            self.get_logger().warning(f'lock_stop = {self._machine.locked}')
+            self._pub_lock.publish(Bool(data=self._machine.locked))
         elif effect.kind == 'notify':
             severity, code = effect.value
             self._notify(severity, code, f'{code}: submode {self._machine.submode} ({self._machine.reason})')
@@ -146,7 +145,8 @@ class SupervisorNode(LifecycleNode):
 
     def _cancel_actions(self) -> None:
         self._pending_cover = False
-        self._escape_seq += 1              # any result of the goals cancelled below is stale
+        self._cover_seq += 1               # any callback of the goals cancelled below is stale
+        self._escape_seq += 1
         self._stop_escape_timer()
         for handle in (self._cover_handle, self._escape_handle):
             if handle is not None:
@@ -161,21 +161,30 @@ class SupervisorNode(LifecycleNode):
             self.get_logger().warning('cover_room server not ready, will retry')
             return
         self._pending_cover = False
+        self._cover_seq += 1
+        seq = self._cover_seq
         goal = CoverRoom.Goal(room_id='', passes=1)
         self.get_logger().info('sending cover_room goal')
-        self._cover_client.send_goal_async(goal).add_done_callback(self._on_cover_accepted)
+        self._cover_client.send_goal_async(goal).add_done_callback(
+            lambda fut, s=seq: self._on_cover_accepted(fut, s))
 
-    def _on_cover_accepted(self, future) -> None:
+    def _on_cover_accepted(self, future, seq: int) -> None:
         handle = future.result()
+        if seq != self._cover_seq:                    # cancelled (mode change, stuck) before being accepted
+            self.get_logger().info('cover_room goal accepted after a cancel: cancelling it')
+            handle.cancel_goal_async()
+            return
         if not handle.accepted:
             self.get_logger().error('cover_room goal rejected')
             return
         self._cover_handle = handle
-        handle.get_result_async().add_done_callback(self._on_cover_result)
+        handle.get_result_async().add_done_callback(lambda fut, s=seq: self._on_cover_result(fut, s))
 
-    def _on_cover_result(self, future) -> None:
+    def _on_cover_result(self, future, seq: int) -> None:
         status = future.result().status
         self.get_logger().info(f'cover_room finished with status {status}')
+        if seq == self._cover_seq:
+            self._cover_handle = None
 
     # ---------------------------------------------------------------- escape
     def _send_escape(self) -> None:
@@ -234,7 +243,7 @@ class SupervisorNode(LifecycleNode):
         msg = Submode(mode=m.mode, submode=m.submode, reason=m.reason)
         msg.stamp = self.get_clock().now().to_msg()
         self._pub_submode.publish(msg)
-        self._pub_lock.publish(Bool(data=self._lock))       # republished: twist_mux may start later
+        self._pub_lock.publish(Bool(data=self._machine.locked))       # republished: twist_mux may start later
         self._try_send_cover_room()
 
     def _publish_telemetry(self) -> None:
@@ -243,8 +252,7 @@ class SupervisorNode(LifecycleNode):
             name=self.get_name(), hardware_id='vacuum',
             level=DiagnosticStatus.ERROR if snap['submode'] == ESCAPE_FAILED else DiagnosticStatus.OK,
             message=snap['submode'],
-            values=[KeyValue(key=k, value=str(v)) for k, v in snap.items()]
-            + [KeyValue(key='lock_stop', value=str(self._lock))])
+            values=[KeyValue(key=k, value=str(v)) for k, v in snap.items()])
         array = DiagnosticArray(status=[status])
         array.header.stamp = self.get_clock().now().to_msg()
         self._pub_telemetry.publish(array)

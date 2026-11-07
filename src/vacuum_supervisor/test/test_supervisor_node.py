@@ -13,7 +13,7 @@ import pytest
 rclpy = pytest.importorskip('rclpy')
 
 from diagnostic_msgs.msg import DiagnosticArray  # noqa: E402
-from rclpy.action import ActionServer, CancelResponse  # noqa: E402
+from rclpy.action import ActionServer, CancelResponse, GoalResponse  # noqa: E402
 from rclpy.callback_groups import ReentrantCallbackGroup  # noqa: E402
 from rclpy.executors import MultiThreadedExecutor  # noqa: E402
 from rclpy.node import Node  # noqa: E402
@@ -38,6 +38,8 @@ class Harness(Node):
         self.escape_outcome = 'succeed'
         self.closing = False            # lets the stub servers return at teardown
         self.cover_goals = 0
+        self.cover_active = 0
+        self.cover_accept_delay = 0.0   # makes the server accept slowly (stale-callback tests)
         self.escape_goals = 0
         self.submode = None
         self.lock = None
@@ -50,16 +52,23 @@ class Harness(Node):
         self.create_subscription(Notification, '/myRobot/notifications', self.notifications.append, 10)
         self.create_subscription(DiagnosticArray, '/myRobot/telemetry/supervisor',
                                  lambda m: setattr(self, 'telemetry', m), 10)
-        self.reset_client = self.create_client(Trigger, '/supervisor/reset')
+        self.reset_client = self.create_client(Trigger, '/myRobot/supervisor/reset')
         ActionServer(self, CoverRoom, '/myRobot/cover_room', self._cover, callback_group=cb,
+                     goal_callback=self._cover_goal,
                      cancel_callback=lambda _: CancelResponse.ACCEPT)
         ActionServer(self, Escape, '/myRobot/escape', self._escape, callback_group=cb,
                      cancel_callback=lambda _: CancelResponse.ACCEPT)
 
+    def _cover_goal(self, _request):
+        time.sleep(self.cover_accept_delay)
+        return GoalResponse.ACCEPT
+
     def _cover(self, goal_handle):
         self.cover_goals += 1
+        self.cover_active += 1
         while not goal_handle.is_cancel_requested and not self.closing:     # coverage runs until cancelled
             time.sleep(0.05)
+        self.cover_active -= 1
         goal_handle.canceled()
         return CoverRoom.Result()
 
@@ -181,3 +190,57 @@ def test_D20_telemetry_reports_counters(system):
     h.pub_stuck.publish(StuckEvent())
     assert wait_for(lambda: h.telemetry is not None and any(
         kv.key == 'stuck_events' and kv.value == '1' for kv in h.telemetry.status[0].values), timeout=5.0)
+
+
+# --- review round 1: B1 (stale cover callbacks), B2 (lock), S1 (lifecycle cycle keeps the lock) -----------
+def test_001_R05_cover_goal_accepted_late_is_cancelled_when_the_mode_already_left_cleaning(system):
+    _, h = system
+    h.cover_accept_delay = 0.6
+    h.set_mode('CLEANING')
+    assert wait_for(lambda: h.submode.submode == 'COVERING')
+    h.set_mode('IDLE')                              # before the server accepts the goal
+    assert wait_for(lambda: h.submode.submode == 'NONE')
+    time.sleep(1.5)                                 # the late acceptance happens in here
+    assert h.cover_active == 0, 'a coverage goal outlived the mode change'
+
+
+def test_001_R07_cover_goal_accepted_late_is_cancelled_when_a_stuck_event_arrives(system):
+    _, h = system
+    h.cover_accept_delay = 0.6
+    h.set_mode('CLEANING')
+    assert wait_for(lambda: h.submode.submode == 'COVERING')
+    h.pub_stuck.publish(StuckEvent())
+    assert wait_for(lambda: h.cover_goals >= 1, timeout=3.0)
+    assert wait_for(lambda: h.escape_goals == 1)
+    # after the escape succeeds a new cover goal is sent: exactly one must be running at the end
+    assert wait_for(lambda: h.submode.submode == 'COVERING')
+    time.sleep(1.5)
+    assert h.cover_active == 1
+
+
+def test_001_R22_reset_works_after_the_mode_left_cleaning(system):
+    _, h = system
+    h.escape_outcome = 'fail'
+    cover_until_covering(h)
+    h.pub_stuck.publish(StuckEvent())
+    assert wait_for(lambda: h.lock is True)
+    h.set_mode('IDLE')
+    assert wait_for(lambda: h.submode.submode == 'NONE')
+    assert h.lock is True                           # still locked
+    assert h.reset_client.wait_for_service(timeout_sec=3.0)
+    future = h.reset_client.call_async(Trigger.Request())
+    assert wait_for(future.done)
+    assert future.result().success
+    assert wait_for(lambda: h.lock is False)
+
+
+def test_001_R22_a_lifecycle_cycle_keeps_the_lock(system):
+    sup, h = system
+    h.escape_outcome = 'fail'
+    cover_until_covering(h)
+    h.pub_stuck.publish(StuckEvent())
+    assert wait_for(lambda: h.lock is True)
+    sup.trigger_deactivate()
+    sup.trigger_activate()
+    time.sleep(0.8)
+    assert h.lock is True, 'a supervisor deactivate/activate cycle released the stop lock'

@@ -31,6 +31,7 @@ class SubmodeMachine:
         self.mode = ''
         self.reason = 'initial'
         self.resume_submode = NONE   # where to return after the escape
+        self.locked = False          # stop lock; independent of the submode, released only by reset()
         self._metrics = {
             'transitions': 0, 'stuck_events': 0, 'escapes_succeeded': 0,
             'escapes_failed': 0, 'escape_timeouts': 0, 'resets': 0,
@@ -38,19 +39,30 @@ class SubmodeMachine:
 
     def snapshot(self) -> Dict[str, Any]:
         """Current state plus counters, for the periodic telemetry."""
-        return {'mode': self.mode, 'submode': self.submode, 'reason': self.reason, **self._metrics}
+        return {'mode': self.mode, 'submode': self.submode, 'reason': self.reason,
+                'locked': self.locked, **self._metrics}
 
     def on_mode(self, mode: str) -> List[Effect]:
         self.mode = mode
+        if self.submode == ESCAPING:
+            # 001-R21: the escape keeps running, but what comes after it depends on the new mode.
+            self.resume_submode = COVERING if mode == 'CLEANING' else NONE
         if mode not in ACTIVE_MODES:
             if self.submode == NONE:
                 return []
             # 001-R05: outside CLEANING/AUTODOCKING the submode is NONE (cancels whatever is ongoing).
-            # lock_stop is not released here: only the user's reset releases it.
+            # 001-R22: the lock is not touched here; only the user's reset releases it.
             self._go(NONE, f'mode {mode or "<empty>"}')
             self.resume_submode = NONE
             return [Effect('cancel_actions')]
+        if mode == 'AUTODOCKING' and self.submode == COVERING:
+            self._go(NONE, 'mode AUTODOCKING')                # 001-R21: docking must not compete with coverage
+            self.resume_submode = NONE
+            return [Effect('cancel_actions')]
         if mode == 'CLEANING' and self.submode == NONE:
+            if self.locked:                                   # 001-R22
+                self._log.debug('CLEANING ignored: stop lock is on, waiting for reset')
+                return []
             self._go(COVERING, 'mode CLEANING')               # 001-R06
             return [Effect('send_cover_room')]
         return []
@@ -90,17 +102,23 @@ class SubmodeMachine:
         return [Effect('cancel_actions')] + self._fail('escape timed out')
 
     def reset(self) -> List[Effect]:
-        """User's ~/reset service: releases the lock after ESCAPE_FAILED."""
-        if self.submode != ESCAPE_FAILED:
-            self._log.debug(f'reset ignored (submode {self.submode})')
+        """User's reset service: releases the stop lock, whatever the current submode (001-R22)."""
+        if not self.locked:
+            self._log.debug(f'reset ignored (not locked, submode {self.submode})')
             return []
         self._metrics['resets'] += 1
-        self._go(NONE, 'user reset')
-        self.resume_submode = NONE
+        self.locked = False
+        if self.submode == ESCAPE_FAILED:
+            self._go(NONE, 'user reset')
+            self.resume_submode = NONE
+        else:
+            self.reason = 'user reset'
+            self._log.info(f'stop lock released by user reset (submode {self.submode})')
         return [Effect('lock_stop', False)]
 
     def _fail(self, reason: str) -> List[Effect]:
         self._metrics['escapes_failed'] += 1
+        self.locked = True
         self._go(ESCAPE_FAILED, reason)
         return [Effect('lock_stop', True), Effect('notify', ('ERROR', 'ESCAPE_FAILED'))]
 

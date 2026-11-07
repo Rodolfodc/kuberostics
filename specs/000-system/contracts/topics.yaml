@@ -110,6 +110,12 @@ services:
     owner: behaviour_server
     frozen: true
 
+  - name: /myRobot/supervisor/reset
+    type: std_srvs/srv/Trigger
+    owner: supervisor
+    since: "001"
+    note: "releases the stop lock after ESCAPE_FAILED, whatever the current submode (001-R22)"
+
 actions:
   - name: /myRobot/escape
     type: vacuum_interfaces/action/Escape
@@ -124,3 +130,16 @@ lifecycle:
   ia368ii_manager: [myrobot, behaviour_server, cleaning_server, autodocking_server, charging_server, charged_server]
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]
   lifecycle_manager_optional: []      # MQTT bridge enters in spec 009
+
+# Public parameters (Art. I.1). Values are the defaults; the launch file may override them.
+parameters:
+  supervisor:
+    escape_timeout_s: {type: double, default: 20.0, requirement: 001-R09}
+    publish_rate_hz: {type: double, default: 5.0, note: "submode and lock_stop republication"}
+    telemetry_rate_hz: {type: double, default: 1.0}
+    mode_topic: {type: string, default: /myRobot/behaviour/mode}
+    cover_room_action: {type: string, default: /myRobot/cover_room}
+    escape_action: {type: string, default: /myRobot/escape}
+  stop_guard:
+    publish_rate_hz: {type: double, default: 10.0, note: "must stay above 1 / timeout of the mux stop input (0.5 s)"}
+    telemetry_rate_hz: {type: double, default: 1.0}

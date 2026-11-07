@@ -97,7 +97,7 @@ Host has ROS 2 **Lyrical** at `/opt/ros/lyrical`; Jazzy runs via `osrf/ros:jazzy
 bash -c 'source /opt/ros/lyrical/setup.bash && colcon build --base-paths src --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 && colcon test --base-paths src && colcon test-result'
 # one test: cd src/vacuum_supervisor && /usr/bin/python3 -m pytest test/test_submode_machine.py -k R07
 # Jazzy:
-docker run --rm -v "$PWD/src":/ws/src:ro osrf/ros:jazzy-desktop-full bash -c 'source /opt/ros/jazzy/setup.bash && cp -r /ws /tmp/ws && cd /tmp/ws && colcon build && colcon test && colcon test-result'
+docker run --rm -v "$PWD":/ws:ro osrf/ros:jazzy-desktop-full bash -c 'source /opt/ros/jazzy/setup.bash && cp -r /ws /tmp/ws && cd /tmp/ws && rm -rf src/deps && colcon build --base-paths src && colcon test --base-paths src && colcon test-result'   # mount the WHOLE repo: tests read specs/
 ```
 
 `ament_python` packages need `tests_require` **and** `extras_require={'test': ['pytest']}` in `setup.py`, or colcon reports "0 tests" on Lyrical's newer setuptools. `geometry_msgs/Pose2D` does not exist in Lyrical (D-17); check message types on both distros before using them.

@@ -44,14 +44,16 @@ stub for a real implementation without touching the rest.
 | 001-R13 | Where CoppeliaSim is running, the wheel bridge shall convert `/myRobot/cmd_vel` into wheel velocities of the robot in the scene. | manual (short video) |
 | 001-R14 | The repository shall contain a script that measures simulation steps per second of the *House* scene in synchronous, headless mode, and the result shall be recorded in decision D-11. | manual |
 | 001-R15 | When there is a push, continuous integration shall run `colcon build` and `colcon test` on a matrix of Jazzy and Lyrical containers, without CoppeliaSim. | CI |
-| 001-R17 | The system shall satisfy 001-R01 to 001-R12, 001-R16 and 001-R18 to 001-R20 on both Jazzy and Lyrical, with the same code and the same configuration. | CI (matrix) |
+| 001-R16 | The `escape_server` stub shall accept the parameter `outcome` (`succeed`, `fail`, `hang`) so that scenarios 2 and 3 are testable without the simulator. | unit |
+| 001-R17 | The system shall satisfy 001-R01 to 001-R12, 001-R16 and 001-R18 to 001-R22 on both Jazzy and Lyrical, with the same code and the same configuration. | CI (matrix) |
 | 001-R18 | The configuration shall explicitly declare `use_stamped: false` on `twist_mux`, and the contract test shall fail if `/myRobot/cmd_vel` has a type other than `geometry_msgs/msg/Twist`. | contract |
 | 001-R19 | While `/myRobot/mux/lock_stop` is `true`, the `stop_guard` shall publish a zero `Twist` on `/myRobot/mux/stop` at 10 Hz or faster, and while it is `false` it shall publish nothing. The lock shall be latched: if `lock_stop` stops arriving, the guard keeps publishing zero. | unit + node |
 | 001-R20 | The `twist_mux` configuration shall order the priorities `stop input > stop lock > every driving input` and give the `stop` input a timeout of at most 1 s. | contract (config) |
-| 001-R16 | The `escape_server` stub shall accept the parameter `outcome` (`succeed`, `fail`, `hang`) so that scenarios 2 and 3 are testable without the simulator. | unit |
+| 001-R21 | When the mode changes to AUTODOCKING while the submode is COVERING, the supervisor shall cancel the coverage and publish NONE. When the mode changes during ESCAPING, the escape shall continue and the submode after it shall be COVERING for CLEANING and NONE for AUTODOCKING. | unit |
+| 001-R22 | The stop lock shall be independent of the submode: it shall stay `true` until the reset service `/myRobot/supervisor/reset` is called, even if the mode leaves CLEANING or the node is deactivated and activated again; while it is `true`, a CLEANING mode shall not start coverage. | unit + node |
 
 ## Definition of done
 
-- All automatic tests for 001-R01 to 001-R12, 001-R16 and 001-R18 to 001-R20 passing in CI, on Jazzy and Lyrical.
+- All automatic tests for 001-R01 to 001-R12, 001-R16 and 001-R18 to 001-R22 passing in CI, on Jazzy and Lyrical.
 - Video of up to 1 minute showing scenarios 1 to 4 in CoppeliaSim.
 - D-11 recorded in `specs/000-system/spec.md` with the steps/s measurement.

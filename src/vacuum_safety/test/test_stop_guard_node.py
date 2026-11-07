@@ -101,3 +101,14 @@ def test_D20_telemetry_reports_the_lock(system):
     p.lock(True)
     assert wait_for(lambda: p.telemetry is not None and any(
         kv.key == 'locked' and kv.value == 'True' for kv in p.telemetry.status[0].values), timeout=4.0)
+
+
+def test_001_R19_zeros_resume_after_a_deactivate_activate_cycle_while_locked(system):
+    g, p = system
+    p.lock(True)
+    assert wait_for(lambda: len(p.stamps) >= 3)
+    g.trigger_deactivate()
+    time.sleep(0.4)
+    count = len(p.stamps)
+    g.trigger_activate()
+    assert wait_for(lambda: len(p.stamps) > count + 2, timeout=3.0), 'zeros did not resume after reactivation'

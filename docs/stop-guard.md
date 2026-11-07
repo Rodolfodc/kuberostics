@@ -51,7 +51,7 @@ Ordering rule, checked by `test_twist_mux_config.py`: `stop input (250) > lock (
 - While the lock is **on**, the lock silences all driving inputs (200 > 100) and `stop_guard` publishes zeros at
   10 Hz on `mux/stop` (250 > 200, so it passes the lock). The mux output is exactly zero.
 - When the lock is **off**, `stop_guard` publishes nothing; the `stop` input times out after 0.5 s and the driving
-  inputs take over again.
+  inputs take over again. So after a release the robot stays at zero for up to 0.5 s more (the input timeout): accepted.
 
 ## 3. Components
 
@@ -70,6 +70,9 @@ Ordering rule, checked by `test_twist_mux_config.py`: `stop input (250) > lock (
 | Supervisor dies **while unlocked** | No lock ever arrives; normal operation. The robot is not stopped by this mechanism (out of scope; the existing input timeouts of 0.5 s apply). | Same as before. |
 | `stop_guard` dies while locked | The `stop` input times out after 0.5 s and the output goes silent, but the **last command published was zero**, so the base holds zero. The lock still blocks every driving input. | Yes. |
 | `stop_guard` never started | The lock alone gives silence, and the base keeps its last command. | **No.** This is why `stop_guard` is in `lifecycle_manager_core` and in the launch file (T013), and why T014 asserts zero on `/myRobot/cmd_vel`, not only silence from the inputs. |
+| Supervisor **lifecycle cycle** (deactivate/activate or cleanup/configure) | The machine lives for the whole process, so the lock is kept (001-R22). | Yes. |
+| Supervisor **process restart** while locked | The new process starts unlocked and publishes `lock_stop = false`, which releases the robot. The lock is RAM state by design; persisting it is future work. | **Known limitation.** |
+| `stop_guard` deactivated while locked | Its lifecycle publisher is silent while inactive; the zeros resume at the next tick after activation (the lock state is kept in `StopGuard`). The lock in `twist_mux` keeps blocking every driving input meanwhile. | Yes. |
 | Message loss on `lock_stop` | The supervisor republishes the lock at 5 Hz, so a late `twist_mux` or guard recovers within 0.2 s. | Yes. |
 
 ## 5. Alternatives considered
