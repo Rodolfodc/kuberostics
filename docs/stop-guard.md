@@ -97,8 +97,7 @@ Ordering rule, checked by `test_twist_mux_config.py`: `stop input (250) > lock (
 | Real `twist_mux` (Docker) | `tools/probes/mux_lock_probe.sh [jazzy\|lyrical]` | 001-R10, R19, R20 |
 | Whole system | `launch_testing` scenario "escape fails" (T014) | 001-R09, R10 |
 
-Run the probe with `tools/probes/mux_lock_probe.sh jazzy`. Last result (Jazzy, `twist_mux` 4.x from apt):
-all five checks `ok`. The Lyrical run is pending (T003b needs the Lyrical image / `ros-lyrical-twist-mux`).
+Run the probe with `tools/probes/mux_lock_probe.sh jazzy`. Last results: all five checks `ok` on Jazzy (`osrf/ros:jazzy-desktop-full`) and on Lyrical (`ros:lyrical-ros-base`), each with `twist_mux` installed from apt inside the container.
 
 ## 7. Note on the constitution
 

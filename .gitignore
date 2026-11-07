@@ -13,3 +13,5 @@ rl/runs/
 *.ttt
 *.ttm
 .venv/
+.pytest_cache/
+*.egg-info/

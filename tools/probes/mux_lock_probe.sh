@@ -7,10 +7,15 @@
 #   4. locked, guard gone: the stop input times out, output goes silent (last command was zero)
 #   5. lock released: teleop passes again
 # Usage: tools/probes/mux_lock_probe.sh [jazzy|lyrical]   (default jazzy; needs docker and network)
+#        ROS_IMAGE=<image> overrides the image (defaults: osrf/ros:jazzy-desktop-full, ros:lyrical-ros-base)
 # Exit code 0 only if every check holds. Interim until the launch_testing tests of T014.
 set -euo pipefail
 DISTRO="${1:-jazzy}"
-IMAGE="osrf/ros:${DISTRO}-desktop-full"
+case "$DISTRO" in
+  jazzy)   IMAGE="${ROS_IMAGE:-osrf/ros:jazzy-desktop-full}";;
+  lyrical) IMAGE="${ROS_IMAGE:-ros:lyrical-ros-base}";;
+  *) echo "unknown distro: $DISTRO (use jazzy or lyrical)" >&2; exit 2;;
+esac
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 docker run --rm -v "$REPO/src/vacuum_bringup/config:/cfg:ro" "$IMAGE" bash -c '
