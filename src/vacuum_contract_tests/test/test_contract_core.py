@@ -26,8 +26,8 @@ def test_001_R04_contract_is_well_formed(contract):
     assert contract_problems(contract) == []
 
 
-def test_001_R04_scope_is_frozen_or_since_001(contract):
-    """001-R04: exactly the frozen or `since: "001"` interfaces are expected; later specs are not."""
+def test_001_R04_scope_is_since_001_or_no_since(contract):
+    """001-R04: exactly the interfaces with `since: "001"` or no `since` are expected, frozen or not."""
     names = {e.name for e in build_expectations(contract)}
     assert '/myRobot/cmd_vel' in names                       # frozen
     assert '/myRobot/behaviour/submode' in names             # since 001
@@ -35,7 +35,7 @@ def test_001_R04_scope_is_frozen_or_since_001(contract):
     assert '/myRobot/perception/detections/local' not in names   # since 009a
     assert '/detections_markers' not in names                # frozen but since 009a: not in the skeleton
     for e in build_expectations(contract):
-        assert e.since in ('', '001')
+        assert e.since in ('', '001')   # `since` missing is carried as ''
 
 
 def test_001_R03_cmd_vel_is_twist_with_one_publisher(contract):
@@ -74,7 +74,7 @@ def test_001_R04_exclude_owners_drops_sim_topics(contract):
 
 
 def test_ia368ii_profile_is_reliable_volatile_depth_1(contract):
-    """The inherited QoS (QoSProfile(depth=1)) resolves to what the header of topics.yaml says."""
+    """001-R04 (QoS): the inherited QoS (QoSProfile(depth=1)) resolves to what the header of topics.yaml says."""
     assert exp_by_name(contract, '/myRobot/cmd_vel').qos == IA368II
 
 
@@ -173,13 +173,19 @@ def test_001_R04_owner_star_allows_any_publisher(contract):
 # ---- services / actions / helpers -----------------------------------------------------------------------------
 
 def test_001_R04_named_type_checks(contract):
+    """001-R04: services and actions are checked for existence and declared type."""
     e = exp_by_name(contract, '/myRobot/supervisor/reset')
     assert check_named_type(e, [(e.name, ['std_srvs/srv/Trigger'])]) == []
     assert 'not in the graph' in check_named_type(e, [('/other', ['std_srvs/srv/Trigger'])])[0]
     assert 'contract says' in check_named_type(e, [(e.name, ['std_srvs/srv/Empty'])])[0]
 
 
-def test_normalize_type_and_applies():
+def test_001_R04_normalize_type_and_applies():
+    """001-R04: scope rule (since 001 or no since, frozen irrelevant) and type spelling."""
     assert normalize_type('std_msgs/String') == 'std_msgs/msg/String'
     assert normalize_type('std_msgs/msg/String') == 'std_msgs/msg/String'
-    assert applies({'frozen': True}) and not applies({'frozen': True, 'since': '009a'}) and applies({'since': '001'}) and not applies({'since': '005'})
+    assert applies({})
+    assert applies({'frozen': True})
+    assert applies({'since': '001'})
+    assert not applies({'frozen': True, 'since': '009a'})
+    assert not applies({'since': '005'})

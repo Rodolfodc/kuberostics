@@ -49,6 +49,8 @@ def node():
 
 
 def _expectations(kind):
+    if os.environ.get('VACUUM_CONTRACT_LIVE') != '1':
+        return []          # skipped anyway: do not look for the contract file at collection time
     exclude = () if os.environ.get('VACUUM_CONTRACT_WITH_SIM') == '1' else SIM_OWNERS
     contract = load_contract(find_contract())
     return [e for e in build_expectations(contract, exclude_owners=exclude) if e.kind == kind]
@@ -67,6 +69,7 @@ def test_001_R04_topic_exists_with_declared_type_and_qos(node, exp):
 
 
 def test_001_R03_cmd_vel_has_exactly_one_publisher_twist_mux(node):
+    """001-R03, with literals on purpose: independent of what topics.yaml says."""
     pubs = node.get_publishers_info_by_topic('/myRobot/cmd_vel')
     assert [p.node_name for p in pubs] == ['twist_mux']
     assert pubs[0].topic_type == 'geometry_msgs/msg/Twist'

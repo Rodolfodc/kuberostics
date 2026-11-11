@@ -72,13 +72,12 @@ def normalize_type(type_name: str) -> str:
 
 
 def applies(entry: dict) -> bool:
-    """001-R04 scope: every interface `since: "001"` or `frozen: true`.
+    """001-R04 scope (spec 001, PR #9 wording): `since == "001"` or no `since`, regardless of `frozen`.
 
-    A frozen entry introduced by a later spec (e.g. /detections_markers, since 009a) is not in the skeleton
-    yet, so it is out of scope here; inherited frozen entries have no `since`.
+    A missing `since` means inherited. The rule is by `since` alone. A later `since` (e.g. /detections_markers,
+    since 009a) is out of scope even when frozen: it is not in the skeleton yet.
     """
-    since = str(entry.get('since', ''))
-    return since == '001' or (bool(entry.get('frozen')) and since == '')
+    return str(entry.get('since', '')) in ('', '001')
 
 
 def _qos(contract: dict, entry: dict) -> Optional[QosSpec]:
