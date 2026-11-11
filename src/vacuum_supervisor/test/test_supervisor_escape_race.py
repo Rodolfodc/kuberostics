@@ -45,13 +45,20 @@ class Peer(Node):
         self.submodes = []
         self.lock = None
         self.notifications = []
+        self.t_stuck = None            # monotonic time just before the StuckEvent is published
         self.escape_goals = 0
         self._server = None
         self.pub_mode = self.create_publisher(String, '/myRobot/behaviour/mode', QOS)
         self.pub_stuck = self.create_publisher(StuckEvent, '/myRobot/stuck', 10)
-        self.create_subscription(Submode, '/myRobot/behaviour/submode', lambda m: self.submodes.append(m.submode), QOS)
+        self.t_failed = None           # monotonic time at which ESCAPE_FAILED was first observed
+        self.create_subscription(Submode, '/myRobot/behaviour/submode', self._on_submode, QOS)
         self.create_subscription(Bool, '/myRobot/mux/lock_stop', lambda m: setattr(self, 'lock', m.data), QOS)
         self.create_subscription(Notification, '/myRobot/notifications', self.notifications.append, 10)
+
+    def _on_submode(self, msg):
+        self.submodes.append(msg.submode)
+        if msg.submode == 'ESCAPE_FAILED' and self.t_failed is None:
+            self.t_failed = time.monotonic()
 
     def start_escape_server(self):
         self._server = ActionServer(self, Escape, self.escape_action, self._escape,
@@ -94,6 +101,7 @@ def system():
         peer.pub_mode.publish(String(data='CLEANING'))
         assert wait_for(lambda: peer.submode == 'COVERING')
         assert not sup._escape_client.server_is_ready()
+        peer.t_stuck = time.monotonic()
         peer.pub_stuck.publish(StuckEvent())
         return sup, peer
 
@@ -123,7 +131,10 @@ def test_001_R07_late_escape_server_is_waited_for_instead_of_failing_the_escape(
 
 def test_001_R09_escape_server_never_discovered_fails_after_escape_server_wait_s(system):
     sup, peer = system({'escape_timeout_s': 15.0, 'escape_server_wait_s': 0.8})
-    assert wait_for(lambda: peer.submode == 'ESCAPE_FAILED', timeout=10.0)   # far before the 15 s timeout
+    assert wait_for(lambda: peer.t_failed is not None, timeout=10.0)   # far before the 15 s timeout
+    # measured from the stuck event, so startup jitter cannot matter; an immediate failure (the original bug) would
+    # give ~0 s here
+    assert 0.8 - 0.1 <= peer.t_failed - peer.t_stuck <= 0.8 + 3.0
     assert wait_for(lambda: peer.lock is True)
     assert wait_for(lambda: any(n.code == 'ESCAPE_FAILED' and n.severity == Notification.ERROR
                                 for n in peer.notifications))
@@ -133,7 +144,8 @@ def test_001_R09_escape_server_never_discovered_fails_after_escape_server_wait_s
 def test_001_R09_escape_timeout_clock_is_not_extended_by_the_server_wait(system):
     """escape_timeout_s < escape_server_wait_s and the server never appears: exactly one failure, no stale goal."""
     sup, peer = system({'escape_timeout_s': 0.6, 'escape_server_wait_s': 30.0})
-    assert wait_for(lambda: peer.submode == 'ESCAPE_FAILED', timeout=10.0)   # far before the 30 s wait
+    assert wait_for(lambda: peer.t_failed is not None, timeout=10.0)   # far before the 30 s wait
+    assert 0.6 - 0.1 <= peer.t_failed - peer.t_stuck <= 0.6 + 3.0
     assert sup._pending_escape_deadline is None, 'the wait outlived the escape timeout'
     peer.start_escape_server()
     assert wait_for(lambda: sup._escape_client.server_is_ready())
