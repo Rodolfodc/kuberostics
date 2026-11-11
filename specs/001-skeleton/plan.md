@@ -99,6 +99,20 @@ each interface, queries `get_publishers_info_by_topic` and `get_subscriptions_in
 
 This test is the executable form of spec 000.
 
+Where it runs: the library and unit tests run in the default `colcon test`. The live checks are opt-in locally (`VACUUM_CONTRACT_LIVE=1`) and run automatically, with no variable, as a `launch_testing` test against `skeleton.launch.py` with `with_ia368ii:=false`, `with_wheel_bridge:=false`, `with_teleop:=false` (T020). The IA368II-dependent checks (001-R12, IA368II manager) need the IA368II checkout and are covered only when T021 is done; until then they are open (T003b, T014).
+
+### Domain ID allocation
+
+Tests that bring up a graph use `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` and a random `ROS_DOMAIN_ID` from a range reserved per package, so parallel `colcon test` runs do not see each other:
+
+| Package | Range |
+|---|---|
+| `vacuum_stubs` | 10-39 |
+| `vacuum_safety` | 40-69 |
+| `vacuum_supervisor` | 70-99 |
+| `vacuum_bringup` | 100-129 |
+| `vacuum_contract_tests` | 130-159 |
+
 ## Steps/s measurement (D-11)
 
 `tools/sim_bench/bench.py` connects through the ZeroMQ Remote API, turns on `sim.setStepping(True)`, runs N calls of
