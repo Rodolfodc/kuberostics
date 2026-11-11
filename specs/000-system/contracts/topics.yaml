@@ -3,9 +3,14 @@
 #
 # Fields:
 #   owner: who publishes (the server, for services and actions)
-#   frozen: true = inherited from IA368II, cannot change (Constitution, Art. II)
+#   frozen: true = inherited from IA368II or from the 2025S2 code, cannot change (Constitution, Art. II).
+#     It is a compatibility promise (name, type, QoS), not a delivery requirement: it says nothing
+#     about WHEN the interface must exist. That is decided by `since`.
 #   qos: reliability / durability / depth
-#   since: spec that introduces the interface
+#   since: spec from which the interface must exist and be checked by the contract tests.
+#     A missing `since` means "001" (inherited and present from the skeleton on). A frozen
+#     entry with a later `since` (e.g. /detections_markers, "009a") is required only from that
+#     spec onward; before that, the contract tests must skip it. Frozen and `since` are independent.
 #
 # IA368II QoS: QoSProfile(depth=1) => reliable, volatile, keep_last 1.
 
