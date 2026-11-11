@@ -1,0 +1,21 @@
+name: ci
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build-test:
+    name: colcon build + test (${{ matrix.distro }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false   # a failure on one distro must not hide the other (Art. X)
+      matrix:
+        distro: [jazzy, lyrical]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the ${{ matrix.distro }} image
+        run: docker build -t vacuum-ci:${{ matrix.distro }} docker/${{ matrix.distro }}
+      # Same logic as local runs: rosdep install, colcon build, colcon test; no CoppeliaSim.
+      - name: Build and test
+        run: ROS_IMAGE=vacuum-ci:${{ matrix.distro }} scripts/test-docker.sh ${{ matrix.distro }}
