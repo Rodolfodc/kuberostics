@@ -6,6 +6,7 @@ It is an actuator in the sense of Art. III: it publishes only to its own twist_m
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Twist
+# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical (T021).
 from rclpy._rclpy_pybind11 import RCLError
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn

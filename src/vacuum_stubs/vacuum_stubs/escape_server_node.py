@@ -8,10 +8,11 @@ import time
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import Twist
+# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical (T021).
+from rclpy._rclpy_pybind11 import RCLError
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
-from rclpy._rclpy_pybind11 import RCLError
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
 from vacuum_interfaces.action import Escape
 

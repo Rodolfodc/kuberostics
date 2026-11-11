@@ -11,8 +11,9 @@ import rclpy
 from action_msgs.msg import GoalStatus
 from builtin_interfaces.msg import Time
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from rclpy.action import ActionClient
+# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical (T021).
 from rclpy._rclpy_pybind11 import RCLError
+from rclpy.action import ActionClient
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -261,6 +262,7 @@ class SupervisorNode(LifecycleNode):
         self._apply(self._machine.on_escape_timeout())
 
     def _stop_escape_timer(self) -> None:
+        self._pending_escape_deadline = None     # an escape that ended (or timed out) must not be sent late
         if self._escape_timer is not None:
             self.destroy_timer(self._escape_timer)
             self._escape_timer = None
