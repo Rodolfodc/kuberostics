@@ -40,5 +40,6 @@ A task is only done when the test that verifies the requirement passes.
 ## Phase 3: verification
 
 - [ ] **T014** Write `launch_testing` tests for scenarios 1 to 4, using the escape stub with each `outcome`. Launch with `with_teleop:=false` (and without the wheel bridge when no simulator is running). Also check on the live graph that `/myRobot/cmd_vel` has `twist_mux` as its only publisher, that both lifecycle managers report their nodes active (001-R02), and that each core node's real name matches `lifecycle_core.yaml`. (001-R06 to 001-R11)
+  Partly done: `test_graph_scenarios.py` (scenarios 1, 2, 4), `test_graph_escape_fail.py` and `test_graph_escape_hang.py` (scenario 3, lock vs teleop) pass on Jazzy and Lyrical in Docker. Open: `test_graph_ia368ii.py` (IA368II manager `is_active`, node names, 001-R12 live checks) skips in the containers because the IA368II checkout is not there; it must run once with the checkout present. Leave unchecked until then.
 - [ ] **T015** Run on CoppeliaSim and record the short video of scenarios 1 to 4. (001-R13)
 - [ ] **T016** Review spec 000: close Q-01 and Q-02 and record D-11.
