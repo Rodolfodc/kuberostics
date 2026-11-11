@@ -27,17 +27,18 @@ A task is only done when the test that verifies the requirement passes.
 - [x] **T010** [P] `coverage_server` stub: `CoverRoom` server that publishes a constant `Twist` on `mux/coverage` while the goal is active. (001-R06)
 - [x] **T011** [P] `escape_server` stub with the parameter `outcome` (`succeed`, `fail`, `hang`): reverses and turns for 2 s on `mux/escape`. (001-R07, 001-R16)
 - [x] **T012** [P] `stuck_detector` stub: publishes a `StuckEvent` when the `~/trigger` service is called. Real detection is left to spec 005. (001-R07)
-- [ ] **T013** Create `skeleton.launch.py`, with:
+- [x] **T013** Create `skeleton.launch.py`, with:
   - the six IA368II nodes and its lifecycle manager, with the remappings of D-04 and D-05;
-  - `lifecycle_manager_core`, managing `supervisor` and `stop_guard`;
+  - `lifecycle_manager_core`, managing `stop_guard`, `coverage_server`, `escape_server`, `stuck_detector` and `supervisor` (in this order, the supervisor last);
   - `twist_mux`;
   - the 2025S2 wheel bridge, with the remapping of D-06;
   - `teleop_twist_keyboard` with output on `mux/teleop`.
 
-  (001-R01, 001-R02, 001-R12, 001-R13)
+  Launch arguments: `with_ia368ii` (default true), `with_wheel_bridge` (default true, only effective when `with_ia368ii` is true; the bridge connects to CoppeliaSim at startup) and `with_teleop` (default true; teleop needs a terminal, so headless and Docker runs pass `with_teleop:=false`).
+  Done: the launch description is unit-tested without launching (remaps, parameters, only `twist_mux` outputs `/myRobot/cmd_vel`); running the graph is T014. (001-R01, 001-R02, 001-R12, 001-R13)
 
 ## Phase 3: verification
 
-- [ ] **T014** Write `launch_testing` tests for scenarios 1 to 4, using the escape stub with each `outcome`. (001-R06 to 001-R11)
+- [ ] **T014** Write `launch_testing` tests for scenarios 1 to 4, using the escape stub with each `outcome`. Launch with `with_teleop:=false` (and without the wheel bridge when no simulator is running). Also check on the live graph that `/myRobot/cmd_vel` has `twist_mux` as its only publisher, that both lifecycle managers report their nodes active (001-R02), and that each core node's real name matches `lifecycle_core.yaml`. (001-R06 to 001-R11)
 - [ ] **T015** Run on CoppeliaSim and record the short video of scenarios 1 to 4. (001-R13)
 - [ ] **T016** Review spec 000: close Q-01 and Q-02 and record D-11.
