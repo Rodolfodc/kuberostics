@@ -10,7 +10,8 @@ from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import Twist
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.executors import MultiThreadedExecutor
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
+from rclpy._rclpy_pybind11 import RCLError
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
 from vacuum_interfaces.action import Escape
 
@@ -129,7 +130,15 @@ class EscapeServerNode(LifecycleNode):
                 self._pub.publish(self._twist(*step.command))
                 goal_handle.publish_feedback(Escape.Feedback(elapsed_s=float(elapsed)))
                 time.sleep(period)
+            self._last_result = 'aborted'
             goal_handle.abort()
+            return result
+        except RCLError:
+            if rclpy.ok():
+                raise
+            # SIGINT/shutdown invalidated the context while the goal was publishing: not an error, just the
+            # end of the process. Nothing can be published or logged any more (T021).
+            self._last_result = 'aborted'
             return result
         finally:
             self._running -= 1
@@ -149,10 +158,16 @@ def main(args=None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.destroy_node()
+        # SIGINT already invalidated the context: stop the executor threads first (a running goal sees
+        # rclpy.ok() == False and returns), then tear down tolerating an already-invalid context (T021).
+        executor.shutdown()
+        try:
+            node.destroy_node()
+        except RCLError:
+            pass
         rclpy.try_shutdown()
 
 

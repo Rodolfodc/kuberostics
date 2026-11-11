@@ -116,8 +116,8 @@ def system():
     sup.trigger_configure()
     sup.trigger_activate()
     assert wait_for(lambda: harness.submode is not None), 'supervisor never published a submode'
-    # the escape client does not retry (a missing server counts as a failed escape), so every test must start
-    # after the supervisor has discovered both action servers of the harness
+    # the late-server behaviour is covered by test_supervisor_escape_race.py; here every test starts after the
+    # supervisor has discovered both action servers of the harness, to stay fast and deterministic
     assert wait_for(lambda: sup._cover_client.server_is_ready() and sup._escape_client.server_is_ready()), \
         'supervisor never discovered the action servers'
     yield sup, harness

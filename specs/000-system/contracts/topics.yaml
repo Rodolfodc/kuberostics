@@ -162,6 +162,7 @@ lifecycle:
 parameters:
   supervisor:
     escape_timeout_s: {type: double, default: 20.0, requirement: 001-R09}
+    escape_server_wait_s: {type: double, default: 2.0, requirement: 001-R09, note: "bounded wait for an undiscovered escape server before the stuck event counts as a failed escape; the escape_timeout_s clock is not extended"}
     publish_rate_hz: {type: double, default: 5.0, note: "submode and lock_stop republication"}
     telemetry_rate_hz: {type: double, default: 1.0}
     mode_topic: {type: string, default: /myRobot/behaviour/mode}

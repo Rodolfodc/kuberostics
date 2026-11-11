@@ -4,6 +4,7 @@ All decisions live in `SubmodeMachine` (pure Python). This node only wires topic
 service to the machine and executes the `Effect`s it returns (D-18). Logs go through the node logger
 and a DiagnosticArray with the machine metrics is published periodically (D-20).
 """
+import time
 from typing import Optional
 
 import rclpy
@@ -11,7 +12,8 @@ from action_msgs.msg import GoalStatus
 from builtin_interfaces.msg import Time
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from rclpy.action import ActionClient
-from rclpy.executors import MultiThreadedExecutor
+from rclpy._rclpy_pybind11 import RCLError
+from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
@@ -31,6 +33,9 @@ class SupervisorNode(LifecycleNode):
     def __init__(self, node_name: str = 'supervisor', **kwargs):
         super().__init__(node_name, **kwargs)
         self.declare_parameter('escape_timeout_s', 20.0)      # 001-R09
+        # How long a stuck event waits for a not yet discovered escape server before it counts as a failed
+        # escape (T021). The escape_timeout_s clock (001-R09) starts at the stuck event, not after this wait.
+        self.declare_parameter('escape_server_wait_s', 2.0)
         self.declare_parameter('publish_rate_hz', 5.0)        # submode and lock, plan 001
         self.declare_parameter('telemetry_rate_hz', 1.0)      # D-20
         self.declare_parameter('mode_topic', '/myRobot/behaviour/mode')
@@ -47,6 +52,7 @@ class SupervisorNode(LifecycleNode):
         self._cover_seq = 0                # same for cover_room: a late acceptance must not outlive a cancel
         self._escape_timer = None
         self._pending_cover = False        # goal to send as soon as the server is up
+        self._pending_escape_deadline: Optional[float] = None   # monotonic; set while waiting for the server
         self._timers = []
 
     # ---------------------------------------------------------------- lifecycle
@@ -145,6 +151,7 @@ class SupervisorNode(LifecycleNode):
 
     def _cancel_actions(self) -> None:
         self._pending_cover = False
+        self._pending_escape_deadline = None
         self._cover_seq += 1               # any callback of the goals cancelled below is stale
         self._escape_seq += 1
         self._stop_escape_timer()
@@ -189,16 +196,37 @@ class SupervisorNode(LifecycleNode):
     # ---------------------------------------------------------------- escape
     def _send_escape(self) -> None:
         timeout_s = float(self.get_parameter('escape_timeout_s').value)
+        self._escape_seq += 1
+        self._stop_escape_timer()
+        # 001-R09: the escape_timeout_s clock starts now, also while waiting for the server to be discovered.
+        self._escape_timer = self.create_timer(timeout_s, self._on_escape_timeout)
+        wait_s = float(self.get_parameter('escape_server_wait_s').value)
         if not self._escape_client.server_is_ready():
-            self.get_logger().error('escape server not ready: treating as a failed escape')
+            self.get_logger().warning(f'escape server not discovered yet: waiting up to {wait_s:.1f} s')
+        self._pending_escape_deadline = time.monotonic() + wait_s
+        self._try_send_escape()
+
+    def _try_send_escape(self) -> None:
+        """Sends the escape goal once the server is discovered; gives up after `escape_server_wait_s` (T021).
+
+        Called right away and then from the periodic tick, so the executor is never blocked.
+        """
+        if self._pending_escape_deadline is None:
+            return
+        if not self._escape_client.server_is_ready():
+            if time.monotonic() < self._pending_escape_deadline:
+                return
+            self.get_logger().error('escape server not discovered within escape_server_wait_s: '
+                                    'treating as a failed escape')
+            self._pending_escape_deadline = None
+            self._stop_escape_timer()
             self._apply(self._machine.on_escape_result(success=False))
             return
-        self._escape_seq += 1
+        self._pending_escape_deadline = None
         seq = self._escape_seq
+        timeout_s = float(self.get_parameter('escape_timeout_s').value)
         goal = Escape.Goal(event=self._last_stuck or StuckEvent(), timeout_s=timeout_s)
         self.get_logger().info(f'sending escape goal (timeout {timeout_s:.1f} s)')
-        self._stop_escape_timer()
-        self._escape_timer = self.create_timer(timeout_s, self._on_escape_timeout)
         self._escape_client.send_goal_async(goal).add_done_callback(
             lambda fut, s=seq: self._on_escape_accepted(fut, s))
 
@@ -245,6 +273,7 @@ class SupervisorNode(LifecycleNode):
         self._pub_submode.publish(msg)
         self._pub_lock.publish(Bool(data=self._machine.locked))       # republished: twist_mux may start later
         self._try_send_cover_room()
+        self._try_send_escape()
 
     def _publish_telemetry(self) -> None:
         snap = self._machine.snapshot()
@@ -265,10 +294,14 @@ def main(args=None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.destroy_node()
+        executor.shutdown()
+        try:
+            node.destroy_node()
+        except RCLError:                         # the context was already invalidated by SIGINT (T021)
+            pass
         rclpy.try_shutdown()
 
 
