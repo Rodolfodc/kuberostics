@@ -15,3 +15,5 @@ rl/runs/
 .venv/
 .pytest_cache/
 *.egg-info/
+.archify/
+docs/diagrams/archify/*.json
