@@ -7,7 +7,13 @@
   <maintainer email="rodolfo.dalla.costa@hotmail.com">Rodolfo Dalla Costa</maintainer>
   <license>Apache-2.0</license>
 
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>teleop_twist_keyboard</exec_depend>
   <exec_depend>twist_mux</exec_depend>
+  <exec_depend>vacuum_safety</exec_depend>
+  <exec_depend>vacuum_stubs</exec_depend>
   <exec_depend>vacuum_supervisor</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
