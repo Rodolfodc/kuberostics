@@ -8,7 +8,7 @@ A task is only done when the test that verifies the requirement passes.
 - [x] **T001** Create `deps.repos` with `IA368II` at commit `51a5fa2c…`. Write `scripts/setup.sh`, which runs `vcs import` and `rosdep install`. (D-10)
 - [x] **T002** [P] Create `vacuum_interfaces` with `Submode`, `StuckEvent`, `Notification`, `Escape` and `CoverRoom`, copied from `contracts/interfaces.md`. Verify with `colcon build` and `ros2 interface show`. (001-R04)
 - [ ] **T003** [P] Create `docker/jazzy` and `docker/lyrical` (confirm the tag of the official Lyrical image) and `.github/workflows/ci.yaml` with matrix `[jazzy, lyrical]`: setup, `colcon build`, `colcon test`. (001-R15, 001-R17)
-- [ ] **T003b** [P] Build and bring up the IA368II `myrobot_bringup` and `my_robot_pkg` in the Lyrical container and record the result in Q-04. (001-R17)
+- [ ] **T003b** Build and bring up the IA368II `myrobot_bringup` and `my_robot_pkg` in the Lyrical container and record the result in Q-04 of spec 000. Depends on T001 (`deps.repos`) and T003 (Lyrical image and tag). Not parallel with T003. (001-R17)
 - [ ] **T004** [P] Write `tools/sim_bench/bench.py`, run it on the *House* scene and record D-11. Answer Q-01 along the way. (001-R14)
 
 ## Phase 1: tests first
@@ -41,4 +41,4 @@ A task is only done when the test that verifies the requirement passes.
 
 - [ ] **T014** Write `launch_testing` tests for scenarios 1 to 4, using the escape stub with each `outcome`. Launch with `with_teleop:=false` (and without the wheel bridge when no simulator is running). Also check on the live graph that `/myRobot/cmd_vel` has `twist_mux` as its only publisher, that both lifecycle managers report their nodes active (001-R02), and that each core node's real name matches `lifecycle_core.yaml`. (001-R06 to 001-R11)
 - [ ] **T015** Run on CoppeliaSim and record the short video of scenarios 1 to 4. (001-R13)
-- [ ] **T016** Review spec 000: close Q-01 and Q-02 and record D-11.
+- [ ] **T016** Review spec 000: close Q-01, record D-11 and close Q-04 with the result of T003b (Q-02 is already closed by D-13). Depends on T004 (bench result, Q-01, D-11) and T003b (Q-04). (001-R14, 001-R17)
