@@ -24,6 +24,7 @@ IMG_JAZZY="osrf/ros:jazzy-desktop-full"
 IMG_LYRICAL="ros:lyrical-ros-base"
 IMG_MERMAID="minlag/mermaid-cli:12.0.1"
 IMAGES_ALL=("$IMG_JAZZY" "$IMG_LYRICAL" "$IMG_MERMAID")
+# docker/jazzy and docker/lyrical build FROM the first two (T003); CI builds them, nothing extra to pull.
 
 COPPELIA_VER="V4_10_0_rev0"
 COPPELIA_DIR="${COPPELIA_DIR:-$HOME/Tools/CoppeliaSim_Edu_${COPPELIA_VER}_Ubuntu24_04}"
