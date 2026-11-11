@@ -99,7 +99,7 @@ each interface, queries `get_publishers_info_by_topic` and `get_subscriptions_in
 
 This test is the executable form of spec 000.
 
-Where it runs: the library and unit tests run in the default `colcon test`. The live checks are opt-in locally (`VACUUM_CONTRACT_LIVE=1`) and run automatically, with no variable, as a `launch_testing` test against `skeleton.launch.py` with `with_ia368ii:=false`, `with_wheel_bridge:=false`, `with_teleop:=false` (T020). The IA368II-dependent checks (001-R12, IA368II manager) need the IA368II checkout and are covered only when T021 is done; until then they are open (T003b, T014).
+Where it runs: the library and unit tests run in the default `colcon test`. The live checks are opt-in locally (`VACUUM_CONTRACT_LIVE=1`) and run automatically, with no variable, as a `launch_testing` test against `skeleton.launch.py` with `with_ia368ii:=false`, `with_wheel_bridge:=false`, `with_teleop:=false` (T022). The IA368II-dependent checks (001-R12, IA368II manager) need the IA368II checkout and are covered only when T023 is done; until then they are open (T003b, T014).
 
 ### Domain ID allocation
 
