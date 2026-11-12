@@ -2,7 +2,8 @@
 the supervisor's `escape_timeout_s` must fire).
 
 `outcome` and `escape_timeout_s` are set on the running nodes through their parameter services before the
-first goal; both are read per goal. The timeout is shortened from 20 s to 3 s to keep the test fast.
+first goal; both are read per goal. The timeout is shortened from 20 s to 3 s to keep the test fast; the 20 s default of 001-R09 is therefore not
+tested here (it is a parameter default, checked by the supervisor unit/node tests).
 """
 import os
 import sys

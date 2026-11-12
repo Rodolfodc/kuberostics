@@ -16,11 +16,23 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import graph_support as gs  # noqa: E402
 
 MODULE = 4
-IA368II_NODES = ['myrobot', 'behaviour_server', 'cleaning_server', 'autodocking_server', 'charging_server',
-                 'charged_server']
 
 
-def ia368ii_installed() -> bool:
+def ia368ii_manager_config():
+    """(manager node name, managed node names) read from myrobot_bringup/config/lifecycle_manager.yaml, the file
+    the IA368II lifecycle manager is launched with (skeleton.launch.py); None when the package is absent."""
+    import yaml
+    try:
+        share = get_package_share_directory('myrobot_bringup')
+    except PackageNotFoundError:
+        return None
+    with open(os.path.join(share, 'config', 'lifecycle_manager.yaml')) as f:
+        document = yaml.safe_load(f)
+    ((manager, body),) = document.items()
+    return manager, list(body['ros__parameters']['node_names'])
+
+
+def ia368ii_installed() -> bool:  # noqa: D103
     try:
         get_package_share_directory('myrobot_bringup')
         return True
@@ -49,8 +61,9 @@ class TestWithIa368ii(unittest.TestCase):
     def setUpClass(cls):
         cls.probe = gs.Probe(MODULE)
         cls.core_active = cls.probe.wait_core_active()
+        cls.manager, cls.managed = ia368ii_manager_config()
         cls.ia368ii_active = cls.probe.wait_for(
-            lambda: cls.probe.manager_is_active('lifecycle_manager'), gs.STARTUP_TIMEOUT_S, 0.5)
+            lambda: cls.probe.manager_is_active(cls.manager), gs.STARTUP_TIMEOUT_S, 0.5)
 
     @classmethod
     def tearDownClass(cls):
@@ -62,10 +75,12 @@ class TestWithIa368ii(unittest.TestCase):
         self.assertTrue(self.ia368ii_active, 'IA368II lifecycle_manager never reported is_active == true')
 
     def test_02_ia368ii_node_names(self):
-        """001-R02: the IA368II nodes have the names its lifecycle_manager.yaml lists."""
+        """001-R02: every node in the IA368II lifecycle_manager.yaml node_names is running with that name."""
         live = {name for name, namespace in self.probe.node_names()}
-        for name in IA368II_NODES:
+        self.assertTrue(self.managed)
+        for name in self.managed:
             self.assertIn(name, live)
+        self.assertIn(self.manager, live)
 
     def test_03_twist_mux_still_the_only_publisher_of_cmd_vel(self):
         """001-R03, 001-R12: cleaning_server and autodocking_server are remapped away from /myRobot/cmd_vel."""

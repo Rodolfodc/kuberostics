@@ -58,7 +58,8 @@ class TestEscapeFails(unittest.TestCase):
         self.assertTrue(all(gs.zero(v) for v in seen), f'teleop moved the locked robot: {seen[:3]}')
 
     def test_04_reset_releases_the_lock_and_teleop_works_again(self):
-        """001-R22 (service), 001-R11: after /myRobot/supervisor/reset the lock is off and teleop is forwarded."""
+        """001-R11: after the lock is released teleop is forwarded again. The release goes through the reset service
+        of 001-R22, which is only exercised here as a means (001-R22 itself is verified by unit and node tests)."""
         self.probe.set_mode('IDLE')              # do not restart coverage behind the test's back
         response = self.probe.trigger('/myRobot/supervisor/reset')
         self.assertTrue(response.success, response.message)
