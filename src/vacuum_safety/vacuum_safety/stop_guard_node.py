@@ -6,7 +6,9 @@ It is an actuator in the sense of Art. III: it publishes only to its own twist_m
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Twist
-from rclpy.executors import SingleThreadedExecutor
+# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical (T021).
+from rclpy._rclpy_pybind11 import RCLError
+from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool
@@ -62,7 +64,16 @@ class StopGuardNode(LifecycleNode):
     def _tick(self) -> None:
         cmd = self._guard.command()
         if cmd is not None:
-            self._pub_stop.publish(Twist())      # an all-zero Twist; the tuple is (0.0, 0.0) by contract
+            self._publish_unless_shutdown(self._pub_stop, Twist())   # an all-zero Twist; the tuple is (0.0, 0.0)
+
+    @staticmethod
+    def _publish_unless_shutdown(pub, msg) -> None:
+        """A timer can fire between SIGINT invalidating the context and the executor stopping (T021)."""
+        try:
+            pub.publish(msg)
+        except RCLError:
+            if rclpy.ok():
+                raise
 
     def _publish_telemetry(self) -> None:
         snap = self._guard.snapshot()
@@ -73,7 +84,7 @@ class StopGuardNode(LifecycleNode):
             values=[KeyValue(key=k, value=str(v)) for k, v in snap.items()])
         array = DiagnosticArray(status=[status])
         array.header.stamp = self.get_clock().now().to_msg()
-        self._pub_telemetry.publish(array)
+        self._publish_unless_shutdown(self._pub_telemetry, array)
 
 
 def main(args=None) -> None:
@@ -83,10 +94,14 @@ def main(args=None) -> None:
     executor.add_node(node)
     try:
         executor.spin()
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
-        node.destroy_node()
+        executor.shutdown()
+        try:
+            node.destroy_node()
+        except RCLError:                         # the context was already invalidated by SIGINT (T021)
+            pass
         rclpy.try_shutdown()
 
 

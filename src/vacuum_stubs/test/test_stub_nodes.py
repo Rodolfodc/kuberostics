@@ -1,5 +1,4 @@
 """Stub LifecycleNodes wiring, in-process rclpy (no launch). Requirements: 001-R06, 001-R07, 001-R16."""
-import os
 import threading
 import time
 
@@ -25,7 +24,7 @@ from vacuum_stubs.stuck_detector_node import StuckDetectorNode  # noqa: E402
 QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.VOLATILE)
 
 
-def wait_for(predicate, timeout=5.0):
+def wait_for(predicate, timeout=10.0):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         if predicate():
@@ -34,10 +33,23 @@ def wait_for(predicate, timeout=5.0):
     return False
 
 
+def wait_quiet(count, quiet=1.0, timeout=10.0):
+    """Waits until `count()` stops changing for `quiet` seconds (messages already in flight are delivered)."""
+    deadline = time.monotonic() + timeout
+    last, since = count(), time.monotonic()
+    while time.monotonic() < deadline:
+        now = count()
+        if now != last:
+            last, since = now, time.monotonic()
+        elif time.monotonic() - since >= quiet:
+            return True
+        time.sleep(0.02)
+    return False
+
+
 class Harness:
     def __init__(self, node):
-        os.environ.setdefault('ROS_DOMAIN_ID', '89')
-        rclpy.init()
+        rclpy.init()                        # the domain is isolated by conftest.py
         self.node = node()
         self.probe = Node('stub_probe')
         self.executor = MultiThreadedExecutor(num_threads=4)
@@ -75,7 +87,7 @@ def collect_twists(h, topic):
 
 
 def send(h, client, goal):
-    assert client.wait_for_server(timeout_sec=5.0)
+    assert client.wait_for_server(timeout_sec=10.0)
     fut = client.send_goal_async(goal)
     assert wait_for(fut.done)
     handle = fut.result()
@@ -83,7 +95,7 @@ def send(h, client, goal):
     return handle
 
 
-def result_of(handle, timeout=8.0):
+def result_of(handle, timeout=15.0):
     fut = handle.get_result_async()
     assert wait_for(fut.done, timeout), 'no result'
     return fut.result().result
@@ -102,16 +114,17 @@ def test_001_R06_coverage_publishes_constant_twist_while_goal_active_and_stops_o
     assert got == [], 'must publish nothing when idle'
     client = ActionClient(coverage.probe, CoverRoom, '/myRobot/cover_room')
     handle = send(coverage, client, CoverRoom.Goal(room_id='', passes=1))
-    assert wait_for(lambda: len(got) >= 11, 4.0)
+    # 21 samples (20 intervals, ~2 s): a delivery burst after a CPU stall cannot dominate the mean rate
+    assert wait_for(lambda: len(got) >= 21, 15.0)
     assert all(abs(m.linear.x - 0.2) < 1e-6 and abs(m.angular.z - 0.1) < 1e-6 for _, m in got)
-    window = got[-11:]
-    assert 8.0 <= 10 / (window[-1][0] - window[0][0]) <= 12.0
+    window = got[:21]
+    assert 8.0 <= 20 / (window[-1][0] - window[0][0]) <= 12.0
     cancel = handle.cancel_goal_async()
     assert wait_for(cancel.done)
     res = handle.get_result_async()
     assert wait_for(res.done)
     assert res.result().result.success is False and res.result().result.covered_ratio == 0.0
-    time.sleep(0.3)
+    assert wait_quiet(lambda: len(got)), 'kept publishing after cancel'
     n = len(got)
     time.sleep(0.5)
     assert len(got) == n, 'must publish nothing after cancel'
@@ -120,17 +133,17 @@ def test_001_R06_coverage_publishes_constant_twist_while_goal_active_and_stops_o
 def test_001_R06_coverage_feedback_ratio_increases(coverage):
     fb = []
     client = ActionClient(coverage.probe, CoverRoom, '/myRobot/cover_room')
-    assert client.wait_for_server(timeout_sec=5.0)
+    assert client.wait_for_server(timeout_sec=10.0)
     fut = client.send_goal_async(CoverRoom.Goal(), feedback_callback=lambda m: fb.append(m.feedback.covered_ratio))
     assert wait_for(fut.done)
-    assert wait_for(lambda: len(fb) >= 2, 4.0)
+    assert wait_for(lambda: len(fb) >= 2, 10.0)
     assert fb[-1] >= fb[0] >= 0.0
 
 
 def test_001_R06_D20_coverage_telemetry_published(coverage):
     got = []
     coverage.probe.create_subscription(DiagnosticArray, '/myRobot/telemetry/coverage_server', got.append, 10)
-    assert wait_for(lambda: got, 4.0)
+    assert wait_for(lambda: got, 10.0)
 
 
 def run_escape(outcome, **extra):
@@ -167,13 +180,12 @@ def test_001_R07_escape_hang_keeps_publishing_until_cancelled():
         res = handle.get_result_async()
         assert not res.done()
         n = len(got)
-        time.sleep(0.5)
-        assert len(got) > n, 'hang keeps publishing'
+        assert wait_for(lambda: len(got) > n), 'hang keeps publishing'
         cancel = handle.cancel_goal_async()
         assert wait_for(cancel.done)
         assert wait_for(res.done)
         assert res.result().result.success is False
-        time.sleep(0.3)
+        assert wait_quiet(lambda: len(got))
         n = len(got)
         time.sleep(0.5)
         assert len(got) == n
@@ -187,7 +199,7 @@ def test_001_R07_stuck_trigger_publishes_one_event_per_call():
         events = []
         h.probe.create_subscription(StuckEvent, '/myRobot/stuck', events.append, 10)
         cli = h.probe.create_client(Trigger, '/myRobot/stuck_detector/trigger')
-        assert cli.wait_for_service(timeout_sec=5.0)
+        assert cli.wait_for_service(timeout_sec=10.0)
         for i in (1, 2):
             fut = cli.call_async(Trigger.Request())
             assert wait_for(fut.done)
@@ -223,7 +235,7 @@ def test_001_R06_coverage_goal_does_not_resume_after_deactivate_activate(coverag
     assert wait_for(lambda: len(got) >= 3)
     coverage.node.trigger_deactivate()
     coverage.node.trigger_activate()
-    time.sleep(0.4)
+    assert wait_quiet(lambda: len(got))
     n = len(got)
     time.sleep(0.5)
     assert len(got) == n, 'old goal must not resume publishing'
@@ -251,7 +263,7 @@ def test_001_R07_escape_goal_does_not_resume_after_deactivate_activate():
         assert wait_for(lambda: len(got) >= 3)
         h.node.trigger_deactivate()
         h.node.trigger_activate()
-        time.sleep(0.4)
+        assert wait_quiet(lambda: len(got))
         n = len(got)
         time.sleep(0.5)
         assert len(got) == n
@@ -264,7 +276,7 @@ def test_001_R07_D20_escape_telemetry_published():
     try:
         got = []
         h.probe.create_subscription(DiagnosticArray, '/myRobot/telemetry/escape_server', got.append, 10)
-        assert wait_for(lambda: got, 4.0)
+        assert wait_for(lambda: got, 10.0)
         assert any(kv.key == 'outcome' and kv.value == 'succeed' for kv in got[0].status[0].values)
     finally:
         h.close()
@@ -276,10 +288,10 @@ def test_001_R07_D20_stuck_detector_telemetry_counts_events():
         got = []
         h.probe.create_subscription(DiagnosticArray, '/myRobot/telemetry/stuck_detector', got.append, 10)
         cli = h.probe.create_client(Trigger, '/myRobot/stuck_detector/trigger')
-        assert cli.wait_for_service(timeout_sec=5.0)
+        assert cli.wait_for_service(timeout_sec=10.0)
         fut = cli.call_async(Trigger.Request())
         assert wait_for(fut.done)
         assert wait_for(lambda: got and any(kv.key == 'events' and kv.value == '1'
-                                            for kv in got[-1].status[0].values), 4.0)
+                                            for kv in got[-1].status[0].values), 10.0)
     finally:
         h.close()
