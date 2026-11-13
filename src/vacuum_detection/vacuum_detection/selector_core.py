@@ -3,6 +3,8 @@
 The clock, the notification callback and the logger are injected (D-20). Time is in seconds on the robot
 clock; a response is described only by its source ('cloud' | 'local') and its photo `stamp` (seconds).
 
+Invariant: close_threshold_s < max_age_s <= open_threshold_s (validated in the constructor).
+Every response ends in exactly one counter: forwarded, dropped_inactive, dropped_stale or dropped_watermark.
 Order applied to each response: (1) health tracking and breaker transitions (cloud responses only),
 (2) source gate (009a-R07), (3) age filter (009a-R05), (4) watermark filter (009a-R06).
 """
@@ -22,6 +24,9 @@ class SelectorCore:
                  logger: Optional[Any] = None,
                  max_age_s: float = 0.67, open_threshold_s: float = 1.5,
                  close_threshold_s: float = 0.5, stable_window_s: float = 3.0):
+        if not close_threshold_s < max_age_s <= open_threshold_s:
+            raise ValueError('need close_threshold_s < max_age_s <= open_threshold_s, got '
+                             f'{close_threshold_s}, {max_age_s}, {open_threshold_s}')
         self._clock = clock
         self._notify = notify if notify is not None else (lambda severity, code: None)
         self._log = logger if logger is not None else logging.getLogger(__name__)
@@ -66,12 +71,15 @@ class SelectorCore:
         wanted = CLOUD if self.state == CLOSED else LOCAL
         if source != wanted:
             self._m['dropped_inactive'] += 1                        # 009a-R07
+            self._log.debug(f'drop inactive {source} stamp={stamp:.3f}')
             return False
         if age > self.max_age_s:
             self._m['dropped_stale'] += 1                           # 009a-R05
+            self._log.debug(f'drop stale {source} stamp={stamp:.3f} age={age:.3f}')
             return False
         if not stamp > self.watermark:
             self._m['dropped_watermark'] += 1                       # 009a-R06
+            self._log.debug(f'drop watermark {source} stamp={stamp:.3f} <= {self.watermark:.3f}')
             return False
         self.watermark = stamp
         self._m['forwarded'] += 1
@@ -80,7 +88,7 @@ class SelectorCore:
     def _track_cloud(self, now: float, age: float) -> None:
         self.tick()                                                 # silence before this response counts
         if self.state == CLOSED:
-            if age <= self.open_threshold_s:
+            if age <= self.max_age_s:                               # health = would be forwarded
                 self._last_good_cloud = now
         elif self.state == OPEN:
             if age <= self.close_threshold_s:                       # 009a-R09
