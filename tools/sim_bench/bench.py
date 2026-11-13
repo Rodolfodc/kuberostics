@@ -16,7 +16,8 @@ ap.add_argument("--port", type=int, default=23000)
 ap.add_argument("--steps", type=int, default=2000)
 ap.add_argument("--warmup", type=int, default=200)
 ap.add_argument("--model-src", default=SRC)
-ap.add_argument("--no-kinect", action="store_true", help="remove /myRobot/kinect before stepping (physics-only ceiling)")
+ap.add_argument("--no-kinect", action="store_true", help="remove /myRobot/kinect/{rgb,depth} vision sensors before stepping (physics-only ceiling)")
+ap.add_argument("--no-robot", action="store_true", help="House scene alone (no robot model), measures the scene baseline")
 ap.add_argument("--wheel-speed", type=float, default=3.0, help="rad/s on both wheels")
 a = ap.parse_args()
 
@@ -35,25 +36,28 @@ if not os.path.exists(model):                     # export /myRobot once, from a
     print("exported", model)
 
 sim.loadScene(house)                              # the copy, never the original
-robot = sim.loadModel(model)
-room = sim.getObject("/house/livingroom")
-p = sim.getObjectPosition(robot, sim.handle_world)
-rx, ry, _ = sim.getObjectPosition(room, sim.handle_world)
-sim.setObjectPosition(robot, sim.handle_world, [rx, ry, p[2]])
-if a.no_kinect:
-    kin = sim.getObject("/myRobot/kinect"); sim.removeObjects(sim.getObjectsInTree(kin, sim.handle_all, 0) + [kin], True)
-left, right = sim.getObject("/myRobot/leftMotor"), sim.getObject("/myRobot/rightMotor")
+robot = None if a.no_robot else sim.loadModel(model)
+if robot is not None:
+    room = sim.getObject("/house/livingroom")
+    p = sim.getObjectPosition(robot, sim.handle_world)
+    rx, ry, _ = sim.getObjectPosition(room, sim.handle_world)
+    sim.setObjectPosition(robot, sim.handle_world, [rx, ry, p[2]])
+    if a.no_kinect:
+        # remove the Kinect vision sensors (the render cost); removing only the kinect shape tree left them in place
+        sim.removeObjects([sim.getObject("/myRobot/kinect/depth"), sim.getObject("/myRobot/kinect/rgb")], True)
+    left, right = sim.getObject("/myRobot/leftMotor"), sim.getObject("/myRobot/rightMotor")
 print("dt (s):", sim.getSimulationTimeStep(), "| objects:", len(sim.getObjectsInTree(sim.handle_scene, sim.handle_all, 0)))
 
 sim.setStepping(True)
 sim.startSimulation()
-sim.setJointTargetVelocity(left, a.wheel_speed); sim.setJointTargetVelocity(right, a.wheel_speed)
-start = sim.getObjectPosition(robot, sim.handle_world)
+if robot is not None:
+    sim.setJointTargetVelocity(left, a.wheel_speed); sim.setJointTargetVelocity(right, a.wheel_speed)
+start = sim.getObjectPosition(robot, sim.handle_world) if robot is not None else [0, 0, 0]
 for _ in range(a.warmup): sim.step()
 t0 = time.perf_counter()
 for _ in range(a.steps): sim.step()
 dt = time.perf_counter() - t0
-end = sim.getObjectPosition(robot, sim.handle_world)
+end = sim.getObjectPosition(robot, sim.handle_world) if robot is not None else start
 sim.stopSimulation()
 moved = sum((e - s) ** 2 for e, s in zip(end, start)) ** 0.5
 print(f"steps/s: {a.steps / dt:.1f}  ({a.steps} steps in {dt:.2f}s)  | simulated time: {a.steps * sim.getSimulationTimeStep():.1f}s | robot moved {moved:.2f} m")
