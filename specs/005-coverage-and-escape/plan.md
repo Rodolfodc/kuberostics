@@ -56,9 +56,23 @@ Nav2 minimal configuration (initial values, to tune in the simulator):
 - `bt_navigator` with an own tree `nav_bt.xml`: `ComputePathToPose` + `FollowPath`, replanning at 1 Hz, **no recovery nodes**. `behavior_server`, `velocity_smoother` and `collision_monitor` are not launched, so `controller_server` is the only Nav2 node that publishes velocity.
 - `controller_server` and `bt_navigator` take odometry from `/myrobot/odom` (`odom_topic`); T510 checks that it is `nav_msgs/Odometry` with a usable twist (Q-14).
 - `enable_stamped_cmd_vel: false` on `controller_server` (and on any other velocity publisher; D-13). A config test checks it (005-R23); the parameter may not exist in Nav2 1.3.x (Jazzy), where declaring it is harmless: the test accepts both (unverified, T510 records it).
-- Startup order: `lifecycle_manager_core` (stop_guard, supervisor, stubs or real nodes) comes up first; `lifecycle_manager_nav` starts after it and may fail without blocking the core (Q-09). `coverage_server` waits for `/navigate_to_pose` with a timeout and reports `COVERAGE_FAILED` instead of blocking.
+- Startup order: `lifecycle_manager_core` (stop_guard, supervisor, stubs or real nodes) comes up first; `lifecycle_manager_nav` starts after it and a failure there leaves the core active (Q-09 decided, conditional on guaranteed synchronization; see "Lifecycle synchronization"). `coverage_server` waits for `/navigate_to_pose` with a timeout and reports `COVERAGE_FAILED` instead of blocking.
 - `use_sim_time` follows the outcome of Q-13 of spec 003.
 - Costmaps: local costmap `obstacle_layer` on `/scan`; global costmap `static_layer` on `/map` + inflation.
+
+## Lifecycle synchronization (Q-09 condition, 005-R35 to R38)
+
+```
+start:    core (stop_guard, supervisor, stuck_detector, escape_server, coverage_server, ...)  -> is_active
+          -> nav (planner_server, controller_server, bt_navigator)                              -> is_active
+          -> optional (MQTT bridge etc., empty until spec 009)                                   -> is_active
+shutdown: optional -> nav -> core   (reverse; stop_guard last)
+```
+
+- `ManagerSequencer` (pure Python, injected clock and a `call_manager(name, command)` callback) holds the state machine: `STARTING_CORE`, `STARTING_NAV`, `STARTING_OPTIONAL`, `ALL_ACTIVE`, `FAILED_CORE`, `DEGRADED_NAV`, `DEGRADED_OPTIONAL`, `SHUTTING_DOWN`. It only decides; the thin node `lifecycle_sequencer` calls the Nav2 manager services (`~/manage_nodes` and `~/is_active`, names to confirm in T521) with `autostart: false` on the nav and optional managers and publishes the state in `/myRobot/telemetry/lifecycle_sequencer` and `Notification`s. The sequencer is a plain bootstrap node, not under a manager (it manages the managers): an exception to Art. III.2, to be stated in the contract entry.
+- Failure rules are in 005-R36. In every state teleoperation (`mux/teleop`) and the stop lock keep working because they depend only on `twist_mux`, `stop_guard` and `teleop`.
+- Proposed contract entries (not applied): node `lifecycle_sequencer` and `/myRobot/telemetry/lifecycle_sequencer` (`diagnostic_msgs/DiagnosticArray`, `default`); parameters `manager_startup_timeout_s` 30.0, `manager_shutdown_timeout_s` 15.0, `managers` (ordered list: `[lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional]`).
+- The D-09 amendment (three managers, the order above) is applied by the architect to spec 000 later; until then this spec is the proposal.
 
 ## Escape: timeout and fallback (Art. VI.3)
 
@@ -111,10 +125,14 @@ actions:
   - {name: /navigate_to_pose, type: nav2_msgs/action/NavigateToPose, owner: bt_navigator, frozen: true, since: "005"}
 
 lifecycle:
-  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # Q-09 (proposed; amends D-09)
+  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # Q-09 (decided, conditional; amends D-09, applied by the architect later)
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]   # unchanged
 
 parameters:
+  lifecycle_sequencer:
+    manager_startup_timeout_s: {type: double, default: 30.0, requirement: 005-R35}
+    manager_shutdown_timeout_s: {type: double, default: 15.0, requirement: 005-R37}
+    managers: {type: string_array, default: [lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional], requirement: 005-R35}
   supervisor:
     dock_after_coverage: {type: bool, default: false, requirement: 005-R30, note: "true needs amendment A2 of spec 001"}
     nav_cancel_s: {type: double, default: 1.0, requirement: 005-R34}

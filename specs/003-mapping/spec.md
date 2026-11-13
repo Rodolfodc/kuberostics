@@ -18,10 +18,10 @@ detected objects or by the user. Decide which odometry feeds SLAM (Q-03). All of
 
 ## Minimal version and cut order inside the module (Art. IX.1)
 
-1. Must have: odometry and TF, SLAM Toolbox, a map saved to disk, room segmentation, default labels, `map_file` mode.
-2. Next (a late item in the schedule, 005 does not wait for it): autonomous frontier exploration. Fallback if it is late: the user drives the robot with teleoperation to build the map and the launch is started with `map_file:=...` (003-R06).
+1. Must have, the default path (decided by the project owner, 2026-11-13): map by teleoperation (SLAM Toolbox running while the user drives, map saved to disk), then room segmentation, then manual labels (`set_label`), then coverage (spec 005) on `map_file`. Odometry and TF, SLAM Toolbox, a map saved to disk, room segmentation, default labels, `map_file` mode.
+2. Optional and late, decided by the project owner, 2026-11-13: autonomous frontier exploration (the `exploration_server` tasks with its supervisor rows and `explore_on_start`, 003-R09 to R15, R31, R32). The default is teleoperated mapping with `map_file`; spec 005 does not wait for exploration.
 3. Next: the `set_label` service (manual label editing, 003-R23), default labels `room_<n>`.
-4. Cut order inside the module, decided by the project owner, 2026-11-13: first the automatic labels by object rules (003-R21, R22, tasks T307 and T314); then the alternative odometry `odom_source:=laser` (003-R04, T321 to T323). Segmentation, `set_label` and the rest stay in scope. Without automatic labels, labels are `room_<n>` or user-set.
+4. Cut order inside the module, decided by the project owner, 2026-11-13, stated explicitly as: **labels, rf2o, exploration**. (a) first the automatic labels by object rules (003-R21, R22, tasks T307 and T314); (b) then the alternative odometry `odom_source:=laser` (003-R04, T321 to T323); (c) then autonomous exploration (T312, T315, T318, with 003-R09 to R15, R31, R32), only if time runs out later. Never cut: teleoperated mapping, segmentation, manual labels (`set_label`, 003-R23), `map_file`. Without automatic labels, labels are `room_<n>` or user-set.
 
 ## Decision of this spec (DECIDED by the project owner, 2026-11-13; to be recorded in spec 000 by the architect): odometry for SLAM (closes Q-03)
 
@@ -35,7 +35,7 @@ detected objects or by the user. Decide which odometry feeds SLAM (Q-03). All of
 
 ## Usage scenarios
 
-1. **First run.** The user starts the system with `explore_on_start:=true` (default is false, so spec 001 scenarios keep working) and no saved map. Mode CLEANING: the supervisor publishes EXPLORING, the robot explores, the map is saved, the rooms are segmented, `explored` becomes `true`, and the supervisor goes to COVERING (spec 005).
+1. **First run (optional, autonomous exploration; the default is to map by teleoperation, save, and restart with `map_file`).** The user starts the system with `explore_on_start:=true` (default is false, so spec 001 scenarios keep working) and no saved map. Mode CLEANING: the supervisor publishes EXPLORING, the robot explores, the map is saved, the rooms are segmented, `explored` becomes `true`, and the supervisor goes to COVERING (spec 005).
 2. **Known map.** The system starts with `map_file:=maps/house.yaml`. `explored` is `true` at once, rooms are segmented from the file and no exploration happens.
 3. **Stuck while exploring.** A `StuckEvent` during EXPLORING: escape, then back to EXPLORING.
 4. **Relabel.** The user renames `room_02` to "kitchen" by service; the name survives a new segmentation.
@@ -56,11 +56,11 @@ SLAM and map file.
 | ID | Requirement | Verification |
 |---|---|---|
 | 003-R05 | The system shall run `slam_toolbox` online asynchronous in mapping mode with explicit parameters (Art. X.3): `odom_frame: odom`, `map_frame: map`, `base_frame: base_link`, `scan_topic: /scan`, `resolution: 0.05`, `max_laser_range` equal to the laser range measured in T301, `use_sim_time` per Q-13; it publishes `/map` (latched, `nav_msgs/OccupancyGrid`) and the TF `map -> odom`. | launch_testing |
-| 003-R06 | When the argument `map_file` is set, the launch shall load that map with `nav2_map_server`, shall not start `slam_toolbox`, and shall broadcast a static `map -> odom` computed from the start pose recorded with the map (003-R30), valid only for `odom_source:=sim`. In that mode the launch shall pass `map_loaded:=true` to `exploration_server`, which is the only publisher of `explored` (003-R13). | launch_testing |
+| 003-R06 | When the argument `map_file` is set, the launch shall load that map with `nav2_map_server`, shall not start `slam_toolbox`, and shall broadcast a static `map -> odom` computed from the start pose recorded with the map (003-R30), valid only for `odom_source:=sim`. In that mode `room_segmenter` shall segment the loaded map at start-up (003-R18), and, where `exploration_server` is present (optional), the launch shall pass `map_loaded:=true` to it; it is the only publisher of `explored` (003-R13). | launch_testing |
 | 003-R07 | When `/myRobot/map/save` (service `std_srvs/Trigger`) is called, and when exploration ends, the system shall save the map to `maps/<map_name>.yaml` + `.pgm` with `nav2_map_server` and emit an INFO `Notification` `MAP_SAVED`. | node |
 | 003-R08 | Needs simulator: after the exploration of 003-R10 and 003-R11, the map shall match a reference raster of the scene (exported by T301): median distance from each occupied cell of the map to the nearest occupied cell of the reference `<= 0.10 m`, and at least 90 % of the reference free area reachable by the robot marked free. The thresholds are initial. | sim (local) |
 
-Exploration.
+Exploration (optional and late, see the cut order; the default path is teleoperated mapping).
 
 | ID | Requirement | Verification |
 |---|---|---|
@@ -78,7 +78,7 @@ Segmentation and labels.
 |---|---|---|
 | 003-R16 | `RoomSegmenter` shall turn an occupancy grid into a label raster: free space is eroded by `door_width_m / 2` (default door width 0.9 m, to be measured in T301), connected components with at least `min_room_area_m2` (default 2.0) become seeds, and every free cell takes the label of the nearest seed (multi-source breadth-first). It is deterministic. | unit |
 | 003-R17 | On synthetic maps with `door_width_m` = 0.9 and the erosion radius 0.45 m, `RoomSegmenter` shall return 2 rooms for two rectangles joined by a 0.80 m opening (narrower than `door_width_m`), 1 room when the opening is 1.00 m, 1 room for an open rectangle, and no label on occupied or unknown cells. | unit |
-| 003-R18 | `room_segmenter` shall run when `explored` becomes `true`, and when `/myRobot/map/segment` (`std_srvs/Trigger`) is called, and shall publish `/myRobot/map/room_labels` (`nav_msgs/OccupancyGrid`, latched, same geometry as `/map`, value = `Room.index` of the room that owns the cell, 0 = no room, -1 = unknown) and `/myRobot/map/rooms` (`vacuum_interfaces/RoomArray`, latched). | node |
+| 003-R18 | `room_segmenter` shall run when `/myRobot/map/segment` (`std_srvs/Trigger`) is called, after each successful map save (003-R07), at start-up when `map_file` is set, and, where exploration is present, when `explored` becomes `true`; it shall publish `/myRobot/map/room_labels` (`nav_msgs/OccupancyGrid`, latched, same geometry as `/map`, value = `Room.index` of the room that owns the cell, 0 = no room, -1 = unknown) and `/myRobot/map/rooms` (`vacuum_interfaces/RoomArray`, latched). | node |
 | 003-R19 | After a new segmentation, a new room shall keep the `index` (and so the `id`), `label` and `label_source` of the previous room with which it has the largest overlap, if that overlap is at least 50 % of the area of the new room (one-to-one matching, largest overlap first); other rooms get the next unused index. Indexes are never reused while the map is the same. | unit (`RoomTracker`) |
 | 003-R20 | Every `Room` shall have `index` (integer from 1, the value in `room_labels`), `id` (`room_%02d` of the index), `label` (default equal to `id`), centroid, area in m2, and `label_source` (`default`, `rule`, `user`). | unit |
 | 003-R21 | (Cuttable, first in the cut order.) `RoomLabeler` shall choose each room's label by weighted vote of object observations (class, x, y) located in that room, using a rule table `class -> label, weight` (file `config/room_rules.yaml`), with at least `min_votes` (default 2); otherwise it keeps the default label. | unit |

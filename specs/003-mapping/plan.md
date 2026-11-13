@@ -80,7 +80,7 @@ Pure logic receives a logger and a metrics callback (D-20).
 | `room_segmenter` | LifecycleNode, service | `RoomSegmenter`, `RoomTracker`, `RoomLabeler`; services `segment`, `set_label`, `save` | `/myRobot/map/room_labels`, `/myRobot/map/rooms`, telemetry | `/map`, `explored`, `observations_topic` |
 | `supervisor` | existing | new rows below | existing | `explored`, action `/myRobot/explore` |
 
-## Supervisor: new rows, active only with `explore_on_start:=true` (ros-dev edits `SubmodeMachine`, T315; plan 001 is not edited, the architect merges these rows when accepted)
+## Supervisor: new rows (optional and late: cut candidate third in the order labels, rf2o, exploration), active only with `explore_on_start:=true` (ros-dev edits `SubmodeMachine`, T315; plan 001 is not edited, the architect merges these rows when accepted)
 
 `exploration_done` is an internal flag, set when an `Explore` goal ends (success or failure); it prevents a loop on failure and is cleared only by a restart or a new map.
 
@@ -199,7 +199,7 @@ Diagrams: when the proposal is applied, update `docs/diagrams/a3-perception-offl
 
 ## Risks
 
-- Time: exploration depends on Nav2 (spec 005, T510). Mitigation: `map_file` mode, so segmentation and labels are done without exploration; a map recorded by teleoperation is the fallback.
+- Time: exploration is optional and late (decided by the project owner, 2026-11-13); the default path is teleoperated mapping with `map_file`. Exploration depends on Nav2 (spec 005, T510). Mitigation: `map_file` mode, so segmentation and labels are done without exploration; a map recorded by teleoperation is the fallback.
 - Door width below the erosion radius merges rooms; above, it splits large rooms. `door_width_m` is measured on the scene (T301) and the result of 003-R24 decides the value.
 - Ground-truth odometry makes SLAM easy and hides drift; stated as a limitation (D-23).
 - Stamps and TF: if the bridge does not use simulation time consistently, SLAM and Nav2 reject messages (Q-13).
