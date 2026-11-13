@@ -33,12 +33,31 @@ depth camera ──▶ projector (depth + TF at the photo timestamp)     │
 
 | State | Source forwarded | Event | Next |
 |---|---|---|---|
-| CLOSED | cloud | no cloud response with age ≤ 1.5 s for 1.5 s | OPEN (WARN) |
+| CLOSED | cloud | no cloud response with age ≤ `max_age_s` (0.67 s) for `open_threshold_s` (1.5 s) | OPEN (WARN) |
 | OPEN | local | cloud response with age ≤ 0.5 s | HALF_OPEN |
 | HALF_OPEN | local | 3 s in a row with every cloud response ≤ 0.5 s | CLOSED (INFO) |
 | HALF_OPEN | local | cloud response with age > 0.5 s | OPEN |
+| HALF_OPEN | local | no cloud response for more than `open_threshold_s` (silence) | OPEN (no notification; the stable window restarts at the next R09 transition) |
 
-In every state, the age (`max_age_s`) and watermark filters apply before forwarding.
+Order per response: breaker health tracking (cloud only), source gate, age filter, watermark filter (see spec, "Selector
+processing order and counters"). The age and watermark filters apply to the active source in every state.
+
+Rulings (2026-11): (1) `dropped_inactive` counts the non-active source before the age filter, so every response lands in
+exactly one counter. (2) CLOSED health uses `max_age_s`, not `open_threshold_s`, which removes the dead zone where a slow
+cloud kept the breaker CLOSED while every response was dropped as stale. Invariants: `close_threshold_s < max_age_s ≤
+open_threshold_s`. (3) The fifth row exists so that a response after a long gap cannot close the breaker at once (R10,
+"every response"); it needs the silence check in `tick()` and in the HALF_OPEN branch.
+
+Tests the ros-dev must add (T904 follow-up, in `test_selector_core.py`):
+- Counters: a stale cloud response while OPEN increments `dropped_inactive` only; a stale cloud response while CLOSED
+  increments `dropped_stale` only; the sum of the four counters equals the number of `on_response` calls.
+- Dead zone: CLOSED, cloud responses with age 1.0 s every 0.5 s: breaker reaches OPEN within `open_threshold_s` (+ tick
+  period), notification `CLOUD_DETECTOR_DOWN` emitted once, then local responses are forwarded. Change `_track_cloud`
+  to `age <= self.max_age_s`.
+- HALF_OPEN silence: enter HALF_OPEN, stay silent for more than `open_threshold_s`, `tick()` returns to OPEN without
+  notification; a cloud response after a 10 s gap does not close the breaker (it goes through R09 and a full
+  `stable_window_s` is required).
+- Constructor validation or test of the invariant `close_threshold_s < max_age_s ≤ open_threshold_s`.
 
 ## Why the projection stays on the robot
 
