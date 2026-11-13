@@ -8,8 +8,8 @@
 
 ## Phase 1: tests first
 
-- [ ] **T904** pytest tests of `selector_core`: age and watermark filters, every transition of the table and the hysteresis, with a simulated clock. (009a-R05 to R10)
-- [ ] **T905** [P] `projector` test with synthetic TF: transform at the photo timestamp, drop when there is no TF. (009a-R12)
+- [x] **T904** pytest tests of `selector_core`: age and watermark filters, every transition of the table and the hysteresis, with a simulated clock. (009a-R05 to R10)
+- [x] **T905** [P] `projector` test with synthetic TF: transform at the photo timestamp, drop when there is no TF. (009a-R12)
 
 ## Phase 2: implementation
 
