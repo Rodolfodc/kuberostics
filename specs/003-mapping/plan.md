@@ -40,12 +40,12 @@ coverage_server (spec 005) ◀─ room_labels, rooms
 
 Only `controller_server` moves the robot during exploration (D-24 of spec 005); `exploration_server` computes and sends goals (a service in the sense of Art. III.4).
 
-## Odometry decision (D-23, proposed)
+## Odometry decision (D-23, decided by the project owner, 2026-11-13)
 
 | Option | Release on Jazzy and Lyrical (`ros/rosdistro` `distribution.yaml`, 2026-11-13) | Cost | Verdict |
 |---|---|---|---|
 | `sim`: `/myrobot/odom` from the 2025S2 bridge (simulator pose) + `odom_tf_bridge` | not applicable (our node) | small; frames and origin to confirm (Q-14) | **default** |
-| `laser`: `rf2o_laser_odometry` | **no entry** on either distribution | source build in `deps.repos`, port to Lyrical unverified | optional, cut first (T321) |
+| `laser`: `rf2o_laser_odometry` | **no entry** on either distribution | source build in `deps.repos`, port to Lyrical unverified | optional alternative, second in the cut order after the automatic labels (T321) |
 | `robot_localization` EKF | entry on both | needs a second, noisy source; no gain here | not used |
 
 The 2025S2 code and the House scene are not read in this change; everything about their frames is marked unverified (Q-14, T302). If T302 finds that the 2025S2 node already broadcasts `odom -> base_link`, `odom_tf_bridge` is not launched (003-R02), and if it publishes pose in the world frame instead of a start-relative frame, the bridge subtracts the pose at the first message so that `odom` starts at the origin. Which of these holds is decided by T302 and T301.

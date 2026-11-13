@@ -75,17 +75,18 @@ Time budget (005-R10 to R12), with the defaults `reverse_speed_m_s` 0.15 and `tu
 
 `default_timeout_s` (17 s) is below the supervisor's 20 s, so the server normally fails cleanly before the supervisor's clock does. While the server is not publishing, `twist_mux` times out the `escape` input after 0.5 s, and the lower inputs take over; after a failed escape the supervisor locks the robot, and `stop_guard` keeps it at zero (D-22).
 
-## Supervisor: new rows (proposal, Q-12; ros-dev edits `SubmodeMachine`, T512)
+## Supervisor: new rows (Q-12 decided by the project owner, 2026-11-13; the rows are a proposal for plan 001; ros-dev edits `SubmodeMachine`, T512)
 
 The table of plan 001 has no row for the result of `cover_room`. Proposed additions, to be merged into that table by the architect when accepted:
 
 | Current state | Event | Action | Next |
 |---|---|---|---|
-| COVERING | `cover_room` succeeded, mode still CLEANING | INFO `Notification` `COVERAGE_DONE`; sends a new `cover_room` goal (same `room_id`) | COVERING |
-| COVERING | `cover_room` failed, first failure | WARN `Notification` `COVERAGE_FAILED`; sends `cover_room` once more | COVERING |
-| COVERING | `cover_room` failed, second consecutive failure | ERROR `Notification` `COVERAGE_FAILED`; no new goal | NONE |
+| COVERING | `cover_room` ended (success or failure), mode CLEANING | INFO `COVERAGE_DONE` or WARN `COVERAGE_FAILED` `Notification`; requests docking (call to the orchestrator user-command service, mechanism confirmed in T520); `coverage_blocked = true`; starts the dock timer | NONE |
+| NONE | mode becomes AUTODOCKING | as in 001 (NONE; the IA368II `autodocking_server` drives, D-05) | NONE |
+| NONE | dock timer expires (`dock_request_timeout_s`) and mode still CLEANING | ERROR `Notification` `DOCK_REQUEST_FAILED`; no new goal (bounded, Art. VI.3) | NONE |
+| NONE | mode leaves CLEANING | clears `coverage_blocked` | NONE |
 
-The failure counter resets on success. NONE with mode CLEANING after the second failure would send `cover_room` again under the 001 table; the machine therefore keeps a `coverage_blocked` flag, cleared when the mode leaves CLEANING. If the user rejects Q-12, the machine keeps the 001 behaviour and 005-R30 is dropped. This is the formal EARS text of 005-R30.
+The 001 row "NONE, mode CLEANING: sends `cover_room`" is suppressed while `coverage_blocked` is true; that is an amendment to the 001 table (architect, later). The supervisor gains a client of the orchestrator command service (the frozen `/myRobot/start_stop`, to be confirmed). The `Mode` enum is not extended and `BehaviourManager` is not touched (Art. II). If T520 finds no way to request docking without breaking Art. II, escalate to the project owner. This is the formal EARS text of 005-R30.
 
 ## Dependencies on spec 003
 
@@ -101,7 +102,7 @@ topics:
   - {name: /myRobot/coverage/path,    type: nav_msgs/msg/Path,          qos: default, owner: coverage_server, since: "005", note: "lane waypoints of the current pass, for the interface (spec 007); published once per pass"}
   - {name: /myRobot/coverage/covered, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: coverage_server, since: "005", note: "100 = covered, 0 = not covered, -1 = outside the region; 1 Hz"}
   # Q-10 (proposed, applied before T511): /myRobot/mux/coverage gets "reserved: true" and no owner (twist_mux still subscribes);
-  #   the stub owns it only with with_stubs:=true. Not applied if D-24 falls back to the own follower.
+  #   the stub owns it only with with_stubs:=true.
   # /map: spec 003 lists owner [slam_toolbox, map_server]; the contract test must tolerate either.
 
   # consumed Nav2 interfaces, declared so the contract tests see them (owner = third party, frozen: true)
@@ -113,6 +114,8 @@ lifecycle:
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]   # unchanged
 
 parameters:
+  supervisor:
+    dock_request_timeout_s: {type: double, default: 30.0, requirement: 005-R30}
   stuck_detector:
     cmd_linear_min_m_s: {type: double, default: 0.05, requirement: 005-R01}
     cmd_angular_min_rad_s: {type: double, default: 0.20, requirement: 005-R01}
