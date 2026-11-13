@@ -48,16 +48,13 @@ cloud kept the breaker CLOSED while every response was dropped as stale. Invaria
 open_threshold_s`. (3) The fifth row exists so that a response after a long gap cannot close the breaker at once (R10,
 "every response"); it needs the silence check in `tick()` and in the HALF_OPEN branch.
 
-Tests the ros-dev must add (T904 follow-up, in `test_selector_core.py`):
-- Counters: a stale cloud response while OPEN increments `dropped_inactive` only; a stale cloud response while CLOSED
-  increments `dropped_stale` only; the sum of the four counters equals the number of `on_response` calls.
-- Dead zone: CLOSED, cloud responses with age 1.0 s every 0.5 s: breaker reaches OPEN within `open_threshold_s` (+ tick
-  period), notification `CLOUD_DETECTOR_DOWN` emitted once, then local responses are forwarded. Change `_track_cloud`
-  to `age <= self.max_age_s`.
-- HALF_OPEN silence: enter HALF_OPEN, stay silent for more than `open_threshold_s`, `tick()` returns to OPEN without
-  notification; a cloud response after a 10 s gap does not close the breaker (it goes through R09 and a full
-  `stable_window_s` is required).
-- Constructor validation or test of the invariant `close_threshold_s < max_age_s ≤ open_threshold_s`.
+Rulings implemented in PR #11 (commit 42cd673), pinned by tests in `test_selector_core.py`:
+- [x] Counters: `test_009a_R07_stale_cloud_response_while_open_counts_only_as_inactive`,
+  `test_009a_R05_every_response_lands_in_exactly_one_counter`.
+- [x] Dead zone: `test_009a_R08_dead_zone_closed_cloud_slower_than_max_age_opens_and_local_takes_over`.
+- [x] HALF_OPEN silence: `test_009a_R10_cloud_silence_in_half_open_returns_to_open`,
+  `test_009a_R10_silence_in_half_open_returns_to_open_without_notification`.
+- [x] Invariant: `test_009a_R08_invalid_threshold_ordering_is_rejected`.
 
 ## Why the projection stays on the robot
 

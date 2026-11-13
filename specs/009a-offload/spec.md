@@ -41,7 +41,7 @@ With 0.20 m tolerance and 0.30 m/s, the limit is about 0.67 s.
 | 009a-R06 | The selector shall forward a response only if its `header.stamp` is strictly greater than the watermark, update the watermark when forwarding and, otherwise, drop it and increment `dropped_watermark`. | unit |
 | 009a-R07 | While in CLOSED, the selector shall forward only cloud responses. While in OPEN or HALF_OPEN, only local responses. A response from the other source shall be dropped, regardless of its age, incrementing `dropped_inactive`. | unit |
 | 009a-R08 | When in CLOSED and no cloud response with `age ≤ max_age_s` (a healthy response, i.e. one that would be forwarded by the age filter) arrives within `open_threshold_s` (default 1.5 s, and never below `max_age_s`), the selector shall change to OPEN and emit a WARN `Notification` `CLOUD_DETECTOR_DOWN`. | unit + injected failure |
-| 009a-R09 | When in OPEN and a cloud response with `age ≤ close_threshold_s` (default 0.5 s) arrives, the selector shall change to HALF_OPEN. | unit |
+| 009a-R09 | When in OPEN and a cloud response with `age ≤ close_threshold_s` (default 0.5 s) arrives, the selector shall change to HALF_OPEN. The selector shall reject a configuration that violates `close_threshold_s < max_age_s ≤ open_threshold_s`. | unit |
 | 009a-R10 | When in HALF_OPEN and every cloud response stays with `age ≤ close_threshold_s` for `stable_window_s` (default 3 s), the selector shall change to CLOSED and emit an INFO `Notification` `CLOUD_DETECTOR_RECOVERED`. If any response violates the limit, it shall go back to OPEN. If no cloud response at all arrives for longer than `open_threshold_s` while in HALF_OPEN, it shall also go back to OPEN, with no `Notification`, and the stability window shall restart from the next response that triggers R09. | unit |
 | 009a-R11 | While in OPEN or HALF_OPEN, the robot shall keep sending images to the cloud at the same rate, to act as a probe. | contract |
 | 009a-R12 | The `projector` shall query TF at the detection `header.stamp`, with timeout `tf_timeout_s` (default 0.1 s). If the transform does not exist, it shall drop the detection and increment `dropped_tf`. It shall never use the arrival instant. | unit |
@@ -76,7 +76,15 @@ The watermark is shared by both sources: it is a robot-clock photo stamp, so it 
 Health (R08) uses the same limit as forwarding (`max_age_s`). A cloud answering with age between `max_age_s` and
 `open_threshold_s` therefore cannot keep the breaker CLOSED: all its responses are dropped as stale, the breaker opens
 after `open_threshold_s` and local takes over (Art. VII: the robot keeps getting detections). Hysteresis is kept because
-`close_threshold_s < max_age_s`.
+`close_threshold_s < max_age_s` (R09 requires the selector to reject a configuration that breaks the invariant).
+`max_age_s` is derived (`position_tolerance_m / v_max_m_s`), so changing the tolerance or the speed can trip the invariant.
+
+Accepted side effects of this ruling:
+- Up to `open_threshold_s` (1.5 s) without detections while the breaker is still CLOSED after the cloud dies or turns slow:
+  local responses are dropped as `dropped_inactive` in that window.
+- A cloud that is only intermittently healthy (about one healthy response per 1.5 s) stays CLOSED with most detections
+  dropped as stale: no flapping, but a lower detection rate.
+- The local fallback still works whenever the breaker opens (Art. VII).
 
 ## Definition of done
 
