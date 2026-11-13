@@ -1,0 +1,26 @@
+[ros2run]: Received signal:  Terminated
+Traceback (most recent call last):
+  File "/ws/install/myrobot_bringup/lib/myrobot_bringup/autodocking_server", line 33, in <module>
+    sys.exit(load_entry_point('myrobot-bringup==0.0.1', 'console_scripts', 'autodocking_server')())
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/ws/install/myrobot_bringup/lib/python3.14/site-packages/myrobot_bringup/autodocking_server.py", line 127, in main
+    executor.spin_once(timeout_sec=0.1)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/opt/ros/lyrical/lib/python3.14/site-packages/rclpy/executors.py", line 1033, in spin_once
+    self._spin_once_impl(timeout_sec)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/opt/ros/lyrical/lib/python3.14/site-packages/rclpy/executors.py", line 1013, in _spin_once_impl
+    handler, entity, node = self.wait_for_ready_callbacks(
+                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        timeout_sec, None, wait_condition)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/lyrical/lib/python3.14/site-packages/rclpy/executors.py", line 983, in wait_for_ready_callbacks
+    return next(self._cb_iter)
+  File "/opt/ros/lyrical/lib/python3.14/site-packages/rclpy/executors.py", line 861, in _wait_for_ready_callbacks
+    wait_set = _rclpy.WaitSet(
+        entity_count.num_subscriptions,
+    ...<4 lines>...
+        entity_count.num_events,
+        self._context.handle)
+rclpy._rclpy_pybind11.RCLError: failed to initialize wait set: the given context is not valid, either rcl_init() was not called or rcl_shutdown() was called., at ./src/rcl/wait.c:110
+[ros2run]: Process exited with failure 1

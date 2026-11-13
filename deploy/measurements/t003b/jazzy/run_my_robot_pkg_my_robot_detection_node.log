@@ -1,0 +1,22 @@
+[ERROR] [1794596043.339932606] [my_robot_detection_node]: ultralytics package not available. Install it and try again.
+[WARN] [1794596043.340892765] [my_robot_detection_node]: Semantic class config not found: /ws/install/my_robot_pkg/share/my_robot_pkg/config/semantic_room_seg_classes.json
+[INFO] [1794596043.342025556] [my_robot_detection_node]: Continuous detection initialized on /camera.
+Traceback (most recent call last):
+  File "/ws/install/my_robot_pkg/lib/my_robot_pkg/my_robot_detection_node", line 33, in <module>
+    sys.exit(load_entry_point('my-robot-pkg==0.0.1', 'console_scripts', 'my_robot_detection_node')())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/ws/install/my_robot_pkg/lib/python3.12/site-packages/my_robot/my_robot_detection_node.py", line 759, in main
+    rclpy.spin(node)
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/__init__.py", line 247, in spin
+    executor.spin_once()
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 926, in spin_once
+    self._spin_once_impl(timeout_sec)
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 907, in _spin_once_impl
+    handler, entity, node = self.wait_for_ready_callbacks(
+                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 877, in wait_for_ready_callbacks
+    return next(self._cb_iter)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/opt/ros/jazzy/lib/python3.12/site-packages/rclpy/executors.py", line 785, in _wait_for_ready_callbacks
+    raise ExternalShutdownException()
+rclpy.executors.ExternalShutdownException

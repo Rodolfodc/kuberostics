@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/ws/install/my_robot_pkg/lib/my_robot_pkg/my_robot_semantic_segmentation_node", line 33, in <module>
+    sys.exit(load_entry_point('my-robot-pkg==0.0.1', 'console_scripts', 'my_robot_semantic_segmentation_node')())
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/ws/install/my_robot_pkg/lib/python3.14/site-packages/my_robot/my_robot_semantic_segmentation_node.py", line 411, in main
+    node = SemanticRoomSegmentationNode()
+  File "/ws/install/my_robot_pkg/lib/python3.14/site-packages/my_robot/my_robot_semantic_segmentation_node.py", line 55, in __init__
+    self.get_logger().warn(
+    ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'RcutilsLogger' object has no attribute 'warn'
+[ros2run]: Process exited with failure 1
