@@ -19,7 +19,7 @@ detected objects or by the user. Decide which odometry feeds SLAM (Q-03). All of
 ## Minimal version and cut order inside the module (Art. IX.1)
 
 1. Must have: odometry and TF, SLAM Toolbox, a map saved to disk, room segmentation, default labels, `map_file` mode.
-2. Next: autonomous frontier exploration. Fallback if it is late: the user drives the robot with teleoperation to build the map and the launch is started with `map_file:=...` (003-R06).
+2. Next (a late item in the schedule, 005 does not wait for it): autonomous frontier exploration. Fallback if it is late: the user drives the robot with teleoperation to build the map and the launch is started with `map_file:=...` (003-R06).
 3. Next: the `set_label` service (manual label editing, 003-R23), default labels `room_<n>`.
 4. Cut order inside the module, decided by the project owner, 2026-11-13: first the automatic labels by object rules (003-R21, R22, tasks T307 and T314); then the alternative odometry `odom_source:=laser` (003-R04, T321 to T323). Segmentation, `set_label` and the rest stay in scope. Without automatic labels, labels are `room_<n>` or user-set.
 
@@ -95,7 +95,7 @@ Cross-cutting.
 | 003-R27 | `mapping.launch.py` shall run alone (Art. III.1), fed by a rosbag or by fakes (a fake `/scan` and `/myrobot/odom` publisher plus a saved map), and shall have a `launch_testing` test: with `map_file`, the rooms and labels topics appear and the `set_label` service works. | launch_testing |
 | 003-R28 | `RoomSegmenter` shall process a 300 x 300 cell grid (15 m x 15 m at 0.05 m) in less than 2 s on the CI machine. | unit |
 | 003-R30 | The map files shall record the start pose of the robot in frame `map` (x, y, yaw, in `maps/<map_name>_rooms.yaml`). When `map_file` is set, the launch shall build the static `map -> odom` from that pose and shall check that the first `/myrobot/odom` (after `zero_at_first_message` if used) is consistent with the scene being reset to the same start pose; if the check cannot be done, it shall log a WARN that the static transform is valid only if the robot starts at the recorded pose. | unit (transform computation) + sim |
-| 003-R31 | When `exploration_server` is deactivated, shut down or terminated while it has a Nav2 goal in flight, it shall cancel that goal before it stops (best effort on a crash, then the 0.5 s command timeout of the `mux/nav` input applies); `frontier_timeout_s` bounds every frontier goal, which is cancelled on timeout. | node |
+| 003-R31 | When `exploration_server` is deactivated or shut down gracefully while it has a Nav2 goal in flight, it shall cancel that goal before it stops; `frontier_timeout_s` bounds every frontier goal, which is cancelled on timeout. The crash case is handled by the supervisor watchdog of 005-R34 (cancel of all `/navigate_to_pose` goals within `nav_cancel_s`), because the 0.5 s `twist_mux` timeout alone does not stop a live `controller_server`; the test is in T316. | node + launch_testing |
 | 003-R32 | When the supervisor cancels `explore` (for an escape) and sends it again, `exploration_server` shall keep its blacklist and the frontier counters, and shall not restart the `explore_timeout_s` clock, until the goal ends with success or failure. | unit + node |
 | 003-R29 | Requirements 003-R01 to R03, R05 to R07, R09 to R14, R16 to R23, R25 to R28 and R30 to R32 shall hold on Jazzy and on Lyrical, with the same code and configuration. | CI (matrix) |
 

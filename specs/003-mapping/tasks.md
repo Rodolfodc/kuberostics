@@ -5,7 +5,7 @@ A task is only done when the test that verifies the requirement passes. Task IDs
 
 Pre-condition (architect, not a task of the four agents): apply the "Proposed contract changes" of `plan.md` to `contracts/topics.yaml` and `interfaces.md` in one serialized change, after PRs #9 and #10 are merged. T303 and every task that adds an interface start after it. Order of the two contract changes: this spec's first, then spec 005's (005 consumes the room messages). Architect action A1 (outside the four-agent list): amend spec 001 as listed in the spec of 003 before `explore_on_start` becomes true; T315 only adds the rows behind the default-false parameter.
 
-Order of delivery (Art. IX.1): odometry/TF and SLAM first (T301, T302, T310, T311), because spec 005 needs the map and the TF; then segmentation (T306, T313); exploration and labels last.
+Exploration (T312, T315, T318) is a late item; teleoperation plus `map_file` is the fallback and spec 005 does not wait for it. Order of delivery (Art. IX.1): odometry/TF and SLAM first (T301, T302, T310, T311), because spec 005 needs the map and the TF; then segmentation (T306, T313); exploration and labels last.
 
 ## Phase 0: preparation
 
@@ -30,7 +30,7 @@ Order of delivery (Art. IX.1): odometry/TF and SLAM first (T301, T302, T310, T31
 - [ ] **T313** Implement `RoomSegmenter` and `RoomTracker` until T306 passes; `room_segmenter` node (`room_labels` with value = `Room.index`, `rooms`, services `segment` and `set_label`, persistence in `maps/<map_name>_rooms.yaml`). Owner: ros-dev. Depends on T303, T306. (003-R16 to R20, R23, R25, R26)
 - [ ] **T314** (Cuttable, first in the cut order.) Implement `RoomLabeler` until T307 passes, `config/room_rules.yaml` (placeholder classes) and the adapter for `observations_topic` in the format found by T903 of spec 009a. Owner: ros-dev. Depends on T307, T313, T903 of spec 009a; the class names depend on spec 004. (003-R21, R22)
 - [ ] **T315** Implement the EXPLORING rows in `SubmodeMachine` until T308 passes and wire the `supervisor` (action client of `/myRobot/explore`, subscription to `explored`, parameter `explore_on_start` default **false**; the 001 tests must still pass unchanged). Owner: ros-dev. Depends on T308, T312 and the contract change. (003-R14)
-- [ ] **T316** `launch_testing` test of `mapping.launch.py` with `map_file` and fakes (rooms and labels topics appear; `set_label` works and persists), isolation as in T014/T020 of spec 001; add the three nodes to `lifecycle_core.yaml` and to the skeleton launch. Owner: ros-dev. Depends on T311, T313. (003-R26, R27)
+- [ ] **T316** `launch_testing` test of `mapping.launch.py` with `map_file` and fakes (rooms and labels topics appear; `set_label` works and persists), plus the kill test of exploration (kill `exploration_server` mid-goal; the supervisor watchdog of 005-R34 stops the velocity on `mux/nav` within 2.0 s; 003-R31), isolation as in T014/T020 of spec 001; add the three nodes to `lifecycle_core.yaml` and to the skeleton launch. Owner: ros-dev. Depends on T311, T313. (003-R26, R27)
 
 ## Phase 3: verification
 
