@@ -11,7 +11,7 @@ src/vacuum_coverage/
 │   │   ├── stuck_core.py           # StuckCore
 │   │   ├── escape_script.py        # EscapeScript
 │   │   └── coverage_planner.py     # CoveragePlanner, CoverageTracker, RegionBuilder
-│   │                               # GridView comes from vacuum_mapping.core.grid (spec 003; local copy until T309 of spec 003 is done)
+│   │                               # GridView comes from the tiny shared package vacuum_grid (no ROS, no other dependency; created by T309 of spec 003)
 │   ├── stuck_detector_node.py      # thin LifecycleNode
 │   ├── escape_server_node.py       # thin LifecycleNode (actuator: mux/escape only)
 │   └── coverage_server_node.py     # thin LifecycleNode (action server + Nav2 client)
@@ -48,11 +48,15 @@ Why Nav2 between waypoints and not an own follower: Nav2 already gives the globa
 | `coverage_server` | LifecycleNode, service | action `/myRobot/cover_room`; `NavigateToPose` client | `/myRobot/coverage/path`, `/myRobot/coverage/covered`, telemetry; no `Twist` | `/map`, `/myRobot/map/room_labels`, `/myRobot/map/rooms` (optional until 003), TF |
 | `planner_server`, `controller_server`, `bt_navigator` | Nav2 (third party, Art. II: configuration only) | global path, local avoidance, `NavigateToPose` | `controller_server`: `/myRobot/mux/nav` (remapped from `cmd_vel`) | `/map`, `/scan`, TF |
 
+Shutdown and failure handling (005-R31): on `on_deactivate` and `on_shutdown`, `coverage_server` cancels its Nav2 goal first and then releases the action; if it crashes, `controller_server` stops after its own 0.5 s command timeout on the `mux/nav` input of `twist_mux`, and the supervisor sees the action fail. The same pattern applies to `exploration_server` (spec 003). Timeouts use the node clock (wall time unless Q-13 sets `use_sim_time`).
+
 Nav2 minimal configuration (initial values, to tune in the simulator):
 
 - Planner `nav2_navfn_planner::NavfnPlanner`; controller `nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController`, `desired_linear_vel: 0.25` (below the 0.30 m/s limit of spec 009a), `robot_radius: 0.16`, inflation 0.30 m. Plugin names unverified here: T510 checks them on both distros.
 - `bt_navigator` with an own tree `nav_bt.xml`: `ComputePathToPose` + `FollowPath`, replanning at 1 Hz, **no recovery nodes**. `behavior_server`, `velocity_smoother` and `collision_monitor` are not launched, so `controller_server` is the only Nav2 node that publishes velocity.
-- `enable_stamped_cmd_vel: false` on `controller_server` (and on any other velocity publisher; D-13). A config test checks it (005-R23).
+- `controller_server` and `bt_navigator` take odometry from `/myrobot/odom` (`odom_topic`); T510 checks that it is `nav_msgs/Odometry` with a usable twist (Q-14).
+- `enable_stamped_cmd_vel: false` on `controller_server` (and on any other velocity publisher; D-13). A config test checks it (005-R23); the parameter may not exist in Nav2 1.3.x (Jazzy), where declaring it is harmless: the test accepts both (unverified, T510 records it).
+- Startup order: `lifecycle_manager_core` (stop_guard, supervisor, stubs or real nodes) comes up first; `lifecycle_manager_nav` starts after it and may fail without blocking the core (Q-09). `coverage_server` waits for `/navigate_to_pose` with a timeout and reports `COVERAGE_FAILED` instead of blocking.
 - `use_sim_time` follows the outcome of Q-13 of spec 003.
 - Costmaps: local costmap `obstacle_layer` on `/scan`; global costmap `static_layer` on `/map` + inflation.
 
@@ -67,7 +71,9 @@ supervisor sends Escape(timeout_s)
 supervisor: success=false or its escape_timeout_s (20 s) -> lock_stop + ESCAPE_FAILED notification (001-R09)
 ```
 
-`default_timeout_s` (15 s) is below the supervisor's 20 s, so the server normally fails cleanly before the supervisor's clock does. While the server is not publishing, `twist_mux` times out the `escape` input after 0.5 s, and the lower inputs take over; after a failed escape the supervisor locks the robot, and `stop_guard` keeps it at zero (D-22).
+Time budget (005-R10 to R12), with the defaults `reverse_speed_m_s` 0.15 and `turn_speed_rad_s` 1.0 (the stub's 0.1 m/s and 0.8 rad/s would leave no time: three attempts of 90/135/180 degrees take about 15 s): one attempt is about 1.3 s of reverse plus 1.6 to 3.1 s of turn, so three attempts take about 11 s, which is more than `primary_budget_s` (7 s); the primary phase therefore ends at 7 s even if attempts remain, leaving `fallback_budget_s` (8 s: 6.3 s sweep + 2 s advance, tight, to confirm in T515) before `default_timeout_s` (17 s). A unit test with a simulated clock checks this worst case.
+
+`default_timeout_s` (17 s) is below the supervisor's 20 s, so the server normally fails cleanly before the supervisor's clock does. While the server is not publishing, `twist_mux` times out the `escape` input after 0.5 s, and the lower inputs take over; after a failed escape the supervisor locks the robot, and `stop_guard` keeps it at zero (D-22).
 
 ## Supervisor: new rows (proposal, Q-12; ros-dev edits `SubmodeMachine`, T512)
 
@@ -75,15 +81,15 @@ The table of plan 001 has no row for the result of `cover_room`. Proposed additi
 
 | Current state | Event | Action | Next |
 |---|---|---|---|
-| COVERING | `cover_room` succeeded, mode still CLEANING | INFO `Notification` `COVERAGE_DONE`; sends `cover_room` again (next pass) | COVERING |
+| COVERING | `cover_room` succeeded, mode still CLEANING | INFO `Notification` `COVERAGE_DONE`; sends a new `cover_room` goal (same `room_id`) | COVERING |
 | COVERING | `cover_room` failed, first failure | WARN `Notification` `COVERAGE_FAILED`; sends `cover_room` once more | COVERING |
 | COVERING | `cover_room` failed, second consecutive failure | ERROR `Notification` `COVERAGE_FAILED`; no new goal | NONE |
 
-The failure counter resets on success. NONE with mode CLEANING after the second failure would send `cover_room` again under the 001 table; the machine therefore keeps a `coverage_blocked` flag, cleared when the mode leaves CLEANING. If the user rejects Q-12, the machine keeps the 001 behaviour and 005-R30 is dropped.
+The failure counter resets on success. NONE with mode CLEANING after the second failure would send `cover_room` again under the 001 table; the machine therefore keeps a `coverage_blocked` flag, cleared when the mode leaves CLEANING. If the user rejects Q-12, the machine keeps the 001 behaviour and 005-R30 is dropped. This is the formal EARS text of 005-R30.
 
 ## Dependencies on spec 003
 
-005 needs from 003: `/map`, TF `map -> odom -> base_link` and `/scan` frame, and later the room topics. Until then the module runs on a saved map from `map_server` with a static `map -> odom` identity (valid for the simulator ground-truth odometry, see spec 003) so that 005 is not blocked. `room_id` resolution (005-R16, non-empty case) depends on message `Room`/`RoomArray` from T303.
+005 needs from 003: `/map`, TF `map -> odom -> base_link` and `/scan` frame, and later the room topics. Until then the module runs on a saved map from `map_server` with a static `map -> odom` identity (valid for the simulator ground-truth odometry, see spec 003) so that 005 is not blocked. `room_id` resolution (005-R16) depends on `Room`/`RoomArray` from T303: `Room.index` is the value in `room_labels`, `Room.id` is `room_NN` with `NN = index`. Shared grid code lives in the tiny package `vacuum_grid` (no ROS, created in T309), so `vacuum_coverage` and `vacuum_mapping` do not depend on each other (Art. III.1); fallback if that is rejected: two copies pinned by identical unit tests.
 
 ## Proposed contract changes (NOT applied; the architect applies them in one serialized change, after PRs #9 and #10)
 
@@ -94,7 +100,9 @@ topics:
   # already declared, no change: /myRobot/mux/nav (owner controller_server, priority 60, since "005")
   - {name: /myRobot/coverage/path,    type: nav_msgs/msg/Path,          qos: default, owner: coverage_server, since: "005", note: "lane waypoints of the current pass, for the interface (spec 007); published once per pass"}
   - {name: /myRobot/coverage/covered, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: coverage_server, since: "005", note: "100 = covered, 0 = not covered, -1 = outside the region; 1 Hz"}
-  # Q-10 (proposed): /myRobot/mux/coverage gets "reserved: true" and loses its owner when the stub is retired
+  # Q-10 (proposed, applied before T511): /myRobot/mux/coverage gets "reserved: true" and no owner (twist_mux still subscribes);
+  #   the stub owns it only with with_stubs:=true. Not applied if D-24 falls back to the own follower.
+  # /map: spec 003 lists owner [slam_toolbox, map_server]; the contract test must tolerate either.
 
   # consumed Nav2 interfaces, declared so the contract tests see them (owner = third party, frozen: true)
 actions:
@@ -116,7 +124,7 @@ parameters:
     scan_topic: {type: string, default: /scan}
     bumper_topic: {type: string, default: "", requirement: 005-R05, note: "empty = BUMPER disabled (Q-11)"}
   escape_server:
-    outcome: {type: string, default: auto, values: [auto, succeed, fail, hang], requirement: 005-R14, note: "extends the 001 values; stub default stays succeed"}
+    outcome: {type: string, default: auto, values: [auto, succeed, fail, hang], requirement: 005-R14, note: "extends the 001 values; the launch file sets it per implementation: succeed for the stub, auto for the real node (005-R33)"}
     reverse_m: {type: double, default: 0.20}
     rear_clearance_m: {type: double, default: 0.15}
     turn_deg_base: {type: double, default: 90.0}
@@ -124,7 +132,11 @@ parameters:
     front_clearance_m: {type: double, default: 0.40}
     max_attempts: {type: int, default: 3}
     fallback_forward_m: {type: double, default: 0.30}
-    default_timeout_s: {type: double, default: 15.0, requirement: 005-R12}
+    default_timeout_s: {type: double, default: 17.0, requirement: 005-R12}
+    reverse_speed_m_s: {type: double, default: 0.15, requirement: 005-R08, note: "stub script used 0.1; limit from T503"}
+    turn_speed_rad_s: {type: double, default: 1.0, requirement: 005-R08, note: "stub script used 0.8; limit from T503"}
+    primary_budget_s: {type: double, default: 7.0, requirement: 005-R10}
+    fallback_budget_s: {type: double, default: 8.0, requirement: 005-R11}
     odom_topic: {type: string, default: /myrobot/odom}
     scan_topic: {type: string, default: /scan}
   coverage_server:
@@ -136,6 +148,8 @@ parameters:
     target_ratio: {type: double, default: 0.90, requirement: 005-R21}
     max_skip_ratio: {type: double, default: 0.3, requirement: 005-R20}
     coverage_timeout_s: {type: double, default: 1800.0, requirement: 005-R20}
+    waypoint_timeout_s: {type: double, default: 120.0, requirement: 005-R20}
+    resume_window_s: {type: double, default: 120.0, requirement: 005-R32}
     max_region_area_m2: {type: double, default: 150.0, requirement: 005-R16}
     map_topic: {type: string, default: /map}
     nav_action: {type: string, default: /navigate_to_pose}

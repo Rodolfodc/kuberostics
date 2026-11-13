@@ -21,7 +21,7 @@ src/vacuum_mapping/
 └── maps/                           # house.yaml, house.pgm, house_rooms.yaml (small, versioned; "maps/" in the requirements means this directory)
 ```
 
-Grid helpers (`GridView`: world/cell conversion, inflation) are shared with spec 005. To avoid a dependency cycle, the class lives in `vacuum_mapping.core.grid` and `vacuum_coverage` imports it; T511 of spec 005 adapts the import (until then it carries its own copy; the unit tests of both pin the same behaviour).
+Grid helpers (`GridView`: world/cell conversion, inflation) are shared with spec 005 through a tiny package `src/vacuum_grid/` (pure Python, no ROS, no dependency on `vacuum_mapping` or `vacuum_coverage`), created in T309; this avoids coupling and a circular dependency between the two modules (Art. III.1). Fallback if rejected: two copies pinned by identical unit tests.
 
 ## Data flow
 
@@ -80,13 +80,13 @@ Pure logic receives a logger and a metrics callback (D-20).
 | `room_segmenter` | LifecycleNode, service | `RoomSegmenter`, `RoomTracker`, `RoomLabeler`; services `segment`, `set_label`, `save` | `/myRobot/map/room_labels`, `/myRobot/map/rooms`, telemetry | `/map`, `explored`, `observations_topic` |
 | `supervisor` | existing | new rows below | existing | `explored`, action `/myRobot/explore` |
 
-## Supervisor: new rows (ros-dev edits `SubmodeMachine`, T315; plan 001 is not edited, the architect merges these rows when accepted)
+## Supervisor: new rows, active only with `explore_on_start:=true` (ros-dev edits `SubmodeMachine`, T315; plan 001 is not edited, the architect merges these rows when accepted)
 
 `exploration_done` is an internal flag, set when an `Explore` goal ends (success or failure); it prevents a loop on failure and is cleared only by a restart or a new map.
 
 | Current state | Event | Action | Next |
 |---|---|---|---|
-| NONE | mode = CLEANING, `explored` false, `explore_on_start` true, `exploration_done` false, lock off | sends `explore` (takes precedence over the 001 row that sends `cover_room`) | EXPLORING |
+| NONE | mode = CLEANING, `explored` false, `explore_on_start` true (default false), `exploration_done` false, lock off | sends `explore` instead of `cover_room`; this changes 001-R06 and needs the amendment A1 of the spec before the default becomes true | EXPLORING |
 | EXPLORING | `explore` succeeded | sends `cover_room`; `exploration_done = true` | COVERING |
 | EXPLORING | `explore` failed | sends `cover_room` with the partial map; `exploration_done = true` | COVERING |
 | EXPLORING | `StuckEvent` | cancels `explore`; `resume_submode = EXPLORING`; sends `escape` | ESCAPING |
@@ -105,7 +105,8 @@ Pure logic receives a logger and a metrics callback (D-20).
 uint8 DEFAULT=0
 uint8 RULE=1
 uint8 USER=2
-string id                       # room_NN, stable across segmentations (003-R19)
+uint16 index                    # value in room_labels, from 1, stable (003-R19)
+string id                       # room_%02d of index
 string label                    # default = id
 uint8 label_source
 geometry_msgs/Point centroid    # frame map
@@ -138,8 +139,8 @@ string message
 
 ```yaml
 topics:
-  - {name: /map, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: slam_toolbox, since: "003", note: "with map_file the owner is map_server; exactly one of them runs"}
-  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, since: "003"}
+  - {name: /map, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: [slam_toolbox, map_server], since: "003", note: "exactly one of them runs (map_file selects map_server); the contract test shall accept either owner"}
+  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, max_publishers: 1, since: "003"}
   - {name: /myRobot/map/room_labels, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: room_segmenter, since: "003", note: "value = room index from 1, 0 = no room, -1 = unknown"}
   - {name: /myRobot/map/rooms,       type: vacuum_interfaces/msg/RoomArray, qos: latched, owner: room_segmenter, since: "003"}
   - {name: /myRobot/telemetry/odom_tf_bridge,    type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: odom_tf_bridge, since: "003"}
@@ -155,7 +156,7 @@ lifecycle:
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server, odom_tf_bridge, exploration_server, room_segmenter]
 parameters:
   supervisor:
-    explore_on_start: {type: bool, default: true, requirement: 003-R14}
+    explore_on_start: {type: bool, default: false, requirement: 003-R14, note: "true needs amendment A1 of spec 001; false until exploration exists"}
     explore_action: {type: string, default: /myRobot/explore}
   odom_tf_bridge:
     odom_topic: {type: string, default: /myrobot/odom, note: "D-07"}
@@ -166,6 +167,7 @@ parameters:
     odom_source: {type: string, default: sim, values: [sim, laser], requirement: 003-R01}
     map_file: {type: string, default: "", requirement: 003-R06}
     map_name: {type: string, default: house}
+    start_pose_xyyaw: {type: double_array, default: [0, 0, 0], requirement: 003-R30, note: "read from maps/<map_name>_rooms.yaml with map_file"}
     scan_frame: {type: string, default: laser_link, note: "to be measured, T301"}
     laser_to_base_xyz_rpy: {type: double_array, default: [0, 0, 0, 0, 0, 0], note: "to be measured, T301"}
     camera_to_base_xyz_rpy: {type: double_array, default: [0, 0, 0, 0, 0, 0], note: "to be measured, T301"}
@@ -175,6 +177,7 @@ parameters:
     robot_radius_m: {type: double, default: 0.16}
     frontier_timeout_s: {type: double, default: 60.0, requirement: 003-R10}
     explore_timeout_s: {type: double, default: 900.0, requirement: 003-R11}
+    map_loaded: {type: bool, default: false, requirement: 003-R06, note: "set by the launch with map_file; explored = true"}
     max_blacklist_ratio: {type: double, default: 0.5, requirement: 003-R11}
     nav_action: {type: string, default: /navigate_to_pose}
   room_segmenter:
