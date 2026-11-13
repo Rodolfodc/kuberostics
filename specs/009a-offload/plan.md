@@ -33,12 +33,28 @@ depth camera ──▶ projector (depth + TF at the photo timestamp)     │
 
 | State | Source forwarded | Event | Next |
 |---|---|---|---|
-| CLOSED | cloud | no cloud response with age ≤ 1.5 s for 1.5 s | OPEN (WARN) |
+| CLOSED | cloud | no cloud response with age ≤ `max_age_s` (0.67 s) for `open_threshold_s` (1.5 s) | OPEN (WARN) |
 | OPEN | local | cloud response with age ≤ 0.5 s | HALF_OPEN |
 | HALF_OPEN | local | 3 s in a row with every cloud response ≤ 0.5 s | CLOSED (INFO) |
 | HALF_OPEN | local | cloud response with age > 0.5 s | OPEN |
+| HALF_OPEN | local | no cloud response for more than `open_threshold_s` (silence) | OPEN (no notification; the stable window restarts at the next R09 transition) |
 
-In every state, the age (`max_age_s`) and watermark filters apply before forwarding.
+Order per response: breaker health tracking (cloud only), source gate, age filter, watermark filter (see spec, "Selector
+processing order and counters"). The age and watermark filters apply to the active source in every state.
+
+Rulings (2026-11): (1) `dropped_inactive` counts the non-active source before the age filter, so every response lands in
+exactly one counter. (2) CLOSED health uses `max_age_s`, not `open_threshold_s`, which removes the dead zone where a slow
+cloud kept the breaker CLOSED while every response was dropped as stale. Invariants: `close_threshold_s < max_age_s ≤
+open_threshold_s`. (3) The fifth row exists so that a response after a long gap cannot close the breaker at once (R10,
+"every response"); it needs the silence check in `tick()` and in the HALF_OPEN branch.
+
+Rulings implemented in PR #11 (commit 42cd673), pinned by tests in `test_selector_core.py`:
+- [x] Counters: `test_009a_R07_stale_cloud_response_while_open_counts_only_as_inactive`,
+  `test_009a_R05_every_response_lands_in_exactly_one_counter`.
+- [x] Dead zone: `test_009a_R08_dead_zone_closed_cloud_slower_than_max_age_opens_and_local_takes_over`.
+- [x] HALF_OPEN silence: `test_009a_R10_cloud_silence_in_half_open_returns_to_open`,
+  `test_009a_R10_silence_in_half_open_returns_to_open_without_notification`.
+- [x] Invariant: `test_009a_R08_invalid_threshold_ordering_is_rejected`.
 
 ## Why the projection stays on the robot
 
