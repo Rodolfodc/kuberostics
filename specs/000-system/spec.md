@@ -106,6 +106,15 @@ The complete machine-readable list is in `contracts/topics.yaml`.
   difference, not a distro one). Limits: no simulator, "alive for 10 s" is not "correct", no `colcon test`, Nav2/SLAM launch
   files not run, wheel bridge not started. Still open: the fix under Art. II (wrapper that restores the logger method in our
   own package, or a same-name replacement node, T024) and tracking the runtime dependencies (T025).
+  Reviewer input (PR #17): a same-name replacement node is not recommended (400+ lines copied, drift from upstream,
+  contradicts D-16); targeted inheritance does not work because the call is `self.get_logger()` on the `Node` base class.
+  **Proposed decision for the project owner (draft; D-number to be assigned at merge, Art. II interpretation, not in
+  the constitution):** *Logger-compatibility shim.* A small launcher executable in a `vacuum_*` package runs, in the process
+  of each upstream node, `if not hasattr(RcutilsLogger, "warn"): RcutilsLogger.warn = RcutilsLogger.warning` and then
+  the upstream entry point. Conditions: a no-op when `warn` exists (Jazzy); no upstream file or pin changes; no
+  `BehaviourManager` subclass and no `Mode` extension; pytest plus launch test; recorded as an explicit decision, because it
+  is not literally on the ordered adaptation list (closest item: launch wrapper) and patches `rclpy` at runtime.
+  Alternative to the launcher: a `sitecustomize` on `PYTHONPATH` set by our launch.
 - Q-05: pip dependencies on Python 3.14, used on Lyrical: `torch`, `ultralytics` and `stable-baselines3`.
   If any of them has no wheel, RL training runs in a Python environment separate from ROS, and only inference goes into the node.
 - Q-06: robot ↔ cloud transport. Two options:

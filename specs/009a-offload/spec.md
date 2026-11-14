@@ -91,7 +91,7 @@ the table in spec 000 was not verified against the source in this change.
 Reasons, all structural (T902 report): the allow-list enforces R03 by construction (only the two perception topics cross);
 the motion loop (`twist_mux`, `stop_guard`) stays on DDS and its RMW does not change (Art. VI); one binary (1.10.2) for
 both distributions, whereas `rmw_zenoh` would have to be qualified in two different versions (Art. X); the cloud Pod is
-a bridge sidecar plus an ordinary DDS node. Latency does not separate them on a good link (4 ms against 5 ms).
+a bridge sidecar plus an ordinary DDS node. Latency does not separate them on a good link (4 ms against 5 ms); on a lossy link the bridge is worse (risk below).
 
 Conditions to revisit and prefer `rmw_zenoh`: (1) the real robot-to-cluster link is lossy, as measured by the Wi-Fi task
 T920 below, with the bridge's age above `close_threshold_s` in more than a small fraction of responses; (2) the Jazzy
@@ -104,22 +104,30 @@ Read against the selector rulings of 2026-11 (CLOSED health uses `max_age_s`, in
 open_threshold_s`, silence returns HALF_OPEN to OPEN): the transport numbers are *without* inference time, which the
 selector sees, because the age is measured at the robot after the whole round trip.
 
-- **Opening is not the expected event.** The breaker opens when no cloud response with age <= `max_age_s` (0.67 s)
-  arrives for 1.5 s (R08); the bridge's maximum on the lossy link was 0.62 s, so with only the transport it stays CLOSED.
-  What fails first is *closing again*: `close_threshold_s` is 0.5 s, the bridge has p50 0.39 s and p99 0.58 s, so
-  after any opening (for example a Pod restart) HALF_OPEN to CLOSED (R10, every response <= 0.5 s for 3 s) will take
-  longer or repeat, and on a really lossy link the robot may stay on the local detector. That is the correct, designed
-  behaviour (Art. VII), not a defect, but the benefit of offloading is lost there.
-- **The margin to `max_age_s` is thin.** Maximum 0.62 s against 0.67 s leaves about 45 ms. Any detector inference time
-  above that pushes the tail beyond `max_age_s` and those responses are dropped as `dropped_stale`. With inference above about
-  0.11 s the bridge's p50 on the lossy link exceeds `close_threshold_s` (the breaker cannot close), and above about 0.28 s the
-  median exceeds `max_age_s` (most responses stale, breaker opens). yolo11x on K3s inference time is not measured yet.
-- **No threshold change is proposed.** `max_age_s` is physical (0.20 m / 0.30 m/s) and `close_threshold_s` keeps the
-  hysteresis; loosening them to suit the link would reintroduce stale detections on the semantic map (R05). If the
-  measured link and inference leave no usable window, the choice is a better transport or a smaller cloud model, or running
-  with `offload:=false`, not different thresholds.
+- **Opening is not the expected event; reclosing is.** The breaker opens when no cloud response with age <= `max_age_s`
+  (0.67 s) arrives for 1.5 s (R08); the bridge's maximum on the lossy link was 0.62 s, so on transport alone it stays CLOSED.
+  What fails is *closing again* after any opening (for example a Pod restart): R10 needs every response of the 3 s stable
+  window (about 6 at 2 Hz) at or below `close_threshold_s` (0.5 s). On the bridge, 42 of 607 responses (6.9 %) exceed 0.5 s
+  and p95 is 511 ms; with independent losses about 1 - 0.93^6, roughly 35 %, of the recovery windows fail and send the
+  selector back to OPEN (the sample gives 32 %: 68 % of the windows are clean). With `rmw_zenoh` the maximum is 430 ms and
+  the limit is never violated. The robot keeps working on the local detector (Art. VII), but the benefit of offloading is lost.
+- **The margin to `max_age_s` is thin and the inference time is missing.** Maximum 0.62 s against 0.67 s leaves about 45 ms;
+  the round trip excludes inference. With yolo11x in K3s, the bridge's p99 (0.58 s) plus inference probably crosses `max_age_s`
+  and R05 drops those frames as `dropped_stale`. By arithmetic on the p50 (0.39 s): inference above about 0.11 s puts the
+  median above `close_threshold_s` (the breaker cannot close), above about 0.28 s above `max_age_s` (most responses stale).
+  Inference time is not measured (T921).
+- **This is a risk against the bridge choice, not something to wave away.** The thresholds are not changed by this
+  specification, and `max_age_s` is physical (0.20 m / 0.30 m/s), but the owner must decide, if the real link is lossy,
+  between: (a) re-tuning `close_threshold_s`, `stable_window_s` and/or `max_age_s` for the bridge (a spec change to R05, R09, R10
+  and to the invariant `close_threshold_s < max_age_s <= open_threshold_s`, with the cost of older detections on the
+  semantic map), or (b) reconsidering `rmw_zenoh` (conditions above), or (c) running `offload:=false`. Until T920 and T921
+  give numbers, the proposal stays a proposal.
 - **Consequence for the report:** R15 and R16 are measured on a clean link (the local chaos test); add one run with
   netem on the uplink (T922) so that the time to CLOSED on a lossy link, and the share of `dropped_stale`, appear in the numbers.
+- **The bridge is a new robot-side process** outside `lifecycle_manager_core` (T911 must declare it, in the optional group
+  of D-09 or equivalent): if it dies the robot must keep cleaning (Art. VII), and its allow-list must never include
+  `mux` or `cmd_vel` topics (Art. VI; R19). The bridge on Jazzy is untested: "same binary for both distros" is an
+  expectation until T919.
 
 ### Requirement added by this proposal
 
