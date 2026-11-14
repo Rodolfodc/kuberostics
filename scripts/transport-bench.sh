@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
 # T902 (009a-R03, Q-06): robot <-> K3s transport measurement, rmw_zenoh vs zenoh-bridge-ros2dds.
 # The robot side is a Docker container on the k3d network; the cloud side is a Pod in namespace t902 of the local
-# cluster "kuberostics" (tools/k3s.sh, own kubeconfig). Round trip = timestamp echo of a ~60 KB JPEG at 2 Hz.
+# cluster "kuberostics" (tools/k3s.sh, own kubeconfig). Round trip = timestamp echo of a 80 KB JPEG (80 187 bytes) at 2 Hz.
 # Usage: scripts/transport-bench.sh [--duration S] [--distro lyrical] [--scenarios "lan wan"] [--transports "rmw bridge"]
 # Needs: docker, k3d, kubectl. `tools/k3s.sh up` is run if the cluster is absent. Results: deploy/measurements/t902/.
 # Cleanup: scripts/transport-bench.sh --cleanup   (removes only namespace t902 and the t902-* containers)
+# Raw docker and k3d image import are used on purpose (no wrapper covers them); every container is named t902-* and
+# cleanup (--cleanup, or the per-run docker rm) only touches that prefix and namespace t902.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K="$REPO/tools/k3s.sh"
 OUT="$REPO/deploy/measurements/t902"
 DISTRO=lyrical DURATION=300 SCENARIOS="lan wan" TRANSPORTS="rmw bridge"
-BRIDGE_IMG="eclipse/zenoh-bridge-ros2dds:1.10.2"
+# Pinned by digest (supply chain); the tag is tracked in scripts/setup_env.sh. apt packages and ros:lyrical-ros-base float.
+BRIDGE_IMG="eclipse/zenoh-bridge-ros2dds:1.10.2@sha256:0183b7e83790a8c57a069743776c2d913041760eb19e64d8cc4fbf7374269034"
 declare -A NETEM=( [lan]="" [wan]="delay 20ms 5ms loss 1%" )   # robot -> cloud direction only (egress of the robot netns)
 
 while [[ $# -gt 0 ]]; do

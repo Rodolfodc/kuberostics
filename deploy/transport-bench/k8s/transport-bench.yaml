@@ -62,7 +62,7 @@ spec:
           args: ["dds", "echo"]
           securityContext: {allowPrivilegeEscalation: false}
         - name: bridge   # shares the pod network namespace with the DDS node
-          image: eclipse/zenoh-bridge-ros2dds:1.10.2
+          image: eclipse/zenoh-bridge-ros2dds:1.10.2@sha256:0183b7e83790a8c57a069743776c2d913041760eb19e64d8cc4fbf7374269034
           imagePullPolicy: IfNotPresent
           env: [{name: ROS_AUTOMATIC_DISCOVERY_RANGE, value: LOCALHOST}, {name: ROS_DISTRO, value: lyrical}]
           args: ["-l", "tcp/0.0.0.0:7447", "--no-multicast-scouting", "-c", "/cfg/bridge.json5"]
