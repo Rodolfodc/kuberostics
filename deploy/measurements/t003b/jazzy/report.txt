@@ -1,0 +1,84 @@
+vcs import exit=0
+ROS_DISTRO=jazzy
+image=osrf/ros:jazzy-desktop-full
+python=Python 3.12.3
+IA368II=51a5fa2c816c7ee712c963843e5d747b3ed2a98f
+packages: src/deps/IA368II/myrobot_bringup_ws/src/myrobot_bringup src/deps/IA368II/myrobot_bringup_ws/src/myrobot_interfaces src/deps/IA368II/final_project/final_project_ws/src/my_robot_pkg 
+rosdep install exit=0
+rosdep UNRESOLVED keys (rosdep -r hides them in its exit code): ament_python 
+colcon build exit=0
+Starting >>> myrobot_interfaces
+Starting >>> my_robot_pkg
+Finished <<< my_robot_pkg [1.94s]
+Finished <<< myrobot_interfaces [8.67s]
+Starting >>> myrobot_bringup
+Finished <<< myrobot_bringup [1.90s]
+Summary: 3 packages finished [10.7s]
+RESULT build_exit=0 pin=ok
+== executables (10 s each) ==
+myrobot_bringup/autodocking_server: exit=124 alive
+myrobot_bringup/behaviour_server: exit=124 alive
+myrobot_bringup/charged_server: exit=124 alive
+myrobot_bringup/charging_server: exit=124 alive
+myrobot_bringup/cleaning_server: exit=124 alive
+myrobot_bringup/myrobot_server: exit=124 alive
+my_robot_pkg/my_robot_cartographer_node: exit=124 alive
+my_robot_pkg/my_robot_cmd_vel_node: SKIPPED (wheel bridge off)
+my_robot_pkg/my_robot_detection_node: exit=124 alive
+my_robot_pkg/my_robot_explorer_node: exit=124 alive
+my_robot_pkg/my_robot_keyboard_node: exit=1 EXITED
+    Traceback (most recent call last):
+    termios.error: (25, 'Inappropriate ioctl for device')
+my_robot_pkg/my_robot_odometry_node: exit=1 EXITED
+    Traceback (most recent call last):
+    ModuleNotFoundError: No module named 'coppeliasim_zmqremoteapi_client'
+my_robot_pkg/my_robot_scan_node: exit=1 EXITED
+    Traceback (most recent call last):
+    ModuleNotFoundError: No module named 'coppeliasim_zmqremoteapi_client'
+my_robot_pkg/my_robot_semantic_segmentation_node: exit=124 alive
+my_robot_pkg/my_robot_serialize_pose_graph_node: exit=1 EXITED
+    Traceback (most recent call last):
+    ModuleNotFoundError: No module named 'slam_toolbox'
+my_robot_pkg/my_robot_sim_control_node: exit=1 EXITED
+    Traceback (most recent call last):
+    ModuleNotFoundError: No module named 'coppeliasim_zmqremoteapi_client'
+my_robot_pkg/my_robot_topologic_segmentation_node: exit=1 EXITED
+    Traceback (most recent call last):
+    ModuleNotFoundError: No module named 'skimage'
+my_robot_pkg/my_robot_vision_node: exit=1 EXITED
+    Traceback (most recent call last):
+    ModuleNotFoundError: No module named 'coppeliasim_zmqremoteapi_client'
+== ros2 launch myrobot_bringup bringup.launch.py ==
+-- node list
+/autodocking_server
+/behaviour_server
+/charged_server
+/charging_server
+/cleaning_server
+/lifecycle_manager
+/myrobot
+-- topics
+/autodocking_server/transition_event [lifecycle_msgs/msg/TransitionEvent]
+/behaviour_server/transition_event [lifecycle_msgs/msg/TransitionEvent]
+/charged_server/transition_event [lifecycle_msgs/msg/TransitionEvent]
+/charging_server/transition_event [lifecycle_msgs/msg/TransitionEvent]
+/cleaning_server/transition_event [lifecycle_msgs/msg/TransitionEvent]
+/diagnostics [diagnostic_msgs/msg/DiagnosticArray]
+/myRobot/battery_state [sensor_msgs/msg/BatteryState]
+/myRobot/behaviour/mode [std_msgs/msg/String]
+/myRobot/charging_base/relativeAngle [std_msgs/msg/Float32]
+/myRobot/charging_base/strengthSignal [std_msgs/msg/Float32]
+/myRobot/cmd_vel [geometry_msgs/msg/Twist]
+/myrobot/transition_event [lifecycle_msgs/msg/TransitionEvent]
+/parameter_events [rcl_interfaces/msg/ParameterEvent]
+/rosout [rcl_interfaces/msg/Log]
+-- mode (one sample)
+data: CHARGED
+---
+-- lifecycle /myrobot: active [3]
+-- lifecycle /behaviour_server: active [3]
+-- lifecycle /cleaning_server: active [3]
+-- lifecycle /autodocking_server: active [3]
+-- lifecycle /charging_server: active [3]
+-- lifecycle /charged_server: active [3]
+report complete

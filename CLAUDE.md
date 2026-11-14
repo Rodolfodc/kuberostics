@@ -98,7 +98,7 @@ Claude Code reads `.claude/` (agents, settings, hooks) and `CLAUDE.md` from the 
 | What | Where it is tracked |
 |---|---|
 | ROS package dependencies (e.g. `twist_mux`, `python3-pytest`, `python3-yaml`) | `exec_depend` / `test_depend` in each `src/vacuum_*/package.xml`; `scripts/test-docker.sh` installs them with rosdep in the containers |
-| Docker images: `osrf/ros:jazzy-desktop-full`, `ros:lyrical-ros-base`, `minlag/mermaid-cli:12.0.1` | `scripts/setup_env.sh` (list `IMAGES_ALL`; `--no-images` skips the pull) |
+| Docker images: `osrf/ros:jazzy-desktop-full`, `ros:lyrical-ros-base`, `ros:jazzy-ros-base`, `minlag/mermaid-cli:12.0.1` | `scripts/setup_env.sh` (list `IMAGES_ALL`; `--no-images` skips the pull) |
 | Host tools: Docker, `kubectl`, `k3d`, `terraform`, firewall for ports 23000-23099 | `scripts/setup_env.sh`, `scripts/setup-tools.sh` (needs sudo) |
 | CoppeliaSim 4.10.0 (runs on the host, not in Docker) | `scripts/setup_env.sh` |
 | Python tools outside ROS (`.venv`: ZMQ client, pyzmq, cbor, numpy, pytest) | `requirements.txt` |
