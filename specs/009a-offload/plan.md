@@ -62,7 +62,7 @@ It also checks the monotonicity of the timestamps on `/myRobot/perception/detect
 ## Risks
 
 - Q-06: T902 measured both on Lyrical (same host, synthetic). Proposal: `zenoh-bridge-ros2dds`, awaiting the project owner; the requirements do not depend on the transport, because health is measured in the application. Missing: Jazzy, real Wi-Fi, detector inference time, CPU (T919 to T922).
-- On a lossy link the bridge's age tail (p99 0.58 s, max 0.62 s without inference) is above `close_threshold_s` (0.5 s) and 45 ms from `max_age_s` (0.67 s): the breaker is expected to reclose with difficulty or stay on local. Thresholds are not changed here; re-tuning them for the bridge, or reconsidering `rmw_zenoh`, is a decision for the project owner if the real link is lossy (see the spec).
+- On a lossy link the bridge's age tail (p99 about 0.57 to 0.58 s depending on the percentile convention, max 0.62 s, without inference) is above `close_threshold_s` (0.5 s) and 45 ms from `max_age_s` (0.67 s): the breaker is expected to reclose with difficulty or stay on local. Thresholds are not changed here; re-tuning them for the bridge, or reconsidering `rmw_zenoh`, is a decision for the project owner if the real link is lossy (see the spec).
 - yolo11n on the robot CPU, even at 2 Hz, may compete with SLAM. Mitigation: measure in week 3 and reduce the resolution if needed.
 - Exact format of the `MarkerArray` expected by the 2025S2 semantic node to be confirmed (T903).
 

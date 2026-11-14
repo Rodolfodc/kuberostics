@@ -50,7 +50,7 @@ With 0.20 m tolerance and 0.30 m/s, the limit is about 0.67 s.
 | 009a-R15 | When the cloud detector Pod is deleted during cleaning, the selector shall reach OPEN within `open_threshold_s + 0.5 s`, and the orchestrator mode shall not change. | injected failure |
 | 009a-R16 | When the Pod comes back, the selector shall reach CLOSED, and no detection with a repeated `header.stamp` or one below the watermark shall appear on `/myRobot/perception/detections` throughout the test. | injected failure |
 | 009a-R17 | The cloud detector shall run as a Deployment on K3s with a `livenessProbe`, from one image per distribution built by CI, and the infrastructure shall be declared in Terraform (`local` module). | CI + `terraform plan` |
-| 009a-R18 | Requirements R01 to R16 shall hold on Jazzy and on Lyrical. | CI (matrix) |
+| 009a-R18 | Requirements R01 to R16 and R19 shall hold on Jazzy and on Lyrical. | CI (matrix) |
 
 ## Definition of done
 
@@ -64,27 +64,37 @@ With 0.20 m tolerance and 0.30 m/s, the limit is about 0.67 s.
 Status: **recommendation recorded, awaiting the project owner.** Q-06 stays open in spec 000 until the owner confirms.
 Source: T902, `deploy/measurements/t902-transport.md` (PR of branch `feat/t902-transport-measurement`).
 
+Dependency: the selector rulings quoted below (health uses `max_age_s`, the invariant, HALF_OPEN silence) exist only in
+PR #13; **merge PR #13 first**. This section also must not merge before PR #16 (T902) is settled.
+
+The figures below were recomputed from the committed CSVs (`deploy/measurements/t902/*.csv`) with the stated subset and
+convention, and may be updated by the final summary of PR #16.
+
 ### What was measured (Lyrical only)
 
 `rmw_zenoh` 0.10.6 against `zenoh-bridge-ros2dds` 1.10.2, 640x480 JPEG (80 kB, synthetic) at 2 Hz, round trip =
 robot clock at reception minus the `header.stamp` echoed by a stand-in detector (the age of R05, without inference time),
-600 samples per cell, one run per cell, robot and K3s Pod on the same host.
+one run per cell, robot and K3s Pod on the same host. Each wan CSV has 607 numeric rows (608 lines, one empty). Two
+subsets and conventions were computed: (A) the first 600 rows with the bench's index method `sorted[int(p/100*n)]`
+(the figures of the T902 summary), and (B) all 607 rows with linear interpolation (`statistics.quantiles`, inclusive).
+Values are rounded to 1 ms because one run does not support more.
 
-| Scenario | Transport | p50 (ms) | p99 (ms) | max (ms) |
-|---|---|---|---|---|
-| lan | `rmw_zenoh` | 4.05 | 4.67 | 5.69 |
-| lan | bridge | 5.15 | 5.89 | 6.91 |
-| wan (netem 20 ms +/- 5 ms, 1 % loss, uplink only) | `rmw_zenoh` | 149.3 | 407.7 | 430.3 |
-| wan | bridge | 393.2 | 579.9 | 624.3 |
+| Scenario | Transport | p50 (ms) A / B | p95 (ms) A / B | p99 (ms) A / B | max (ms), 607 rows |
+|---|---|---|---|---|---|
+| wan (netem 20 ms +/- 5 ms, 1 % loss, uplink only) | `rmw_zenoh` | 149 / 150 | 310 / 307 | 408 / 366 | 430 |
+| wan | bridge | 393 / 393 | 511 / 511 | 580 / 566 | 624 |
 
-Neither transport lost an image (both over TCP) nor reordered. From the raw CSV of the bridge on `wan` (this
-specification's own computation, indicative): 6.9 % of the responses have age above `close_threshold_s` (0.5 s), none above
-`max_age_s` (0.67 s), and 68 % of the windows of 6 consecutive responses (3 s at 2 Hz) are entirely at or below 0.5 s.
+The p99 depends on the convention and the subset (bridge 566 to 580 ms, `rmw_zenoh` 366 to 408 ms): quote it as "about
+0.57 to 0.58 s" for the bridge; in both conventions it is above 0.5 s. The lan cells (p50 4.05 ms `rmw_zenoh`, 5.15 ms
+bridge; p99 4.67 and 5.89 ms) are quoted from the T902 summary and were not recomputed here. Neither transport lost an image
+(both over TCP) nor reordered. From the bridge wan CSV: 42 of 607 responses (6.9 %) exceed 0.5 s, none exceed 0.67 s;
+68 % of the windows of 6 consecutive responses (3 s at 2 Hz) are entirely at or below 0.5 s. For `rmw_zenoh`, none exceed 0.5 s.
 
 Limits: same-host lower bound (not Wi-Fi), synthetic image, a single run per cell, `wan` is a netem model on the uplink
 only, Lyrical only (Jazzy has `rmw_zenoh` 0.2.x, not measured), CPU not measured, inference time of the detector not
-included. The versions measured (0.10.6, 1.10.2) differ from those written in spec 000 Q-06 (0.10.8 and 1.9.0);
-the table in spec 000 was not verified against the source in this change.
+included. Versions: 0.10.6 is the apt candidate on Lyrical (it may simply lag the upstream release), and the Jazzy
+`rmw_zenoh` apt candidate in the report is 0.2.11; spec 000 Q-06 says 0.10.8 (Lyrical) and 0.2.13 (Jazzy), and the bridge 1.9.0
+against 1.10.2 measured. Spec 000's text was left untouched and not verified against the source.
 
 ### Proposal (for the project owner): `zenoh-bridge-ros2dds` as the default transport
 
@@ -108,11 +118,11 @@ selector sees, because the age is measured at the robot after the whole round tr
   (0.67 s) arrives for 1.5 s (R08); the bridge's maximum on the lossy link was 0.62 s, so on transport alone it stays CLOSED.
   What fails is *closing again* after any opening (for example a Pod restart): R10 needs every response of the 3 s stable
   window (about 6 at 2 Hz) at or below `close_threshold_s` (0.5 s). On the bridge, 42 of 607 responses (6.9 %) exceed 0.5 s
-  and p95 is 511 ms; with independent losses about 1 - 0.93^6, roughly 35 %, of the recovery windows fail and send the
+  and p95 is about 511 ms; with independent losses about 1 - 0.93^6, roughly 35 %, of the recovery windows fail and send the
   selector back to OPEN (the sample gives 32 %: 68 % of the windows are clean). With `rmw_zenoh` the maximum is 430 ms and
   the limit is never violated. The robot keeps working on the local detector (Art. VII), but the benefit of offloading is lost.
 - **The margin to `max_age_s` is thin and the inference time is missing.** Maximum 0.62 s against 0.67 s leaves about 45 ms;
-  the round trip excludes inference. With yolo11x in K3s, the bridge's p99 (0.58 s) plus inference probably crosses `max_age_s`
+  the round trip excludes inference. With yolo11x in K3s, the bridge's p99 (about 0.57 to 0.58 s) plus inference probably crosses `max_age_s`
   and R05 drops those frames as `dropped_stale`. By arithmetic on the p50 (0.39 s): inference above about 0.11 s puts the
   median above `close_threshold_s` (the breaker cannot close), above about 0.28 s above `max_age_s` (most responses stale).
   Inference time is not measured (T921).
@@ -127,7 +137,8 @@ selector sees, because the age is measured at the robot after the whole round tr
 - **The bridge is a new robot-side process** outside `lifecycle_manager_core` (T911 must declare it, in the optional group
   of D-09 or equivalent): if it dies the robot must keep cleaning (Art. VII), and its allow-list must never include
   `mux` or `cmd_vel` topics (Art. VI; R19). The bridge on Jazzy is untested: "same binary for both distros" is an
-  expectation until T919.
+  expectation until T919. **Open for the project owner (Art. III, third-party binary):** does the bridge run on the robot
+  inside the optional lifecycle group (D-09), or as a separate supervised process outside `lifecycle_manager_core`?
 
 ### Requirement added by this proposal
 
@@ -135,5 +146,7 @@ selector sees, because the age is measured at the robot after the whole round tr
 |---|---|---|
 | 009a-R19 | While `offload:=true`, the transport shall let only `/myRobot/perception/rgb_throttled/compressed` leave the robot and only `/myRobot/perception/detections/cloud` come in; every other topic shall stay local, whichever transport is chosen. | contract (allow-list or ACL checked against `topics.yaml`) |
 
-Topic names are those of the T902 bench; confirm them against `contracts/topics.yaml` when T911 is done (this change
-does not modify the contract).
+The two topics are already in `specs/000-system/contracts/topics.yaml`: `/myRobot/perception/rgb_throttled/compressed`
+(`sensor_msgs/msg/CompressedImage`, owner `image_throttle`) and `/myRobot/perception/detections/cloud`
+(`vision_msgs/msg/Detection2DArray`, owner `detector_cloud`). T923 generates the allow-list check from that file. This change
+does not modify the contract.

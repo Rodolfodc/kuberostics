@@ -99,11 +99,15 @@ The complete machine-readable list is in `contracts/topics.yaml`.
   the three packages (`myrobot_interfaces`, `myrobot_bringup`, `my_robot_pkg`) build on Jazzy and Lyrical; the upstream
   `bringup.launch.py` brings up six nodes plus `lifecycle_manager`, all active and mode `CHARGED`, on both. Of the 11
   `my_robot_pkg` executables, still alive after 10 s: 4 on Jazzy and 0 on Lyrical. Lyrical-only cause: `RcutilsLogger.warn`
-  was removed (`warning` replaces it); 38 call sites in 8 files, including `my_robot_semantic_segmentation_node` (kept
-  unchanged by D-16) and `my_robot_detection_node`. On both distros: missing runtime dependencies
-  `coppeliasim_zmqremoteapi_client`, the `slam_toolbox` Python module, `skimage` and the `rf2o_laser_odometry` rosdep key
-  (the last tied to Q-03); `scipy` and `ultralytics` exist in Jazzy `desktop-full` and not in Lyrical `ros-base` (an image
-  difference, not a distro one). Limits: no simulator, "alive for 10 s" is not "correct", no `colcon test`, Nav2/SLAM launch
+  was removed (`warning` replaces it); 38 call sites in 8 files. It is the *only* distro difference and explains only two
+  executables: `my_robot_detection_node` and `my_robot_semantic_segmentation_node` (kept unchanged by D-16), which run on
+  Jazzy and crash on Lyrical. The others die from missing runtime dependencies, on both distros: `cartographer` and
+  `explorer` for `scipy`, the rest for `coppeliasim_zmqremoteapi_client` (four nodes), the `slam_toolbox` Python module
+  and `skimage`; `scipy` and `ultralytics` exist in Jazzy `desktop-full` and not in `ros-base` (an image difference).
+  Controlled run of the T003b report (Jazzy on `ros-base`, same flavour as Lyrical): 2 of 11 alive on Jazzy
+  (`detection`, `semantic_segmentation`) against 0 on Lyrical, which isolates `.warn`. The `rf2o_laser_odometry` rosdep key
+  is unresolved on Lyrical, and on Jazzy in the first run but resolved in the re-run (rosdep index changed between runs), so
+  it is a Lyrical gap (tied to Q-03). Limits: no simulator, "alive for 10 s" is not "correct", no `colcon test`, Nav2/SLAM launch
   files not run, wheel bridge not started. Still open: the fix under Art. II (wrapper that restores the logger method in our
   own package, or a same-name replacement node, T024) and tracking the runtime dependencies (T025).
   Reviewer input (PR #17): a same-name replacement node is not recommended (400+ lines copied, drift from upstream,
@@ -114,7 +118,15 @@ The complete machine-readable list is in `contracts/topics.yaml`.
   the upstream entry point. Conditions: a no-op when `warn` exists (Jazzy); no upstream file or pin changes; no
   `BehaviourManager` subclass and no `Mode` extension; pytest plus launch test; recorded as an explicit decision, because it
   is not literally on the ordered adaptation list (closest item: launch wrapper) and patches `rclpy` at runtime.
-  Alternative to the launcher: a `sitecustomize` on `PYTHONPATH` set by our launch.
+  Alternative to the launcher: a `sitecustomize` on `PYTHONPATH` set by our launch; it patches every Python process on the
+  path, including our own nodes, so the launcher is preferable. Option 0: do nothing and use only the orchestrator
+  (`myrobot_bringup`) on Lyrical, which keeps Art. II untouched but leaves `my_robot_pkg` (and D-16's semantic node) on
+  Jazzy only, which conflicts with Art. X unless the owner accepts that.
+  Follow-up tasks T024 to T028 are *proposed, to be added to `specs/001-skeleton/tasks.md` (and 003/005 where they
+  belong) by a later architect change*; they are not defined in any task list yet: T024 shim (ros-dev), T025 rosdep
+  `exec_depend`s in our own package (ros-dev), T026 pinned pip requirements in `docker/jazzy` and `docker/lyrical` (devops),
+  T027 `rf2o` source build or another odometry source (architect and devops, Q-03), T028 `ultralytics` policy on Python 3.14
+  (architect and devops, Q-05, D-16).
 - Q-05: pip dependencies on Python 3.14, used on Lyrical: `torch`, `ultralytics` and `stable-baselines3`.
   If any of them has no wheel, RL training runs in a Python environment separate from ROS, and only inference goes into the node.
 - Q-06: robot ↔ cloud transport. Two options:
@@ -126,11 +138,13 @@ The complete machine-readable list is in `contracts/topics.yaml`.
 
   **Status: recommendation recorded, awaiting the project owner** (not closed). T902 measured, on Lyrical only and on
   the same host (`rmw_zenoh` 0.10.6, bridge 1.10.2; the versions above were not re-verified), p50 RTT in ms:
-  lan 4.05 (`rmw_zenoh`) against 5.15 (bridge); wan (netem 20 ms +/- 5 ms, 1 % loss, uplink) 149.3 against 393.2,
-  p99 407.7 against 579.9; 600 samples per cell, no loss or reordering. Recommendation: the bridge, for structural
+  lan 4.05 (`rmw_zenoh`) against 5.15 (bridge); wan (netem 20 ms +/- 5 ms, 1 % loss, uplink) about 150 against 393;
+  wan p99 about 366 to 408 against 566 to 580 (the range is the subset and convention: all 607 numeric rows with
+  linear interpolation, or the first 600 rows with the bench's index method; recomputed from the CSVs, may be updated by the
+  final T902 summary, see spec 009a); no loss or reordering. Recommendation: the bridge, for structural
   reasons (allow-list enforces 009a-R03, motion loop stays on DDS, one binary for both distros; Art. VI and X);
   `rmw_zenoh` is better on a lossy link. Warning: the bridge's p99 on the lossy link (0.58 s) is above
-  `close_threshold_s` (0.5 s) and near `max_age_s` (0.67 s) before counting inference time. Pending: Jazzy, real Wi-Fi,
+  `close_threshold_s` (0.5 s) and near `max_age_s` (0.67 s) before counting inference time. Depends on PR #13 (selector rulings) and PR #16 (T902) being settled. Pending: Jazzy, real Wi-Fi,
   CPU and inference time (T919 to T921 in spec 009a). Details and implications for the selector in spec 009a.
 - Q-07 (future): robot ↔ cloud communication protocol, that is, format, versioning, authentication and the policy of what goes up and when. Out of scope for the course deadline. Spec 009a defines only the minimum needed.
 - Q-03: odometry. 2025S2 uses `/myrobot/odom` (simulator ground truth) and rf2o (laser odometry).
