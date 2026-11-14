@@ -94,8 +94,18 @@ The complete machine-readable list is in `contracts/topics.yaml`.
 - Q-01: CoppeliaSim version and path of the *House* scene. The object names (`/myRobot/leftMotor`)
   must match the 2025S2 scene.
 - ~~Q-02~~: closed by D-13.
-- Q-04: the IA368II `my_robot_pkg` was written for Jazzy. We must confirm that it builds and runs on Lyrical
-  (rclpy 10, Python 3.14). If it does not, the fix goes in as an overlay in our repository, never as an edit to its code.
+- Q-04 (answered partially, T003b, `deploy/measurements/t003b-ia368ii.md`): *yes for the orchestrator, no for `my_robot_pkg`
+  on Lyrical until the logger incompatibility is handled under Art. II.* Pin `51a5fa2c`, Docker, no simulator:
+  the three packages (`myrobot_interfaces`, `myrobot_bringup`, `my_robot_pkg`) build on Jazzy and Lyrical; the upstream
+  `bringup.launch.py` brings up six nodes plus `lifecycle_manager`, all active and mode `CHARGED`, on both. Of the 11
+  `my_robot_pkg` executables, still alive after 10 s: 4 on Jazzy and 0 on Lyrical. Lyrical-only cause: `RcutilsLogger.warn`
+  was removed (`warning` replaces it); 38 call sites in 8 files, including `my_robot_semantic_segmentation_node` (kept
+  unchanged by D-16) and `my_robot_detection_node`. On both distros: missing runtime dependencies
+  `coppeliasim_zmqremoteapi_client`, the `slam_toolbox` Python module, `skimage` and the `rf2o_laser_odometry` rosdep key
+  (the last tied to Q-03); `scipy` and `ultralytics` exist in Jazzy `desktop-full` and not in Lyrical `ros-base` (an image
+  difference, not a distro one). Limits: no simulator, "alive for 10 s" is not "correct", no `colcon test`, Nav2/SLAM launch
+  files not run, wheel bridge not started. Still open: the fix under Art. II (wrapper that restores the logger method in our
+  own package, or a same-name replacement node, T024) and tracking the runtime dependencies (T025).
 - Q-05: pip dependencies on Python 3.14, used on Lyrical: `torch`, `ultralytics` and `stable-baselines3`.
   If any of them has no wheel, RL training runs in a Python environment separate from ROS, and only inference goes into the node.
 - Q-06: robot ↔ cloud transport. Two options:
@@ -104,6 +114,15 @@ The complete machine-readable list is in `contracts/topics.yaml`.
 
   Neither implements the *Deadline* and *Liveliness* QoS events the way we need. Spec 009a therefore implements age, heartbeat and thresholds in the application, independently of the transport.
   Decide after measuring both in week 3.
+
+  **Status: recommendation recorded, awaiting the project owner** (not closed). T902 measured, on Lyrical only and on
+  the same host (`rmw_zenoh` 0.10.6, bridge 1.10.2; the versions above were not re-verified), p50 RTT in ms:
+  lan 4.05 (`rmw_zenoh`) against 5.15 (bridge); wan (netem 20 ms +/- 5 ms, 1 % loss, uplink) 149.3 against 393.2,
+  p99 407.7 against 579.9; 600 samples per cell, no loss or reordering. Recommendation: the bridge, for structural
+  reasons (allow-list enforces 009a-R03, motion loop stays on DDS, one binary for both distros; Art. VI and X);
+  `rmw_zenoh` is better on a lossy link. Warning: the bridge's p99 on the lossy link (0.58 s) is above
+  `close_threshold_s` (0.5 s) and near `max_age_s` (0.67 s) before counting inference time. Pending: Jazzy, real Wi-Fi,
+  CPU and inference time (T919 to T921 in spec 009a). Details and implications for the selector in spec 009a.
 - Q-07 (future): robot ↔ cloud communication protocol, that is, format, versioning, authentication and the policy of what goes up and when. Out of scope for the course deadline. Spec 009a defines only the minimum needed.
 - Q-03: odometry. 2025S2 uses `/myrobot/odom` (simulator ground truth) and rf2o (laser odometry).
   Decide in spec 003 which one feeds SLAM.
