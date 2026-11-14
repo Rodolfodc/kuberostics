@@ -11,7 +11,8 @@ src/vacuum_mapping/
 │   │   ├── frontier_finder.py      # FrontierFinder
 │   │   ├── room_segmenter.py       # RoomSegmenter
 │   │   ├── room_tracker.py         # RoomTracker (stable ids across segmentations)
-│   │   └── room_labeler.py         # RoomLabeler
+│   │   ├── room_labeler.py         # RoomLabeler
+│   │   └── map_diff.py             # MapDiff: pixel-difference %, resolution/origin/size changes (003-R34)
 │   ├── odom_tf_bridge_node.py      # thin LifecycleNode
 │   ├── exploration_server_node.py  # thin LifecycleNode (action server + Nav2 client)
 │   └── room_segmenter_node.py      # thin LifecycleNode (segmentation, tracking, labels, services)
@@ -19,6 +20,7 @@ src/vacuum_mapping/
 ├── config/{slam_toolbox.yaml, room_rules.yaml, mapping.yaml}
 ├── test/
 └── maps/                           # house.yaml, house.pgm, house_rooms.yaml (small, versioned; "maps/" in the requirements means this directory)
+    └── history/                    # one numbered, timestamped file set per regeneration run plus its divergence report (003-R34)
 ```
 
 Grid helpers (`GridView`: world/cell conversion, inflation) are shared with spec 005 through a tiny package `src/vacuum_grid/` (pure Python, no ROS, no dependency on `vacuum_mapping` or `vacuum_coverage`), created in T309; this avoids coupling and a circular dependency between the two modules (Art. III.1). Fallback if rejected: two copies pinned by identical unit tests.
