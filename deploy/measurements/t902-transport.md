@@ -12,7 +12,13 @@ Measured 2026-11-13 on ROS 2 **Lyrical** only (Jazzy not measured). Raw data: `t
   The Pod stands in for the detector and answers a `vision_msgs/Detection2DArray` (3 detections) with the same header on
   `/myRobot/perception/detections/cloud` (QoS `default`: reliable, depth 10). RTT = robot clock at reception minus
   `header.stamp`: the timestamp-echo age of 009a-R05, one clock, no skew.
-- 600 samples (300 s) per cell, first reply to last reply minus a 4 s tail. One run per cell.
+- Each run sends 608 images (about 300 s at 2 Hz from the first reply); the CSV has 608 rows per run, 607 with a reply and
+  1 trailing row without a reply (still in flight at the end). One run per cell.
+- **One stated method for every figure in this file:** all 607 numeric rows of the committed CSVs, percentiles by linear
+  interpolation (numpy default), recomputed by `python3 -I scripts/t902_stats.py` (output committed as
+  `t902/stats.md`). The `SUMMARY` lines in `t902/*.log` and `t902/summary.txt` come from the bench itself, which used a
+  different subset (the first 600 steady-state rows after dropping the last 4 s) and the index method `int(p/100*n)`;
+  they differ slightly (for example bridge wan p99 579.88 there vs 565.93 here) and are kept only as raw logs.
 - **rmw_zenoh** (`ros-lyrical-rmw-zenoh-cpp` 0.10.6): `rmw_zenohd` router in the Pod (NodePort 30447), a local
   `rmw_zenohd` on the robot connecting to it, nodes with `RMW_IMPLEMENTATION=rmw_zenoh_cpp`.
 - **zenoh-bridge-ros2dds** (`eclipse/zenoh-bridge-ros2dds:1.10.2` (digest-pinned)): nodes on CycloneDDS with localhost discovery, one bridge
@@ -22,28 +28,27 @@ Measured 2026-11-13 on ROS 2 **Lyrical** only (Jazzy not measured). Raw data: `t
 
 ## Results (RTT in ms)
 
-| transport | scenario | sent | received | loss | rate (Hz) | min | p50 | p95 | p99 | max | mean |
+| transport | scenario | rows | replies | missing | rate (Hz) | min | p50 | p95 | p99 | max | mean |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| rmw_zenoh | lan | 600 | 600 | 0 % | 2.000 | 2.64 | 4.05 | 4.48 | 4.67 | 5.69 | 4.00 |
-| zenoh-bridge-ros2dds | lan | 600 | 600 | 0 % | 2.000 | 3.11 | 5.15 | 5.46 | 5.89 | 6.91 | 5.05 |
-| rmw_zenoh | wan | 600 | 600 | 0 % | 2.000 | 63.16 | 149.33 | 309.69 | 407.74 | 430.25 | 165.34 |
-| zenoh-bridge-ros2dds | wan | 600 | 600 | 0 % | 2.000 | 145.62 | 393.16 | 511.35 | 579.88 | 624.26 | 386.16 |
+| rmw_zenoh | lan | 608 | 607 | 1 in flight | 2.000 | 2.64 | 4.04 | 4.48 | 4.66 | 5.69 | 4.00 |
+| zenoh-bridge-ros2dds | lan | 608 | 607 | 1 in flight | 2.000 | 3.11 | 5.15 | 5.45 | 5.88 | 6.91 | 5.05 |
+| rmw_zenoh | wan | 608 | 607 | 1 in flight | 2.000 | 63.16 | 150.01 | 307.40 | 366.17 | 430.25 | 165.88 |
+| zenoh-bridge-ros2dds | wan | 608 | 607 | 1 in flight | 2.000 | 132.69 | 392.93 | 510.57 | 565.93 | 624.26 | 384.38 |
 
 No reordering in any run. Both transports sustain 2 Hz with no loss; the images were always delivered (TCP).
 A first bridge run (without `ROS_DISTRO` set in the bridge containers, a WARN in the bridge log) gave the same numbers
-(lan p50 5.16, wan p50 395.19, p99 544.08): `summary.txt` holds the second run.
+(bench lines: lan p50 5.16, wan p50 395.19, p99 544.08; `t902/first-run-summary.txt`): `summary.txt` holds the second run.
 
 > **WARNING: the bridge result on the impaired link conflicts with the 009a thresholds.** Computed from
-> `t902/lyrical-bridge-wan.csv` (607 replies; percentile convention: sorted RTTs, index `int(p/100*n)`, as in
-> `bench.py`):
+> `t902/lyrical-bridge-wan.csv` (all 607 replies; linear-interpolation percentiles, `scripts/t902_stats.py`):
 > - 42 of 607 replies (6.9 %) took more than 500 ms, and p95 is 511 ms. For rmw_zenoh the maximum is 430 ms, so no reply
 >   exceeds 500 ms.
 > - 009a-R10 needs every response in the 3 s stable window (6 replies at 2 Hz) to have `age <= close_threshold_s`
->   (0.5 s). Counting sliding windows of 6 consecutive replies in the bridge wan CSV, 190 of 603 (31.5 %) contain at least
->   one reply above 500 ms (non-overlapping windows: 32 of 101, 31.7 %); the independence estimate
+>   (0.5 s). Counting sliding windows of 6 consecutive replies in the bridge wan CSV, 190 of 602 (31.6 %) contain at least
+>   one reply above 500 ms (non-overlapping windows: 32 of 101, 31.7 %, computed ad hoc); the independence estimate
 >   `1 - (1 - 0.069)^6` gives 35 %. Roughly a third of the recovery windows would fail and send the selector back to OPEN.
 >   rmw_zenoh has 0 such windows in the wan run.
-> - RTT here excludes detector inference. With yolo11x in K3s, the bridge p99 of 0.58 s plus inference probably crosses
+> - RTT here excludes detector inference. With yolo11x in K3s, the bridge p99 of 0.57 s plus inference probably crosses
 >   `max_age_s` (about 0.67 s), so R05 would drop those frames as stale. Not measured.
 > - The architect must either re-tune `close_threshold_s`, `stable_window_s` and `max_age_s` for the bridge, or treat this
 >   as a risk against the bridge recommendation.
@@ -82,7 +87,7 @@ impaired link (see the warning above). Non-latency criteria point the other way:
 | Blast radius on the motion loop (Art. VI) | changes the RMW of every node, including `twist_mux`/`stop_guard` | only the perception nodes' traffic crosses; the robot graph stays on DDS |
 | Art. X, two distros | 0.2.x (Jazzy) vs 0.10.x (Lyrical): different versions to qualify | same bridge binary (1.10.2) for both |
 | Cloud Pod | needs `rmw_zenohd` + the cloud node on rmw_zenoh | bridge sidecar + ordinary DDS node |
-| Measured on impaired link | p50 149 ms, p99 408 ms | p50 393 ms, p99 580 ms |
+| Measured on impaired link | p50 150 ms, p99 366 ms | p50 393 ms, p99 566 ms |
 
 The R03 cell reads "configured allow-list, not negatively tested". Added risks of the bridge: it is a robot-side process
 outside `lifecycle_manager_core`, so the robot must keep cleaning if it dies, and its allow-list must never include a
