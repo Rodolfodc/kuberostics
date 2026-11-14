@@ -140,7 +140,7 @@ string message
 ```yaml
 topics:
   - {name: /map, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: [slam_toolbox, map_server], since: "003", note: "exactly one of them runs (map_file selects map_server); the contract test shall accept either owner"}
-  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, max_publishers: 1, since: "003"}
+  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, max_publishers: 1, since: "003", note: "marked reserved (no publisher) while exploration is cut; the contract test tolerates it, as for mux/coverage (T005/T022)"}
   - {name: /myRobot/map/room_labels, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: room_segmenter, since: "003", note: "value = room index from 1, 0 = no room, -1 = unknown"}
   - {name: /myRobot/map/rooms,       type: vacuum_interfaces/msg/RoomArray, qos: latched, owner: room_segmenter, since: "003"}
   - {name: /myRobot/telemetry/odom_tf_bridge,    type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: odom_tf_bridge, since: "003"}
