@@ -49,7 +49,7 @@ BRC=$?; echo "colcon build exit=$BRC" | tee -a /out/report.txt
 grep -E "^(Starting|Finished|Failed|Aborted|Summary)|packages? (finished|failed|aborted)" /out/build.log | tee -a /out/report.txt
 tail -40 /out/build.log | grep -i "error\|Traceback\|ModuleNotFound\|failed" | head -15 | tee -a /out/report.txt
 echo "RESULT build_exit=$BRC pin=$PINOK" | tee -a /out/report.txt
-source /ws/install/setup.bash 2>/dev/null || { echo "no install/setup.bash" | tee -a /out/report.txt; echo "report complete" >>/out/report.txt; exit 0; }
+source /ws/install/setup.bash 2>/dev/null || { echo "no install/setup.bash" | tee -a /out/report.txt; echo "RESULT build_exit=$BRC pin=$PINOK no-install-setup" >>/out/report.txt; echo "report complete" >>/out/report.txt; exit 0; }
 
 # --- runtime: each executable alone, 10 s, no simulator. exit 124 = still running when the timeout hit (good). ---
 echo "== executables (10 s each) ==" | tee -a /out/report.txt
@@ -90,7 +90,7 @@ run() {   # $1 distro  $2 image  $3 output label
   docker start -a "$name" >"$dest/console.log" 2>&1
   docker cp "$name":/out/. "$dest"/ >/dev/null 2>&1 || echo "  (nothing to copy)"
   docker rm -f "$name" >/dev/null 2>&1; NAME=""
-  grep -q "^RESULT build_exit=0 pin=ok" "$dest/report.txt" 2>/dev/null || { echo "   FAILED: build or pin check (see $dest/report.txt)"; FAIL=1; }
+  { grep -q "^RESULT build_exit=0 pin=ok" "$dest/report.txt" && ! grep -q "^no install/setup.bash" "$dest/report.txt"; } 2>/dev/null || { echo "   FAILED: build or pin check (see $dest/report.txt)"; FAIL=1; }
   echo "   report: $dest/report.txt"; cat "$dest/report.txt" 2>/dev/null || tail -20 "$dest/console.log"
 }
 

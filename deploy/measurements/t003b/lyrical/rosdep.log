@@ -16,8 +16,8 @@ The following NEW packages will be installed:
 0 upgraded, 2 newly installed, 0 to remove and 18 not upgraded.
 Need to get 1384 kB of archives.
 After this operation, 1680 kB of additional disk space will be used.
-Get:1 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-tf-transformations amd64 1.1.1-3resolute.20260728.175016 [25.2 kB]
-Get:2 http://archive.ubuntu.com/ubuntu resolute/universe amd64 python3-transforms3d all 0.4.2+ds-1build1 [1359 kB]
+Get:1 http://archive.ubuntu.com/ubuntu resolute/universe amd64 python3-transforms3d all 0.4.2+ds-1build1 [1359 kB]
+Get:2 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-tf-transformations amd64 1.1.1-3resolute.20260728.175016 [25.2 kB]
 debconf: unable to initialize frontend: Dialog
 debconf: (TERM is not set, so the dialog frontend is not usable.)
 debconf: falling back to frontend: Readline
@@ -27,7 +27,7 @@ debconf: falling back to frontend: Teletype
 debconf: unable to initialize frontend: Teletype
 debconf: (This frontend requires a controlling tty.)
 debconf: falling back to frontend: Noninteractive
-Fetched 1384 kB in 1s (1029 kB/s)
+Fetched 1384 kB in 2s (773 kB/s)
 Selecting previously unselected package python3-transforms3d.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 46577 files and directories currently installed.)
 Preparing to unpack .../python3-transforms3d_0.4.2+ds-1build1_all.deb ...
@@ -546,7 +546,7 @@ debconf: falling back to frontend: Teletype
 debconf: unable to initialize frontend: Teletype
 debconf: (This frontend requires a controlling tty.)
 debconf: falling back to frontend: Noninteractive
-Fetched 312 MB in 38s (8138 kB/s)
+Fetched 312 MB in 43s (7311 kB/s)
 Selecting previously unselected package libsystemd-shared:amd64.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 46638 files and directories currently installed.)
 Preparing to unpack .../libsystemd-shared_259.9-0ubuntu0.1_amd64.deb ...
@@ -2018,21 +2018,21 @@ The following NEW packages will be installed:
 Need to get 4492 kB of archives.
 After this operation, 56.3 MB of additional disk space will be used.
 Get:1 http://archive.ubuntu.com/ubuntu resolute/main amd64 libelf-dev amd64 0.194-4 [116 kB]
-Get:2 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-angles amd64 1.16.1-3resolute.20260728.204755 [13.9 kB]
-Get:3 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-backward-ros amd64 1.0.8-5resolute.20260728.173605 [56.5 kB]
-Get:4 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-bond amd64 4.4.0-3resolute.20260915.050920 [60.1 kB]
-Get:5 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-smclib amd64 4.4.0-3resolute.20260728.204801 [14.3 kB]
-Get:6 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-bondcpp amd64 4.4.0-3resolute.20260915.065330 [134 kB]
-Get:7 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-diagnostic-updater amd64 4.4.7-1resolute.20260915.065027 [119 kB]
-Get:8 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-geographic-msgs amd64 1.0.6-3resolute.20260915.051853 [353 kB]
-Get:9 http://archive.ubuntu.com/ubuntu resolute/main amd64 libdw1t64 amd64 0.194-4 [285 kB]
-Get:10 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-map-msgs amd64 2.6.1-1resolute.20260915.052834 [263 kB]
-Get:11 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-nav2-msgs amd64 1.5.2-2resolute.20260921.005533 [2263 kB]
-Get:12 http://archive.ubuntu.com/ubuntu resolute-updates/main amd64 liblzma-dev amd64 5.8.3-1ubuntu0.1 [179 kB]
-Get:13 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-nav2-ros-common amd64 1.5.2-2resolute.20260921.011719 [27.6 kB]
-Get:14 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-nav2-util amd64 1.5.2-2resolute.20260921.012148 [97.6 kB]
-Get:15 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-nav2-lifecycle-manager amd64 1.5.2-2resolute.20260921.012711 [140 kB]
-Get:16 http://archive.ubuntu.com/ubuntu resolute/main amd64 libdw-dev amd64 0.194-4 [370 kB]
+Get:2 http://archive.ubuntu.com/ubuntu resolute/main amd64 libdw1t64 amd64 0.194-4 [285 kB]
+Get:3 http://archive.ubuntu.com/ubuntu resolute-updates/main amd64 liblzma-dev amd64 5.8.3-1ubuntu0.1 [179 kB]
+Get:4 http://archive.ubuntu.com/ubuntu resolute/main amd64 libdw-dev amd64 0.194-4 [370 kB]
+Get:5 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-angles amd64 1.16.1-3resolute.20260728.204755 [13.9 kB]
+Get:6 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-backward-ros amd64 1.0.8-5resolute.20260728.173605 [56.5 kB]
+Get:7 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-bond amd64 4.4.0-3resolute.20260915.050920 [60.1 kB]
+Get:8 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-smclib amd64 4.4.0-3resolute.20260728.204801 [14.3 kB]
+Get:9 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-bondcpp amd64 4.4.0-3resolute.20260915.065330 [134 kB]
+Get:10 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-diagnostic-updater amd64 4.4.7-1resolute.20260915.065027 [119 kB]
+Get:11 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-geographic-msgs amd64 1.0.6-3resolute.20260915.051853 [353 kB]
+Get:12 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-map-msgs amd64 2.6.1-1resolute.20260915.052834 [263 kB]
+Get:13 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-nav2-msgs amd64 1.5.2-2resolute.20260921.005533 [2263 kB]
+Get:14 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-nav2-ros-common amd64 1.5.2-2resolute.20260921.011719 [27.6 kB]
+Get:15 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-nav2-util amd64 1.5.2-2resolute.20260921.012148 [97.6 kB]
+Get:16 http://packages.ros.org/ros2/ubuntu resolute/main amd64 ros-lyrical-nav2-lifecycle-manager amd64 1.5.2-2resolute.20260921.012711 [140 kB]
 debconf: unable to initialize frontend: Dialog
 debconf: (TERM is not set, so the dialog frontend is not usable.)
 debconf: falling back to frontend: Readline
@@ -2042,7 +2042,7 @@ debconf: falling back to frontend: Teletype
 debconf: unable to initialize frontend: Teletype
 debconf: (This frontend requires a controlling tty.)
 debconf: falling back to frontend: Noninteractive
-Fetched 4492 kB in 2s (2005 kB/s)
+Fetched 4492 kB in 3s (1502 kB/s)
 Selecting previously unselected package libelf-dev:amd64.
 (Reading database ... (Reading database ... 5%(Reading database ... 10%(Reading database ... 15%(Reading database ... 20%(Reading database ... 25%(Reading database ... 30%(Reading database ... 35%(Reading database ... 40%(Reading database ... 45%(Reading database ... 50%(Reading database ... 55%(Reading database ... 60%(Reading database ... 65%(Reading database ... 70%(Reading database ... 75%(Reading database ... 80%(Reading database ... 85%(Reading database ... 90%(Reading database ... 95%(Reading database ... 100%(Reading database ... 56716 files and directories currently installed.)
 Preparing to unpack .../00-libelf-dev_0.194-4_amd64.deb ...

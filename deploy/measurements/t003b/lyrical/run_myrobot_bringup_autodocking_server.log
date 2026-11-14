@@ -16,11 +16,7 @@ Traceback (most recent call last):
         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   File "/opt/ros/lyrical/lib/python3.14/site-packages/rclpy/executors.py", line 983, in wait_for_ready_callbacks
     return next(self._cb_iter)
-  File "/opt/ros/lyrical/lib/python3.14/site-packages/rclpy/executors.py", line 861, in _wait_for_ready_callbacks
-    wait_set = _rclpy.WaitSet(
-        entity_count.num_subscriptions,
-    ...<4 lines>...
-        entity_count.num_events,
-        self._context.handle)
-rclpy._rclpy_pybind11.RCLError: failed to initialize wait set: the given context is not valid, either rcl_init() was not called or rcl_shutdown() was called., at ./src/rcl/wait.c:110
+  File "/opt/ros/lyrical/lib/python3.14/site-packages/rclpy/executors.py", line 889, in _wait_for_ready_callbacks
+    raise ExternalShutdownException()
+rclpy.executors.ExternalShutdownException
 [ros2run]: Process exited with failure 1

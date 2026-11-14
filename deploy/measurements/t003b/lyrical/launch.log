@@ -1,4 +1,4 @@
-[INFO] [launch]: All log files can be found below /root/.ros/log/2026-11-14-15-14-41-600215-3497cd57d65f-5924
+[INFO] [launch]: All log files can be found below /root/.ros/log/2026-11-14-17-22-50-953205-bf60d815b6da-5924
 [INFO] [launch]: Default logging verbosity is set to INFO
 [INFO] [myrobot_server-1]: process started with pid [5959]
 [INFO] [behaviour_server-2]: process started with pid [5960]
@@ -7,41 +7,40 @@
 [INFO] [charging_server-5]: process started with pid [5963]
 [INFO] [charged_server-6]: process started with pid [5964]
 [INFO] [lifecycle_manager-7]: process started with pid [5965]
-[lifecycle_manager-7] [INFO] [1794669281.748419523] [lifecycle_manager]: Creating
-[lifecycle_manager-7] [INFO] [1794669281.748834247] [lifecycle_manager]: [34m[1mCreating and initializing lifecycle publishers[0m[0m
-[lifecycle_manager-7] [INFO] [1794669281.749398725] [lifecycle_manager]: [34m[1mCreating and initializing lifecycle service clients[0m[0m
-[lifecycle_manager-7] [INFO] [1794669282.325328457] [lifecycle_manager]: [34m[1mCreating and initializing lifecycle service servers[0m[0m
-[lifecycle_manager-7] [INFO] [1794669282.360072197] [lifecycle_manager]: [34m[1mStarting managed nodes bringup...[0m[0m
-[lifecycle_manager-7] [INFO] [1794669282.360163541] [lifecycle_manager]: [34m[1mConfiguring myrobot[0m[0m
-[myrobot_server-1] [INFO] [1794669282.385903188] [myrobot]: myrobot configured
-[lifecycle_manager-7] [INFO] [1794669282.397268960] [lifecycle_manager]: [34m[1mConfiguring behaviour_server[0m[0m
-[behaviour_server-2] [INFO] [1794669282.424742373] [behaviour_server]: behaviour configured
-[behaviour_server-2] [INFO] [1794669282.425249167] [behaviour_server]: Initial behaviour state: mode=CHARGED | battery=100.0% | near_base=False | stop_requested=False
-[lifecycle_manager-7] [INFO] [1794669282.426089041] [lifecycle_manager]: [34m[1mConfiguring cleaning_server[0m[0m
-[cleaning_server-3] [INFO] [1794669282.451506209] [cleaning_server]: cleaning configured
-[lifecycle_manager-7] [INFO] [1794669282.452282297] [lifecycle_manager]: [34m[1mConfiguring autodocking_server[0m[0m
-[autodocking_server-4] [INFO] [1794669282.484096234] [autodocking_server]: autodocking configured
-[lifecycle_manager-7] [INFO] [1794669282.484970440] [lifecycle_manager]: [34m[1mConfiguring charging_server[0m[0m
-[charging_server-5] [INFO] [1794669282.520477302] [charging_server]: charging configured
-[lifecycle_manager-7] [INFO] [1794669282.521477434] [lifecycle_manager]: [34m[1mConfiguring charged_server[0m[0m
-[charged_server-6] [INFO] [1794669282.552242574] [charged_server]: charged configured
-[lifecycle_manager-7] [INFO] [1794669282.553157541] [lifecycle_manager]: [34m[1mActivating myrobot[0m[0m
-[myrobot_server-1] [INFO] [1794669282.554749918] [myrobot]: myrobot activated
-[lifecycle_manager-7] [INFO] [1794669282.555847004] [lifecycle_manager]: [34m[1mActivating behaviour_server[0m[0m
-[behaviour_server-2] [INFO] [1794669282.557495724] [behaviour_server]: behaviour activated
-[lifecycle_manager-7] [INFO] [1794669282.558808905] [lifecycle_manager]: [34m[1mActivating cleaning_server[0m[0m
-[cleaning_server-3] [INFO] [1794669282.560194980] [cleaning_server]: cleaning activated
-[lifecycle_manager-7] [INFO] [1794669282.561058808] [lifecycle_manager]: [34m[1mActivating autodocking_server[0m[0m
-[autodocking_server-4] [INFO] [1794669282.563271708] [autodocking_server]: autodocking activated
-[lifecycle_manager-7] [INFO] [1794669282.564061897] [lifecycle_manager]: [34m[1mActivating charging_server[0m[0m
-[charging_server-5] [INFO] [1794669282.565295693] [charging_server]: charging activated
-[lifecycle_manager-7] [INFO] [1794669282.566138486] [lifecycle_manager]: [34m[1mActivating charged_server[0m[0m
-[charged_server-6] [INFO] [1794669282.567256997] [charged_server]: charged activated (idle at dock)
-[lifecycle_manager-7] [INFO] [1794669282.568030600] [lifecycle_manager]: [34m[1mManaged nodes are active[0m[0m
-[behaviour_server-2] [INFO] [1794669287.409471885] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=True | stop_requested=False
-[behaviour_server-2] [INFO] [1794669292.410347019] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=True | stop_requested=False
-[behaviour_server-2] [INFO] [1794669297.409721533] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=False | stop_requested=False
-[behaviour_server-2] [INFO] [1794669302.409807489] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=False | stop_requested=False
-[behaviour_server-2] [INFO] [1794669307.410094303] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=False | stop_requested=False
-[behaviour_server-2] [INFO] [1794669312.411446106] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=False | stop_requested=False
-[behaviour_server-2] [INFO] [1794669317.410201672] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=False | stop_requested=False
+[lifecycle_manager-7] [INFO] [1794676971.098352379] [lifecycle_manager]: Creating
+[lifecycle_manager-7] [INFO] [1794676971.098753283] [lifecycle_manager]: [34m[1mCreating and initializing lifecycle publishers[0m[0m
+[lifecycle_manager-7] [INFO] [1794676971.099228336] [lifecycle_manager]: [34m[1mCreating and initializing lifecycle service clients[0m[0m
+[lifecycle_manager-7] [INFO] [1794676971.579788330] [lifecycle_manager]: [34m[1mCreating and initializing lifecycle service servers[0m[0m
+[lifecycle_manager-7] [INFO] [1794676971.615500168] [lifecycle_manager]: [34m[1mStarting managed nodes bringup...[0m[0m
+[lifecycle_manager-7] [INFO] [1794676971.615592274] [lifecycle_manager]: [34m[1mConfiguring myrobot[0m[0m
+[myrobot_server-1] [INFO] [1794676971.635509221] [myrobot]: myrobot configured
+[lifecycle_manager-7] [INFO] [1794676971.645009749] [lifecycle_manager]: [34m[1mConfiguring behaviour_server[0m[0m
+[behaviour_server-2] [INFO] [1794676971.677485676] [behaviour_server]: behaviour configured
+[behaviour_server-2] [INFO] [1794676971.678041598] [behaviour_server]: Initial behaviour state: mode=CHARGED | battery=100.0% | near_base=False | stop_requested=False
+[lifecycle_manager-7] [INFO] [1794676971.679113541] [lifecycle_manager]: [34m[1mConfiguring cleaning_server[0m[0m
+[cleaning_server-3] [INFO] [1794676971.706618912] [cleaning_server]: cleaning configured
+[lifecycle_manager-7] [INFO] [1794676971.707609667] [lifecycle_manager]: [34m[1mConfiguring autodocking_server[0m[0m
+[autodocking_server-4] [INFO] [1794676971.738497819] [autodocking_server]: autodocking configured
+[lifecycle_manager-7] [INFO] [1794676971.739406895] [lifecycle_manager]: [34m[1mConfiguring charging_server[0m[0m
+[charging_server-5] [INFO] [1794676971.769486159] [charging_server]: charging configured
+[lifecycle_manager-7] [INFO] [1794676971.770398491] [lifecycle_manager]: [34m[1mConfiguring charged_server[0m[0m
+[charged_server-6] [INFO] [1794676971.789389825] [charged_server]: charged configured
+[lifecycle_manager-7] [INFO] [1794676971.790239758] [lifecycle_manager]: [34m[1mActivating myrobot[0m[0m
+[myrobot_server-1] [INFO] [1794676971.791792559] [myrobot]: myrobot activated
+[lifecycle_manager-7] [INFO] [1794676971.792783319] [lifecycle_manager]: [34m[1mActivating behaviour_server[0m[0m
+[behaviour_server-2] [INFO] [1794676971.794260555] [behaviour_server]: behaviour activated
+[lifecycle_manager-7] [INFO] [1794676971.795460745] [lifecycle_manager]: [34m[1mActivating cleaning_server[0m[0m
+[cleaning_server-3] [INFO] [1794676971.797005730] [cleaning_server]: cleaning activated
+[lifecycle_manager-7] [INFO] [1794676971.797793106] [lifecycle_manager]: [34m[1mActivating autodocking_server[0m[0m
+[autodocking_server-4] [INFO] [1794676971.799028866] [autodocking_server]: autodocking activated
+[lifecycle_manager-7] [INFO] [1794676971.799864825] [lifecycle_manager]: [34m[1mActivating charging_server[0m[0m
+[charging_server-5] [INFO] [1794676971.801118485] [charging_server]: charging activated
+[lifecycle_manager-7] [INFO] [1794676971.801873827] [lifecycle_manager]: [34m[1mActivating charged_server[0m[0m
+[charged_server-6] [INFO] [1794676971.802621542] [charged_server]: charged activated (idle at dock)
+[lifecycle_manager-7] [INFO] [1794676971.803278888] [lifecycle_manager]: [34m[1mManaged nodes are active[0m[0m
+[behaviour_server-2] [INFO] [1794676976.659330832] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=False | stop_requested=False
+[behaviour_server-2] [INFO] [1794676981.659450941] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=False | stop_requested=False
+[behaviour_server-2] [INFO] [1794676986.659875405] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=True | stop_requested=False
+[behaviour_server-2] [INFO] [1794676991.699949165] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=True | stop_requested=False
+[behaviour_server-2] [INFO] [1794676996.721689351] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=True | stop_requested=False
+[behaviour_server-2] [INFO] [1794677001.659668888] [behaviour_server]: Battery status: 100.0% | mode=CHARGED | near_base=False | stop_requested=False

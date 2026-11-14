@@ -9,11 +9,11 @@ rosdep UNRESOLVED keys (rosdep -r hides them in its exit code): ament_python rf2
 colcon build exit=0
 Starting >>> myrobot_interfaces
 Starting >>> my_robot_pkg
-Finished <<< my_robot_pkg [1.60s]
-Finished <<< myrobot_interfaces [9.85s]
+Finished <<< my_robot_pkg [1.63s]
+Finished <<< myrobot_interfaces [10.0s]
 Starting >>> myrobot_bringup
-Finished <<< myrobot_bringup [1.53s]
-Summary: 3 packages finished [11.5s]
+Finished <<< myrobot_bringup [1.50s]
+Summary: 3 packages finished [11.7s]
 RESULT build_exit=0 pin=ok
 == executables (10 s each) ==
 myrobot_bringup/autodocking_server: exit=124 alive
@@ -27,7 +27,7 @@ my_robot_pkg/my_robot_cartographer_node: exit=1 EXITED
     ModuleNotFoundError: No module named 'scipy'
 my_robot_pkg/my_robot_cmd_vel_node: SKIPPED (wheel bridge off)
 my_robot_pkg/my_robot_detection_node: exit=1 EXITED
-    [ERROR] [1794669273.702411078] [my_robot_detection_node]: ultralytics package not available. Install it and try again.
+    [ERROR] [1794676963.237533897] [my_robot_detection_node]: ultralytics package not available. Install it and try again.
     Traceback (most recent call last):
     AttributeError: 'RcutilsLogger' object has no attribute 'warn'
 my_robot_pkg/my_robot_explorer_node: exit=1 EXITED
