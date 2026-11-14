@@ -22,8 +22,9 @@ for a in "$@"; do case "$a" in
 # Docker images used by scripts/test-docker.sh, tools/probes/mux_lock_probe.sh and scripts/render-diagrams.sh.
 IMG_JAZZY="osrf/ros:jazzy-desktop-full"
 IMG_LYRICAL="ros:lyrical-ros-base"
+IMG_JAZZY_BASE="ros:jazzy-ros-base"   # same flavour as Lyrical: scripts/ia368ii-check-docker.sh --jazzy-base
 IMG_MERMAID="minlag/mermaid-cli:12.0.1"
-IMAGES_ALL=("$IMG_JAZZY" "$IMG_LYRICAL" "$IMG_MERMAID")
+IMAGES_ALL=("$IMG_JAZZY" "$IMG_LYRICAL" "$IMG_JAZZY_BASE" "$IMG_MERMAID")
 
 COPPELIA_VER="V4_10_0_rev0"
 COPPELIA_DIR="${COPPELIA_DIR:-$HOME/Tools/CoppeliaSim_Edu_${COPPELIA_VER}_Ubuntu24_04}"

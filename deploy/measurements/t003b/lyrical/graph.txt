@@ -1,11 +1,6 @@
 -- node list
-/autodocking_server
-/behaviour_server
 /charged_server
-/charging_server
-/cleaning_server
 /lifecycle_manager
-/myrobot
 -- topics
 /autodocking_server/transition_event [lifecycle_msgs/msg/TransitionEvent]
 /behaviour_server/transition_event [lifecycle_msgs/msg/TransitionEvent]

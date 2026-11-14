@@ -1,4 +1,4 @@
-[ERROR] [1794596360.299804268] [my_robot_detection_node]: ultralytics package not available. Install it and try again.
+[ERROR] [1794669273.702411078] [my_robot_detection_node]: ultralytics package not available. Install it and try again.
 Traceback (most recent call last):
   File "/ws/install/my_robot_pkg/lib/my_robot_pkg/my_robot_detection_node", line 33, in <module>
     sys.exit(load_entry_point('my-robot-pkg==0.0.1', 'console_scripts', 'my_robot_detection_node')())

@@ -1,6 +1,6 @@
-[ERROR] [1794596043.339932606] [my_robot_detection_node]: ultralytics package not available. Install it and try again.
-[WARN] [1794596043.340892765] [my_robot_detection_node]: Semantic class config not found: /ws/install/my_robot_pkg/share/my_robot_pkg/config/semantic_room_seg_classes.json
-[INFO] [1794596043.342025556] [my_robot_detection_node]: Continuous detection initialized on /camera.
+[ERROR] [1794668982.959859691] [my_robot_detection_node]: ultralytics package not available. Install it and try again.
+[WARN] [1794668982.960684231] [my_robot_detection_node]: Semantic class config not found: /ws/install/my_robot_pkg/share/my_robot_pkg/config/semantic_room_seg_classes.json
+[INFO] [1794668982.961570467] [my_robot_detection_node]: Continuous detection initialized on /camera.
 Traceback (most recent call last):
   File "/ws/install/my_robot_pkg/lib/my_robot_pkg/my_robot_detection_node", line 33, in <module>
     sys.exit(load_entry_point('my-robot-pkg==0.0.1', 'console_scripts', 'my_robot_detection_node')())

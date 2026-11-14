@@ -1,4 +1,4 @@
-[INFO] [1794596052.327413431] [my_robot_coverage_node]: Coverage Node (Fill the Map) started
+[INFO] [1794668992.651234387] [my_robot_coverage_node]: Coverage Node (Fill the Map) started
 Traceback (most recent call last):
   File "/ws/install/my_robot_pkg/lib/python3.12/site-packages/my_robot/my_robot_explorer_node.py", line 644, in main
     rclpy.spin(node)

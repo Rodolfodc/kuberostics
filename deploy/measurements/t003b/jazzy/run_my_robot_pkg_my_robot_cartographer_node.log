@@ -1,4 +1,4 @@
-[INFO] [1794596032.456448975] [my_robot_explorer_node]: Explorer Node (Rotate-Then-Move Strict) started
+[INFO] [1794668972.609452091] [my_robot_explorer_node]: Explorer Node (Rotate-Then-Move Strict) started
 Traceback (most recent call last):
   File "/ws/install/my_robot_pkg/lib/my_robot_pkg/my_robot_cartographer_node", line 33, in <module>
     sys.exit(load_entry_point('my-robot-pkg==0.0.1', 'console_scripts', 'my_robot_cartographer_node')())

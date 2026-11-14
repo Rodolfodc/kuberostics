@@ -6,7 +6,7 @@ Starting >>> my_robot_pkg
 /usr/lib/python3/dist-packages/setuptools/_distutils/dist.py:289: UserWarning: Unknown distribution option: 'tests_require'
   warnings.warn(msg)
 ---
-Finished <<< my_robot_pkg [1.61s]
+Finished <<< my_robot_pkg [1.60s]
 --- stderr: myrobot_interfaces
 CMake Deprecation Warning at CMakeLists.txt:1 (cmake_minimum_required):
   Compatibility with CMake < 3.10 will be removed from a future version of
@@ -24,9 +24,9 @@ CMake Warning:
 
 
 ---
-Finished <<< myrobot_interfaces [9.99s]
+Finished <<< myrobot_interfaces [9.85s]
 Starting >>> myrobot_bringup
 Finished <<< myrobot_bringup [1.53s]
 
-Summary: 3 packages finished [11.7s]
+Summary: 3 packages finished [11.5s]
   2 packages had stderr output: my_robot_pkg myrobot_interfaces

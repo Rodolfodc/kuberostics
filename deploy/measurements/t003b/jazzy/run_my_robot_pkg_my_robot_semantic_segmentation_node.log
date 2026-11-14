@@ -1,6 +1,6 @@
-[WARN] [1794596064.165106886] [my_robot_semantic_segmentation_node]: /ws/install/my_robot_pkg/lib/python3.12/site-packages/config/semantic_room_seg_classes.json not found and no fallback available.
-[WARN] [1794596064.165694928] [my_robot_semantic_segmentation_node]: File /ws/install/my_robot_pkg/lib/python3.12/site-packages/config/semantic_room_seg_classes.json not found; semantic map empty.
-[INFO] [1794596064.166212790] [my_robot_semantic_segmentation_node]: 0 semantic labels loaded from /ws/install/my_robot_pkg/lib/python3.12/site-packages/config/semantic_room_seg_classes.json
+[WARN] [1794669004.477559624] [my_robot_semantic_segmentation_node]: /ws/install/my_robot_pkg/lib/python3.12/site-packages/config/semantic_room_seg_classes.json not found and no fallback available.
+[WARN] [1794669004.478197330] [my_robot_semantic_segmentation_node]: File /ws/install/my_robot_pkg/lib/python3.12/site-packages/config/semantic_room_seg_classes.json not found; semantic map empty.
+[INFO] [1794669004.478766757] [my_robot_semantic_segmentation_node]: 0 semantic labels loaded from /ws/install/my_robot_pkg/lib/python3.12/site-packages/config/semantic_room_seg_classes.json
 Traceback (most recent call last):
   File "/ws/install/my_robot_pkg/lib/my_robot_pkg/my_robot_semantic_segmentation_node", line 33, in <module>
     sys.exit(load_entry_point('my-robot-pkg==0.0.1', 'console_scripts', 'my_robot_semantic_segmentation_node')())
