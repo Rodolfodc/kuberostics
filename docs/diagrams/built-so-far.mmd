@@ -30,6 +30,7 @@ flowchart TB
       SEQ{{"lifecycle_sequencer<br/>(#12, D-26)"}}:::planned
       LMN["lifecycle_manager_nav<br/>autostart false (#12)"]:::planned
       LMO["lifecycle_manager_optional<br/>empty until spec 009b"]:::planned
+      MQB["MQTT bridge<br/>optional, spec 009b"]:::planned
     end
 
     subgraph C_BEH["Component: behaviour and supervision"]
@@ -63,15 +64,17 @@ flowchart TB
       direction LR
       THR{{"image_throttle<br/>RGB 2 Hz, compressed"}}:::planned
       DLOC["detector_local<br/>yolo11n"]:::planned
-      DSEL["detection_selector<br/>circuit breaker<br/>selector_core (#11, #13)"]:::pr
-      PROJ["projector<br/>projection_core (#11)"]:::pr
+      DSEL["detection_selector node<br/>T907, planned"]:::planned
+      SELC["selector_core<br/>pure Python, circuit breaker<br/>tests #11, rulings #13"]:::pr
+      PROJ["projector node<br/>T908, planned"]:::planned
+      PROC["projection_core<br/>pure Python, TF at photo stamp<br/>tests #11"]:::pr
       SEM["semantic node<br/>2025S2, D-16"]:::third
     end
 
     subgraph C_BRG["Component: simulator bridges (2025S2)"]
       direction LR
-      WHL["my_robot_cmd_vel_node<br/>wheels, /cmd_vel remapped (D-06)"]:::third
-      SNS["scan, vision, odometry,<br/>sim_control nodes<br/>/scan /camera /camera_depth /myrobot/odom"]:::third
+      WHL{{"my_robot_cmd_vel_node<br/>wheel bridge, plain<br/>/cmd_vel remapped (D-06)"}}:::third
+      SNS["scan, vision, odometry,<br/>sim_control nodes<br/>not in the D-26 table<br/>/scan /camera /camera_depth /myrobot/odom"]:::third
     end
   end
 
@@ -79,7 +82,7 @@ flowchart TB
     direction LR
     TRN["transport robot to K3s<br/>rmw_zenoh or zenoh-bridge-ros2dds<br/>measured (#16), owner decides Q-06 (#18)"]:::pr
     DCL["detector_cloud pod<br/>yolo11x"]:::planned
-    MQ["MQTT bridge, Mosquitto,<br/>MinIO, retraining jobs,<br/>weights (spec 009b)"]:::planned
+    MQ["Mosquitto, MinIO,<br/>retraining jobs, weights<br/>(spec 009b)"]:::planned
   end
 
   subgraph DEV["OPERATOR and DEV tooling (host)"]
@@ -116,5 +119,9 @@ flowchart TB
   THR <-.->|"compressed RGB only"| TRN
   TRN <-.-> DCL
   DSEL <-.->|"detections, offload_status"| TRN
-  IAO -.->|"dock sync, CHARGED only"| MQ
+  BEH -.->|"mode CHARGED triggers sync"| MQB
+  MQB -.->|"MQTT, only at the dock"| MQ
+  LMO -.->|"manages"| MQB
+  DSEL --- SELC
+  PROJ --- PROC
   DEVT -.->|"builds, tests, measures"| ROBOT

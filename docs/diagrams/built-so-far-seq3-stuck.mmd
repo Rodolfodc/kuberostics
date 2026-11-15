@@ -18,10 +18,11 @@ sequenceDiagram
   end
   S->>E: action /myRobot/escape goal (event, timeout_s)
   E->>M: /myRobot/mux/escape Twist reverse then turn (priority 80 beats coverage 50)
-  E-->>S: result success (strategy scripted, later rl in spec 008)
-  S-->>S: back to the previous submode COVERING (001-R08)
-  S->>C: cover_room goal again with the same room_id (resume planned, 005-R32)
-  alt escape fails or exceeds escape_timeout_s
+  alt escape succeeds
+    E-->>S: result success (strategy scripted, later rl in spec 008)
+    S-->>S: back to the previous submode COVERING (001-R08)
+    S->>C: cover_room goal again with the same room_id (resume planned, 005-R32)
+  else escape fails or exceeds escape_timeout_s
     E-->>S: result success false, or timeout
     S-->>S: submode ESCAPE_FAILED
     S->>G: /myRobot/mux/lock_stop true
