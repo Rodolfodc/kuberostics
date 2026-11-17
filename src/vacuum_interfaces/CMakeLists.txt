@@ -10,6 +10,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Submode.msg"
   "msg/StuckEvent.msg"
   "msg/Notification.msg"
+  "msg/OffloadStatus.msg"
   "action/Escape.action"
   "action/CoverRoom.action"
   DEPENDENCIES builtin_interfaces geometry_msgs
