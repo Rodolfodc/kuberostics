@@ -16,7 +16,16 @@
   <exec_depend>vacuum_stubs</exec_depend>
   <exec_depend>vacuum_supervisor</exec_depend>
 
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>geometry_msgs</test_depend>
+  <test_depend>launch_testing</test_depend>
+  <test_depend>lifecycle_msgs</test_depend>
   <test_depend>python3-pytest</test_depend>
+  <test_depend>rcl_interfaces</test_depend>
+  <test_depend>rclpy</test_depend>
+  <test_depend>std_msgs</test_depend>
+  <test_depend>std_srvs</test_depend>
+  <test_depend>vacuum_interfaces</test_depend>
   <test_depend>python3-yaml</test_depend>
 
   <export>
