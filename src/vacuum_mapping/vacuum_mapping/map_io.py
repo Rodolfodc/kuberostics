@@ -14,6 +14,9 @@ import yaml
 from .core.types import FREE, OCCUPIED, UNKNOWN, Raster
 
 
+UNKNOWN_PIXEL = 205  # grey written by map_saver for unknown cells
+
+
 def _read_pgm(path: str) -> np.ndarray:
     """Pixels of a binary 8-bit PGM as a (height, width) uint8 array, top row first."""
     with open(path, 'rb') as f:
@@ -45,7 +48,11 @@ def _write_pgm(path: str, pixels: np.ndarray) -> None:
 
 
 def read_map(yaml_path: str) -> Raster:
-    """Load a map saved by `map_saver`; `image` is resolved relative to the YAML file."""
+    """Load a map saved by `map_saver`; `image` is resolved relative to the YAML file.
+
+    Thresholds of the file apply, except that in non-negated maps the pixel value 205 is always UNKNOWN:
+    with the usual free_thresh 0.25, (255 - 205) / 255 = 0.196 would otherwise read as free.
+    """
     with open(yaml_path, 'r', encoding='utf-8') as f:
         meta: Dict = yaml.safe_load(f)
     origin = meta['origin']
@@ -59,6 +66,8 @@ def read_map(yaml_path: str) -> Raster:
     cells = np.full(pixels.shape, UNKNOWN, dtype=np.int8)
     cells[occupancy < float(meta.get('free_thresh', 0.25))] = FREE
     cells[occupancy > float(meta.get('occupied_thresh', 0.65))] = OCCUPIED
+    if not meta.get('negate', 0):
+        cells[pixels == UNKNOWN_PIXEL] = UNKNOWN  # map_saver's unknown grey is never free, whatever free_thresh says
     # PGM rows run top to bottom; Raster row 0 is the lowest y.
     return Raster(np.flipud(cells), float(meta['resolution']), float(origin[0]), float(origin[1]))
 
@@ -80,7 +89,7 @@ def write_map(raster: Raster, yaml_path: str, image_name: str = '') -> Tuple[str
         'origin': [float(raster.origin_x), float(raster.origin_y), 0.0],
         'negate': 0,
         'occupied_thresh': 0.65,
-        'free_thresh': 0.196,  # below 0.25 so that the unknown grey (205) is not read back as free
+        'free_thresh': 0.25,
     }
     with open(yaml_path, 'w', encoding='utf-8') as f:
         yaml.safe_dump(meta, f, sort_keys=False)

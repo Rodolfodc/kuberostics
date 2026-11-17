@@ -76,7 +76,12 @@ def _occupied_points(raster: Raster) -> np.ndarray:
 
 
 def _nearest_distances(points: np.ndarray, reference: np.ndarray) -> np.ndarray:
-    """Distance from each point to the nearest reference point (exact, blockwise, numpy only)."""
+    """Distance from each point to the nearest reference point (exact, blockwise, numpy only).
+
+    Cost is O(N * M) for N points and M reference points: fast for house-sized maps (a few thousand wall
+    cells each, well under a second) but it grows quadratically; around 50 000 x 50 000 occupied cells
+    (large, dense maps at 0.05 m) it takes minutes. Replace by a distance transform if that is needed.
+    """
     block = max(1, _BLOCK_ELEMENTS // max(1, len(reference)))
     out = np.empty(len(points))
     for start in range(0, len(points), block):

@@ -123,3 +123,11 @@ def test_003_R19_empty_segmentation_keeps_next_index():
 
 def test_003_R19_tracked_map_first_state_helper():
     assert TrackedMap.empty().next_index == 1
+
+
+def test_003_R19_shape_change_logs_a_warning_and_assigns_new_indexes():
+    lines = []
+    previous = track(grid(['1.2']))
+    result = track(grid(['1.2.']), previous, log=lines.append)
+    assert any('WARNING' in line and 'cannot be carried over' in line for line in lines)
+    assert sorted(by_index(result)) == [3, 4]

@@ -74,6 +74,21 @@ Test names carry the requirement id (`test_003_R17_...`). Test grids are tiny sy
    no label on occupied or unknown, determinism, timing on 300 x 300) and make them pass.
 3. `RoomTracker` and `RoomLabeler` need no change: they only see the label raster.
 
+## Known limits and open questions
+
+- `map_io.read_map` follows the thresholds of the file, except that pixel 205 (the `map_saver` unknown grey)
+  is always unknown in non-negated maps; `write_map` writes the standard 0.65 / 0.25 thresholds.
+- Requirement gap for node task T313: `RoomTracker` can only match rooms when the previous and the new label
+  rasters have the same shape. When the map grows (new shape) it logs a WARNING and every room gets a new
+  index, losing labels. Architect to rule whether to match by world-coordinate centroid; not implemented.
+- `MapDiff` distance is O(N * M) in occupied cells (see its docstring).
+
+### Open questions (architect)
+
+- `RoomLabeler`: the tie rule (keep current label), `min_votes` counting observations of the winning label,
+  and vote inflation when the same object is detected repeatedly across frames (no de-duplication).
+- `MapDiff`: which resolution to compare at when the two resolutions differ (now: the finer one).
+
 ## Not here yet
 
 `FrontierFinder` and `GridView` (T305, T309; they belong in the shared `vacuum_grid` package), all nodes,

@@ -51,6 +51,10 @@ class RoomTracker:
         new_area = {k: int(np.count_nonzero(raw_labels == k)) for k in raw_ids}
 
         pairs: List[Tuple[int, int, int]] = []  # (-overlap cells, previous index, raw label)
+        if previous.rooms and previous.labels.shape != raw_labels.shape:
+            self._log('room_tracker: WARNING previous labels %s and new labels %s differ in shape (map grew?); '
+                      'labels cannot be carried over, every room gets a new index'
+                      % (previous.labels.shape, raw_labels.shape))
         if previous.labels.shape == raw_labels.shape:
             both = (previous.labels > 0) & (raw_labels > 0)
             keys, counts = np.unique(

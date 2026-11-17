@@ -62,3 +62,18 @@ def test_003_R34_cli_prints_report_writes_file_and_leaves_maps_untouched(tmp_pat
 def test_003_R34_cli_reports_missing_file_with_exit_code_2(tmp_path, capsys):
     assert main([str(tmp_path / 'no.yaml'), str(tmp_path / 'no2.yaml')]) == 2
     assert 'map_diff' in capsys.readouterr().err
+
+
+def test_003_R34_unknown_grey_is_unknown_even_with_free_thresh_025(tmp_path):
+    (tmp_path / 'u.pgm').write_bytes(b'P5\n3 1\n255\n\x00\xcd\xfe')  # occupied, 205, free
+    (tmp_path / 'u.yaml').write_text('image: u.pgm\nresolution: 0.05\norigin: [0, 0, 0]\n'
+                                     'negate: 0\noccupied_thresh: 0.65\nfree_thresh: 0.25\n')
+    assert read_map(str(tmp_path / 'u.yaml')).cells.tolist() == [[100, -1, 0]]
+
+
+def test_003_R34_write_map_uses_standard_thresholds_and_roundtrips_unknown(tmp_path):
+    raster = boxed_room()
+    raster.cells[5, 7] = -1
+    yaml_path, _ = write_map(raster, str(tmp_path / 'w.yaml'))
+    assert yaml.safe_load(open(yaml_path))['free_thresh'] == 0.25
+    assert read_map(yaml_path).cells[5, 7] == -1
