@@ -47,6 +47,7 @@ class TestSkeletonScenarios(unittest.TestCase):
         names = gs.core_config_nodes()
         self.assertEqual(sorted(names), sorted(['stop_guard', 'coverage_server', 'escape_server',
                                                 'stuck_detector', 'supervisor']))
+        self.probe.wait_for_nodes([*names, 'lifecycle_manager_core', 'twist_mux'])    # discovery lag, not a timeout guess
         live = {name for name, namespace in self.probe.node_names() if namespace == '/'}
         for name in names:
             self.assertIn(name, live, f'lifecycle_core.yaml lists {name} but no such node is running')
@@ -55,6 +56,7 @@ class TestSkeletonScenarios(unittest.TestCase):
 
     def test_03_twist_mux_is_the_only_publisher_of_cmd_vel(self):
         """001-R03, 001-R10, Art. VI: exactly one publisher on /myRobot/cmd_vel, twist_mux, with type Twist."""
+        self.probe.wait_for_publishers(gs.CMD_VEL)
         publishers = self.probe.publishers_of(gs.CMD_VEL)
         self.assertEqual([p.node_name for p in publishers], ['twist_mux'])
         self.assertEqual(publishers[0].topic_type, 'geometry_msgs/msg/Twist')

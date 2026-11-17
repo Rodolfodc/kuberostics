@@ -28,13 +28,19 @@ pytestmark = [
 ]
 
 
-def _qos(info):
+def _qos(info, expected):
+    """Graph QoS of one endpoint. Jazzy's rmw reports depth 0 for endpoints it does not own (the queue depth is
+    local, not part of DDS compatibility); depth 0 therefore means "not reported" and takes the contract value,
+    while reliability and durability (what decides compatibility) are always compared. Lyrical reports the depth."""
     q = info.qos_profile
-    return QosSpec(q.reliability.name.lower(), q.durability.name.lower(), int(q.depth))
+    depth = int(q.depth)
+    if depth == 0 and expected is not None:
+        depth = expected.depth
+    return QosSpec(q.reliability.name.lower(), q.durability.name.lower(), depth)
 
 
-def _endpoints(infos):
-    return [Endpoint(i.node_name, i.topic_type, _qos(i)) for i in infos]
+def _endpoints(infos, exp):
+    return [Endpoint(i.node_name, i.topic_type, _qos(i, exp.qos)) for i in infos]
 
 
 @pytest.fixture(scope='module')
@@ -63,8 +69,8 @@ def _ids(exps):
 @pytest.mark.parametrize('exp', _expectations('topic'), ids=_ids(_expectations('topic')))
 def test_001_R04_topic_exists_with_declared_type_and_qos(node, exp):
     """001-R04 (+ 001-R03 max_publishers/owner of /myRobot/cmd_vel, 001-R12 sink and docking remaps)."""
-    problems = check_topic(exp, _endpoints(node.get_publishers_info_by_topic(exp.name)),
-                           _endpoints(node.get_subscriptions_info_by_topic(exp.name)))
+    problems = check_topic(exp, _endpoints(node.get_publishers_info_by_topic(exp.name), exp),
+                           _endpoints(node.get_subscriptions_info_by_topic(exp.name), exp))
     assert not problems, '; '.join(problems)
 
 

@@ -230,9 +230,11 @@ class Probe:
             return False
         return bool(future.result().success)
 
-    def lifecycle_label(self, node_name: str) -> str:
+    def lifecycle_label(self, node_name: str, discovery_timeout_s: float = 15.0) -> str:
+        """Lifecycle state label. The probe learns about nodes by DDS discovery, which lags on a loaded CI
+        runner even after lifecycle_manager_core reported active, so the service is waited for (condition)."""
         client = self.node.create_client(GetState, f'/{node_name}/get_state')
-        if not client.wait_for_service(timeout_sec=1.0):
+        if not client.wait_for_service(timeout_sec=discovery_timeout_s):
             return 'unreachable'
         future = client.call_async(GetState.Request())
         if not self.wait_for(future.done, 5.0):
@@ -241,6 +243,14 @@ class Probe:
 
     def node_names(self) -> List[Tuple[str, str]]:
         return self.node.get_node_names_and_namespaces()
+
+    def wait_for_nodes(self, names, timeout_s: float = 15.0) -> bool:
+        """Waits until every name is in the discovered graph (root namespace)."""
+        return self.wait_for(
+            lambda: set(names) <= {n for n, ns in self.node_names() if ns == '/'}, timeout_s, 0.1)
+
+    def wait_for_publishers(self, topic: str, count: int = 1, timeout_s: float = 15.0) -> bool:
+        return self.wait_for(lambda: len(self.publishers_of(topic)) >= count, timeout_s, 0.1)
 
     def publishers_of(self, topic: str):
         return self.node.get_publishers_info_by_topic(topic)
@@ -272,7 +282,14 @@ def start_cleaning(tc, probe: Probe) -> None:
 
 
 def provoke_stuck(tc, probe: Probe) -> float:
-    """Calls the stuck_detector stub; returns the time just before the call."""
+    """Calls the stuck_detector stub; returns the time just before the call.
+
+    The stub publishes one StuckEvent per call. If it does so before the supervisor's subscription is matched
+    the event is lost (seen on a 1-CPU runner: the supervisor stayed in COVERING), so the graph must show the
+    supervisor subscribed to /myRobot/stuck first (condition wait, the 0.5 s assertion is untouched)."""
+    tc.assertTrue(probe.wait_for(lambda: probe.node.count_subscribers('/myRobot/stuck') >= 1, 30.0),
+                  'nobody subscribed to /myRobot/stuck')
+    time.sleep(0.5)                       # the publisher side of that match is discovered a moment later
     t0 = time.monotonic()
     response = probe.trigger('/myRobot/stuck_detector/trigger')
     tc.assertTrue(response.success, response.message)
