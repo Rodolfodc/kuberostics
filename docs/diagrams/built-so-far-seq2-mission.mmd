@@ -1,0 +1,32 @@
+%% Sequence 2: mission cycle (CLEANING). Built: supervisor, stubs, twist_mux. Planned: Nav2 on mux/nav and the real coverage_server (D-24, PR #12), room labels (spec 003).
+sequenceDiagram
+  autonumber
+  participant U as User or schedule
+  participant B as behaviour_server (IA368II)
+  participant S as supervisor (built)
+  participant C as coverage_server (stub built, real planned)
+  participant N as Nav2 planner and controller (PLANNED)
+  participant M as twist_mux (third-party)
+  participant W as wheel bridge (2025S2, not yet run)
+  participant X as CoppeliaSim (host)
+
+  U->>B: /myRobot/start_stop (StartStop)
+  B-->>S: /myRobot/behaviour/mode = CLEANING (every 0.2 s)
+  S-->>S: submode COVERING within 0.5 s (001-R06)
+  S-->>B: /myRobot/behaviour/submode = COVERING (every 0.2 s)
+  S->>C: action /myRobot/cover_room goal (room_id, passes)
+  loop per room, lane by lane
+    alt today (stub, T010)
+      C->>M: /myRobot/mux/coverage Twist 0.15 m/s at 10 Hz (priority 50)
+    else planned (D-24)
+      C->>N: NavigateToPose waypoint
+      N->>M: /myRobot/mux/nav Twist (priority 60)
+    end
+    M->>W: /myRobot/cmd_vel Twist (only twist_mux publishes)
+    W->>X: wheel joint targets via ZeroMQ :23000
+    X-->>W: /scan, /camera, /myrobot/odom via ZeroMQ
+    C-->>S: feedback covered_ratio (1 Hz or faster)
+  end
+  C-->>S: result success, covered_ratio at least 0.9
+  S-->>S: Notification COVERAGE_DONE (info), submode NONE (005-R30)
+  Note over M: higher priority inputs always win, lock_stop and mux/stop (250) beat every driving input
