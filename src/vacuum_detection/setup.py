@@ -20,5 +20,6 @@ setup(
     license='Apache-2.0',
     entry_points={'console_scripts': [
         'detection_selector = vacuum_detection.detection_selector_node:main',
+        'image_throttle = vacuum_detection.image_throttle_node:main',
     ]},
 )

@@ -124,6 +124,7 @@ topics:
   - {name: /myRobot/perception/detections, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detection_selector, max_publishers: 1, since: "009a"}
   - {name: /myRobot/perception/offload_status, type: vacuum_interfaces/msg/OffloadStatus, qos: ia368ii, owner: detection_selector, since: "009a", note: "R14: published at 1 Hz (parameter status_rate_hz)"}
   - {name: /myRobot/telemetry/detection_selector, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detection_selector, since: "009a", note: "D-20: breaker state, counters and watermark at status_rate_hz"}
+  - {name: /myRobot/telemetry/image_throttle, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: image_throttle, since: "009a", note: "D-20: passed, dropped_rate, restarts, encode_errors at telemetry_rate_hz"}
   - {name: /detections_markers, type: visualization_msgs/msg/MarkerArray, qos: default, owner: projector, frozen: true, since: "009a", note: "format consumed by the 2025S2 semantic node"}
 
 services:
@@ -197,3 +198,9 @@ parameters:
     cloud_topic: {type: string, default: /myRobot/perception/detections/cloud}
     local_topic: {type: string, default: /myRobot/perception/detections/local}
     output_topic: {type: string, default: /myRobot/perception/detections}
+  image_throttle:
+    image_rate_hz: {type: double, default: 2.0, requirement: 009a-R03, note: "same rate in CLOSED, OPEN and HALF_OPEN (009a-R11); must be > 0"}
+    jpeg_quality: {type: int, default: 80, note: "1..100"}
+    telemetry_rate_hz: {type: double, default: 1.0}
+    input_topic: {type: string, default: /camera, note: "RGB only; depth never leaves the robot"}
+    output_topic: {type: string, default: /myRobot/perception/rgb_throttled/compressed}
