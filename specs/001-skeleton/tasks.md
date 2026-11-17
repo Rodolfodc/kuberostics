@@ -7,7 +7,7 @@ A task is only done when the test that verifies the requirement passes.
 
 - [x] **T001** Create `deps.repos` with `IA368II` at commit `51a5fa2c…`. Write `scripts/setup.sh`, which runs `vcs import` and `rosdep install`. (D-10)
 - [x] **T002** [P] Create `vacuum_interfaces` with `Submode`, `StuckEvent`, `Notification`, `Escape` and `CoverRoom`, copied from `contracts/interfaces.md`. Verify with `colcon build` and `ros2 interface show`. (001-R04)
-- [ ] **T003** [P] Create `docker/jazzy` and `docker/lyrical` (confirm the tag of the official Lyrical image) and `.github/workflows/ci.yaml` with matrix `[jazzy, lyrical]`: setup, `colcon build`, `colcon test`. (001-R15, 001-R17)
+- [x] **T003** [P] Create `docker/jazzy` and `docker/lyrical` (confirm the tag of the official Lyrical image) and `.github/workflows/ci.yaml` with matrix `[jazzy, lyrical]`: setup, `colcon build`, `colcon test`. (001-R15, 001-R17)
 - [ ] **T003b** [P] Build and bring up the IA368II `myrobot_bringup` and `my_robot_pkg` in the Lyrical container and record the result in Q-04. (001-R17)
 - [ ] **T004** [P] Write `tools/sim_bench/bench.py`, run it on the *House* scene and record D-11. Answer Q-01 along the way. (001-R14)
 
