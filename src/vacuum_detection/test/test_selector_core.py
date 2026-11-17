@@ -492,3 +492,12 @@ def test_009a_R05_drops_are_logged_at_debug_level():
     core.on_response(CLOUD, s)
     assert len(msgs) == 3
     assert math.isclose(core.watermark, s)
+
+
+def test_009a_R14_snapshot_reports_age_of_last_cloud_response_nan_before_the_first():
+    core, clock, _ = make()
+    assert math.isnan(core.snapshot()['last_cloud_age_s'])
+    cloud(core, clock, age=0.2)
+    clock.advance(0.1)
+    local(core, clock)                      # a local response must not change the cloud age
+    assert core.snapshot()['last_cloud_age_s'] == pytest.approx(0.2)

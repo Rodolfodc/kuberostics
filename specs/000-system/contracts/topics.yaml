@@ -123,6 +123,7 @@ topics:
   - {name: /myRobot/perception/detections/local, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detector_local, since: "009a"}
   - {name: /myRobot/perception/detections, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detection_selector, max_publishers: 1, since: "009a"}
   - {name: /myRobot/perception/offload_status, type: vacuum_interfaces/msg/OffloadStatus, qos: ia368ii, owner: detection_selector, since: "009a", note: "R14: published at 1 Hz (parameter status_rate_hz)"}
+  - {name: /myRobot/telemetry/detection_selector, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detection_selector, since: "009a", note: "D-20: breaker state, counters and watermark at status_rate_hz"}
   - {name: /detections_markers, type: visualization_msgs/msg/MarkerArray, qos: default, owner: projector, frozen: true, since: "009a", note: "format consumed by the 2025S2 semantic node"}
 
 services:
@@ -186,3 +187,13 @@ parameters:
     publish_rate_hz: {type: double, default: 10.0}
   stuck_detector:
     telemetry_rate_hz: {type: double, default: 1.0}
+  detection_selector:
+    max_age_s: {type: double, default: 0.67, requirement: 009a-R05, note: "= position_tolerance_m / v_max_m_s (0.20 / 0.30)"}
+    open_threshold_s: {type: double, default: 1.5, requirement: 009a-R08, note: "never below max_age_s"}
+    close_threshold_s: {type: double, default: 0.5, requirement: 009a-R09, note: "invariant close_threshold_s < max_age_s <= open_threshold_s; configure fails otherwise"}
+    stable_window_s: {type: double, default: 3.0, requirement: 009a-R10}
+    status_rate_hz: {type: double, default: 1.0, requirement: 009a-R14, note: "OffloadStatus and telemetry"}
+    tick_rate_hz: {type: double, default: 10.0, requirement: 009a-R08, note: "silence check of the cloud; bounds the time to OPEN"}
+    cloud_topic: {type: string, default: /myRobot/perception/detections/cloud}
+    local_topic: {type: string, default: /myRobot/perception/detections/local}
+    output_topic: {type: string, default: /myRobot/perception/detections}

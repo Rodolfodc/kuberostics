@@ -7,6 +7,11 @@
   <maintainer email="rodolfo.dalla.costa@hotmail.com">Rodolfo Dalla Costa</maintainer>
   <license>Apache-2.0</license>
 
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>vacuum_interfaces</exec_depend>
+  <exec_depend>vision_msgs</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+
   <test_depend>python3-pytest</test_depend>
 
   <export>

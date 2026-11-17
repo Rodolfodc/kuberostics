@@ -18,4 +18,7 @@ setup(
     maintainer_email='rodolfo.dalla.costa@hotmail.com',
     description='Detection offload: selector and projector cores',
     license='Apache-2.0',
+    entry_points={'console_scripts': [
+        'detection_selector = vacuum_detection.detection_selector_node:main',
+    ]},
 )
