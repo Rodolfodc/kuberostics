@@ -71,6 +71,7 @@ class DetectionSelectorNode(LifecycleNode):
     def on_activate(self, state) -> TransitionCallbackReturn:
         super().on_activate(state)
         self._active = True
+        self._core.restart_grace()               # configure may have happened long before (009a-R08)
         self._timers = [
             self.create_timer(1.0 / self.get_parameter('tick_rate_hz').value, self._core.tick),
             self.create_timer(1.0 / self.get_parameter('status_rate_hz').value, self._publish_status),
