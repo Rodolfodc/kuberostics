@@ -4,6 +4,7 @@
 # which is where they are tracked (twist_mux, python3-pytest, python3-yaml, ...).
 # Usage: scripts/test-docker.sh [jazzy|lyrical|both]        (default both)
 #        ROS_IMAGE=<image> scripts/test-docker.sh lyrical    overrides the image
+#        TEST_OUT=<dir> scripts/test-docker.sh lyrical       also copies the XML results and logs to <dir>/<distro>/
 # Exit code 0 only if every selected distro passes.
 set -euo pipefail
 
@@ -17,7 +18,12 @@ run() {
   echo ">> $distro ($image)"
   # The repo is mounted read-only; the container works on a copy without the third-party checkout,
   # build outputs and .git.
-  docker run --rm -e DISTRO="$distro" -v "$REPO":/repo:ro "$image" bash -c '
+  local outargs=()
+  if [ -n "${TEST_OUT:-}" ]; then
+    mkdir -p "$TEST_OUT/$distro"
+    outargs=(-v "$(cd "$TEST_OUT/$distro" && pwd)":/out)
+  fi
+  docker run --rm -e DISTRO="$distro" -v "$REPO":/repo:ro "${outargs[@]}" "$image" bash -c '
     set -e
     mkdir -p /ws && cd /repo && tar --exclude=./src/deps --exclude=./build --exclude=./install --exclude=./log \
       --exclude=./.git --exclude=./.sim --exclude=./.venv -cf - . | tar -xf - -C /ws
@@ -29,8 +35,17 @@ run() {
     source /opt/ros/"$DISTRO"/setup.bash
     colcon build --base-paths src --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 >/tmp/build.log 2>&1 || { tail -30 /tmp/build.log; exit 4; }
     colcon test --base-paths src >/tmp/test.log 2>&1 || true
-    colcon test-result --all | grep -E "fail|error|Summary" | tail -15 || true
-    colcon test-result >/dev/null'
+    rc=0
+    colcon test-result --all --verbose >/tmp/result.log 2>&1 || rc=$?
+    python3 -I /ws/scripts/show-test-failures.py build || true
+    grep -E "^Summary" /tmp/result.log || tail -3 /tmp/result.log
+    if [ -d /out ]; then
+      mkdir -p /out/xml && cp /tmp/*.log /tmp/result.log /out/ 2>/dev/null || true
+      (cd build && find . \( -name pytest.xml -o -path "*/test_results/*.xml" \) -exec cp --parents {} /out/xml/ \;) || true
+      cp -r log/latest_test /out/colcon_test_log 2>/dev/null || true
+      chmod -R a+rwX /out || true
+    fi
+    exit $rc'
 }
 
 case "$WHICH" in
