@@ -23,7 +23,7 @@ run() {
     mkdir -p "$TEST_OUT/$distro"
     outargs=(-v "$(cd "$TEST_OUT/$distro" && pwd)":/out)
   fi
-  docker run --rm -e DISTRO="$distro" -v "$REPO":/repo:ro "${outargs[@]}" "$image" bash -c '
+  docker run --rm -e DISTRO="$distro" -v "$REPO":/repo:ro ${outargs[@]+"${outargs[@]}"} "$image" bash -c '
     set -e
     mkdir -p /ws && cd /repo && tar --exclude=./src/deps --exclude=./build --exclude=./install --exclude=./log \
       --exclude=./.git --exclude=./.sim --exclude=./.venv -cf - . | tar -xf - -C /ws
@@ -31,9 +31,9 @@ run() {
     apt-get update -qq
     [ -f /etc/ros/rosdep/sources.list.d/20-default.list ] || rosdep init >/dev/null
     rosdep update --rosdistro "$DISTRO" >/dev/null
-    rosdep install --from-paths src --ignore-src -r -y >/tmp/rosdep.log 2>&1 || { tail -20 /tmp/rosdep.log; exit 3; }
+    rosdep install --from-paths src --ignore-src -r -y >/tmp/rosdep.log 2>&1 || { tail -20 /tmp/rosdep.log; [ -d /out ] && cp /tmp/*.log /out/ && chmod -R a+rwX /out; exit 3; }
     source /opt/ros/"$DISTRO"/setup.bash
-    colcon build --base-paths src --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 >/tmp/build.log 2>&1 || { tail -30 /tmp/build.log; exit 4; }
+    colcon build --base-paths src --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 >/tmp/build.log 2>&1 || { tail -30 /tmp/build.log; [ -d /out ] && cp /tmp/*.log /out/ && chmod -R a+rwX /out; exit 4; }
     colcon test --base-paths src >/tmp/test.log 2>&1 || true
     rc=0
     colcon test-result --all --verbose >/tmp/result.log 2>&1 || rc=$?
@@ -42,7 +42,7 @@ run() {
     if [ -d /out ]; then
       mkdir -p /out/xml && cp /tmp/*.log /tmp/result.log /out/ 2>/dev/null || true
       (cd build && find . \( -name pytest.xml -o -path "*/test_results/*.xml" \) -exec cp --parents {} /out/xml/ \;) || true
-      cp -r log/latest_test /out/colcon_test_log 2>/dev/null || true
+      cp -rL log/latest_test /out/colcon_test_log 2>/dev/null || true
       chmod -R a+rwX /out || true
     fi
     exit $rc'
