@@ -21,8 +21,6 @@ import pytest
 import rclpy
 import yaml
 from diagnostic_msgs.msg import DiagnosticArray
-from lifecycle_msgs.msg import State as LState
-from lifecycle_msgs.msg import TransitionEvent
 from lifecycle_msgs.msg import Transition
 from lifecycle_msgs.srv import ChangeState, GetState
 from rclpy.executors import SingleThreadedExecutor
@@ -71,9 +69,9 @@ class Graph:
         rclpy.init(context=self.context, domain_id=self.domain)
         self.node = rclpy.create_node('sequencer_test_probe', context=self.context)
         self.lock = threading.Lock()
-        self.finalized_order = []
         self.notifications = []
         self.state = ''
+        self.diag_values = {}
         self.node.create_subscription(DiagnosticArray, '/myRobot/telemetry/lifecycle_sequencer', self._on_diag, 10)
         self.node.create_subscription(Notification, '/myRobot/notifications', self._on_note, 10)
         self.executor = SingleThreadedExecutor(context=self.context)
@@ -85,27 +83,37 @@ class Graph:
     def _on_diag(self, msg):
         with self.lock:
             self.state = msg.status[0].message
+            self.diag_values = {kv.key: kv.value for kv in msg.status[0].values}
 
     def _on_note(self, msg):
         with self.lock:
             self.notifications.append((msg.severity, msg.code))
-
-    def _on_event(self, name, msg):
-        if msg.goal_state.id == LState.PRIMARY_STATE_FINALIZED:
-            with self.lock:
-                self.finalized_order.append(name)
 
     def current_state(self):
         with self.lock:
             return self.state
 
     def codes(self):
+        """(severity, code) of the Notifications heard on the topic."""
         with self.lock:
             return list(self.notifications)
 
-    def finalized(self):
+    def telemetry_codes(self):
+        """Notification codes the sequencer reports in its periodic telemetry. The Notification topic is
+        volatile, so a one-shot message published before the probe finished discovery can be missed; the
+        telemetry repeats it every second and is what the assertions use."""
         with self.lock:
-            return list(self.finalized_order)
+            return [c for c in self.diag_values.get('codes', '').split(',') if c]
+
+    def shutdown_order(self):
+        """Nodes in the order they ran on_shutdown, from the monotonic times the dummy nodes print (the host
+        shares CLOCK_MONOTONIC across processes). Nodes that have not shut down yet are not listed."""
+        stamps = []
+        for name in ALL_NODES:
+            for line in self.log(name, tail=None).splitlines():
+                if line.startswith('TRANSITION shutdown '):
+                    stamps.append((int(line.split()[2]), name))
+        return [name for _, name in sorted(stamps)]
 
     # ---- processes
     def _spawn(self, name, command):
@@ -113,10 +121,11 @@ class Graph:
         self.procs[name] = subprocess.Popen(command, env=self.env, start_new_session=True,
                                             stdout=log, stderr=subprocess.STDOUT)
 
-    def log(self, name):
+    def log(self, name, tail=3000):
         """Output of one process, for assertion messages."""
         with open(os.path.join(self.tmp.name, f'{name}.log')) as f:
-            return f.read()[-3000:]
+            text = f.read()
+        return text if tail is None else text[-tail:]
 
     def start(self):
         ros = ['--ros-args']
@@ -132,9 +141,6 @@ class Graph:
                     'autostart': False, 'bond_timeout': 0.0, 'node_names': names}}}, f)
             self._spawn(manager, ['ros2', 'run', 'nav2_lifecycle_manager', 'lifecycle_manager', *ros,
                                   '-r', f'__node:={manager}', '--params-file', path])
-        for n in ALL_NODES:        # shutdown order is observed on the transition events, subscribed up front
-            self.node.create_subscription(TransitionEvent, f'/{n}/transition_event',
-                                          lambda m, n=n: self._on_event(n, m), 10)
         self._spawn('lifecycle_sequencer', [
             'ros2', 'run', 'vacuum_bringup', 'lifecycle_sequencer', *ros,
             '-p', f'manager_startup_timeout_s:={self.startup_timeout_s}', '-p', 'manager_shutdown_timeout_s:=15.0'])
@@ -193,13 +199,13 @@ def test_005_R38_all_nodes_of_all_managers_become_active_over_5_starts(graph_fac
     g = graph_factory()
     assert wait_for(lambda: g.current_state() == 'ALL_ACTIVE'), f'state {g.current_state()!r}\n{g.log("lifecycle_sequencer")}'
     assert set(g.labels().values()) == {'active'}, g.labels()
-    assert g.codes() == []
+    assert g.telemetry_codes() == []
 
 
 def test_005_R38_core_node_failing_gives_FAILED_CORE_and_nothing_else_is_started(graph_factory):
     g = graph_factory(failing='core_a')
     assert wait_for(lambda: g.current_state() == 'FAILED_CORE'), f'state {g.current_state()!r}\n{g.log("lifecycle_sequencer")}'
-    assert wait_for(lambda: (2, 'CORE_START_FAILED') in g.codes())
+    assert wait_for(lambda: 'CORE_START_FAILED' in g.telemetry_codes())
     labels = g.labels()
     assert labels['nav_a'] != 'active' and labels['nav_b'] != 'active' and labels['opt_a'] != 'active', labels
 
@@ -207,7 +213,7 @@ def test_005_R38_core_node_failing_gives_FAILED_CORE_and_nothing_else_is_started
 def test_005_R38_nav_node_failing_gives_DEGRADED_NAV_core_stays_active_nav_left_inactive(graph_factory):
     g = graph_factory(failing='nav_b')
     assert wait_for(lambda: g.current_state() == 'DEGRADED_NAV'), f'state {g.current_state()!r}\n{g.log("lifecycle_sequencer")}'
-    assert wait_for(lambda: (1, 'NAV_UNAVAILABLE') in g.codes())
+    assert wait_for(lambda: 'NAV_UNAVAILABLE' in g.telemetry_codes())
     # the reset of the nav manager is part of the transition to DEGRADED_NAV: wait for it by condition
     assert wait_for(lambda: all(g.label(n) != 'active' for n in ('nav_a', 'nav_b'))), g.labels()
     labels = g.labels()
@@ -220,17 +226,17 @@ def test_005_R38_optional_node_failing_gives_DEGRADED_OPTIONAL_core_and_nav_unaf
     assert wait_for(lambda: g.current_state() == 'DEGRADED_OPTIONAL'), f'state {g.current_state()!r}\n{g.log("lifecycle_sequencer")}'
     labels = g.labels()
     assert all(labels[n] == 'active' for n in ('stop_guard', 'core_a', 'nav_a', 'nav_b')), labels
-    assert not [c for c in g.codes() if c[0] == 2]
+    assert g.telemetry_codes() == ['OPTIONAL_UNAVAILABLE']
 
 
 def test_005_R38_shutdown_order_is_optional_then_nav_then_core_with_stop_guard_last(graph_factory):
     g = graph_factory()
     assert wait_for(lambda: g.current_state() == 'ALL_ACTIVE')
     g.sigint_sequencer()
-    assert wait_for(lambda: len(g.finalized()) == len(ALL_NODES)), f'finalized: {g.finalized()}'
-    order = g.finalized()
+    assert wait_for(lambda: len(g.shutdown_order()) == len(ALL_NODES)), f'shut down: {g.shutdown_order()}'
+    order = g.shutdown_order()
     assert order[0] == 'opt_a', order
-    assert set(order[1:3]) == {'nav_a', 'nav_b'}, order
+    assert set(order[1:3]) == {'nav_a', 'nav_b'}, order     # inside a manager the Nav2 order is not our concern
     assert order[-1] == 'stop_guard', order                 # 005-R37: stop_guard is the last to go down
     assert g.procs['lifecycle_sequencer'].wait(timeout=30) == 0
 
@@ -244,7 +250,7 @@ def test_005_R36_stop_guard_leaving_active_deactivates_nav_and_raises_ERROR(grap
     request.transition.id = Transition.TRANSITION_DEACTIVATE
     future = client.call_async(request)
     assert wait_for(future.done, 10.0) and future.result().success
-    assert wait_for(lambda: (2, 'STOP_GUARD_LOST') in g.codes()), g.log('lifecycle_sequencer')
+    assert wait_for(lambda: 'STOP_GUARD_LOST' in g.telemetry_codes()), g.log('lifecycle_sequencer')
     assert wait_for(lambda: g.current_state() == 'DEGRADED_NAV')
     assert wait_for(lambda: all(g.label(n) != 'active' for n in ('nav_a', 'nav_b'))), g.labels()
     assert g.label('core_a') == 'active'

@@ -146,7 +146,11 @@ def test_005_R36_nav_failure_keeps_core_leaves_nav_inactive_and_still_tries_opti
     assert (Severity.WARN, 'NAV_UNAVAILABLE') in rec.notes
     # a partially started nav manager is reset, so no nav node is left active
     assert (NAV, Action.RESET) in pairs(managers)
+    # ... and whatever the manager left active is deactivated node by node (Jazzy aborts the reset early)
+    assert (NAV, Action.DEACTIVATE_NODES) in pairs(managers)
+    assert pairs(managers).index((NAV, Action.RESET)) < pairs(managers).index((NAV, Action.DEACTIVATE_NODES))
     assert (CORE, Action.RESET) not in pairs(managers)
+    assert (CORE, Action.DEACTIVATE_NODES) not in pairs(managers)
 
 
 def test_005_R36_optional_failure_does_not_stop_core_or_nav():
@@ -155,7 +159,7 @@ def test_005_R36_optional_failure_does_not_stop_core_or_nav():
     assert startups(managers) == [CORE, NAV, OPT]
     assert [n for n in rec.notes if n[0] is Severity.ERROR] == []
     assert [(m, a) for m, a, _t in managers.calls
-            if m != OPT and a in (Action.RESET, Action.SHUTDOWN, Action.PAUSE)] == []
+            if m != OPT and a in (Action.RESET, Action.SHUTDOWN, Action.PAUSE, Action.DEACTIVATE_NODES)] == []
 
 
 def test_005_R36_nav_and_optional_both_failing_reports_the_worse_state():
@@ -169,6 +173,7 @@ def test_005_R36_stop_guard_lost_while_running_deactivates_nav_and_raises_error(
     seq.run_startup()
     seq.on_stop_guard_lost()
     assert (NAV, Action.PAUSE) in pairs(managers)
+    assert (NAV, Action.DEACTIVATE_NODES) in pairs(managers)
     assert (Severity.ERROR, 'STOP_GUARD_LOST') in rec.notes
     assert seq.state is State.DEGRADED_NAV
 
@@ -180,6 +185,7 @@ def test_005_R36_stop_guard_lost_is_reported_once():
     seq.on_stop_guard_lost()
     assert rec.notes.count((Severity.ERROR, 'STOP_GUARD_LOST')) == 1
     assert [a for _, a, _ in managers.calls].count(Action.PAUSE) == 1
+    assert [a for _, a, _ in managers.calls].count(Action.DEACTIVATE_NODES) == 1
 
 
 def test_005_R36_stop_guard_lost_in_failed_core_does_nothing():
@@ -277,6 +283,12 @@ def test_005_R35_metrics_report_state_and_per_step_durations():
     assert m['state'] == 'ALL_ACTIVE'
     assert m['startup_lifecycle_manager_core_s'] == pytest.approx(2.0)
     assert m['notifications'] == 0
+
+
+def test_005_R36_metrics_carry_the_notification_codes_so_periodic_telemetry_shows_them():
+    seq, _, _, _ = build({(NAV, Action.STARTUP): Outcome.FAILED})
+    seq.run_startup()
+    assert seq.metrics()['codes'] == 'NAV_UNAVAILABLE'
 
 
 def test_005_R35_the_manager_list_comes_from_configuration():

@@ -22,7 +22,7 @@ States: `NOT_STARTED`, `STARTING_CORE`, `STARTING_NAV`, `STARTING_OPTIONAL`, `AL
 `DEGRADED_NAV`, `DEGRADED_OPTIONAL`, `SHUTTING_DOWN`. Failure rules (005-R36):
 
 - core fails: nav and optional are not started, ERROR `CORE_START_FAILED`, state `FAILED_CORE`;
-- nav fails: the nav manager is reset (no nav node stays active), WARN `NAV_UNAVAILABLE`, `DEGRADED_NAV`, optional is still tried;
+- nav fails: the nav manager is reset and every node it left active is then deactivated one by one (the Nav2 manager of Jazzy aborts RESET/PAUSE at the first node that cannot make the transition, so `planner_server` could stay active), WARN `NAV_UNAVAILABLE`, `DEGRADED_NAV`, optional is still tried;
 - optional fails: WARN `OPTIONAL_UNAVAILABLE`, `DEGRADED_OPTIONAL`, nothing else is touched;
 - `stop_guard` leaves `active` while running: nav is paused, ERROR `STOP_GUARD_LOST`, `DEGRADED_NAV`.
 
@@ -60,4 +60,4 @@ cd src/vacuum_bringup && python3 -m pytest test/test_manager_sequencer.py
   optional failures, shutdown order, double shutdown, timeouts) with a simulated clock.
 - `test/test_node_classification.py`: 005-R39, every node of the launch is on the plain list or managed.
 - `test/test_sequencer_graph.py`: live graph with the real Nav2 managers, the real sequencer and dummy nodes: five
-  clean starts, one failing node per manager, shutdown order. Condition waits only; domain IDs 130 to 159.
+  clean starts, one failing node per manager, `stop_guard` lost, shutdown order (read from the monotonic times the dummy nodes print, not from event arrival). Condition waits only; domain IDs 130 to 159.

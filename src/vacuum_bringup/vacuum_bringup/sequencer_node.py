@@ -18,8 +18,10 @@ import time
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from lifecycle_msgs.msg import State as LifecycleState
-from lifecycle_msgs.msg import TransitionEvent
+from lifecycle_msgs.msg import Transition, TransitionEvent
+from lifecycle_msgs.srv import ChangeState, GetState
 from nav2_msgs.srv import ManageLifecycleNodes
+from rcl_interfaces.srv import GetParameters
 from rclpy.executors import SingleThreadedExecutor
 from rclpy.node import Node
 from rclpy.signals import SignalHandlerOptions
@@ -92,13 +94,47 @@ class SequencerNode(Node):
             return Outcome.TIMEOUT, None
         return Outcome.OK, future.result()
 
+    def _call_once(self, srv_type, name: str, request, timeout_s: float):
+        client = self.create_client(srv_type, name)
+        try:
+            return self._call_service(client, request, timeout_s)
+        finally:
+            self.destroy_client(client)
+
     def _call(self, manager: str, action: Action, timeout_s: float) -> Outcome:
+        if action is Action.DEACTIVATE_NODES:
+            return self._deactivate_nodes(manager, timeout_s)
         request = ManageLifecycleNodes.Request()
         request.command = COMMANDS[action]
         outcome, response = self._call_service(self._manage[manager], request, timeout_s)
         if outcome is not Outcome.OK:
             return outcome
         return Outcome.OK if response is not None and response.success else Outcome.FAILED
+
+    def _deactivate_nodes(self, manager: str, timeout_s: float) -> Outcome:
+        """Deactivates every node of `manager` that is still active (names from its `node_names` parameter)."""
+        deadline = time.monotonic() + timeout_s
+
+        def left():
+            return max(0.1, deadline - time.monotonic())
+
+        request = GetParameters.Request(names=['node_names'])
+        outcome, response = self._call_once(GetParameters, f'/{manager}/get_parameters', request, left())
+        if outcome is not Outcome.OK or not response.values:
+            return Outcome.FAILED if outcome is Outcome.OK else outcome
+        result = Outcome.OK
+        for name in reversed(list(response.values[0].string_array_value)):
+            outcome, state = self._call_once(GetState, f'/{name}/get_state', GetState.Request(),
+                                             min(left(), 2.0))
+            if outcome is not Outcome.OK or state.current_state.id != LifecycleState.PRIMARY_STATE_ACTIVE:
+                continue                    # unreachable or not active: nothing to deactivate
+            change = ChangeState.Request()
+            change.transition.id = Transition.TRANSITION_DEACTIVATE
+            outcome, done = self._call_once(ChangeState, f'/{name}/change_state', change, left())
+            self._log('info', f'{manager}: deactivated {name}: {outcome.value}')
+            if outcome is not Outcome.OK or not done.success:
+                result = Outcome.FAILED
+        return result
 
     def _wait_active(self, manager: str, timeout_s: float) -> Outcome:
         deadline = time.monotonic() + timeout_s

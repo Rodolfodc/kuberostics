@@ -25,6 +25,10 @@ class Action(Enum):
     PAUSE = 'pause'          # deactivate (can be resumed)
     RESET = 'reset'          # deactivate + cleanup
     SHUTDOWN = 'shutdown'    # deactivate + cleanup + shutdown
+    # Deactivate, one by one, every node of the manager that is still active. Needed because the Nav2 manager
+    # of Jazzy aborts PAUSE/RESET at the first node that cannot make the transition (the one that failed to
+    # activate) and leaves the others active.
+    DEACTIVATE_NODES = 'deactivate_nodes'
 
 
 class Outcome(Enum):
@@ -132,6 +136,7 @@ class ManagerSequencer:
         self._abort = False
         self._stop_guard_lost = False
         self._notifications = 0
+        self._codes: List[str] = []
 
     # ------------------------------------------------------------ read-only view
     @property
@@ -143,7 +148,8 @@ class ManagerSequencer:
         return list(self._results)
 
     def metrics(self) -> Dict[str, object]:
-        data: Dict[str, object] = {'state': self._state.value, 'notifications': self._notifications}
+        data: Dict[str, object] = {'state': self._state.value, 'notifications': self._notifications,
+                                   'codes': ','.join(self._codes)}
         for r in self._results:
             data[f'{r.action.value}_{r.manager}_s'] = r.duration_s
             data[f'{r.action.value}_{r.manager}_outcome'] = r.outcome.value
@@ -208,7 +214,7 @@ class ManagerSequencer:
         if spec.role is Role.NAV:
             self._emit(Severity.WARN, 'NAV_UNAVAILABLE',
                        f'{spec.name} did not become active: no automatic motion until it does')
-            self._best_effort(spec.name, Action.RESET)      # a partly started nav stack must not stay active
+            self._deactivate_nav(spec, Action.RESET)         # a partly started nav stack must not stay active
             return State.DEGRADED_NAV
         self._emit(Severity.WARN, 'OPTIONAL_UNAVAILABLE',
                    f'{spec.name} did not become active: running without it (Art. VII)')
@@ -226,7 +232,7 @@ class ManagerSequencer:
         self._emit(Severity.ERROR, 'STOP_GUARD_LOST', 'stop_guard is no longer active: nav deactivated')
         for spec in self._specs:
             if spec.role is Role.NAV:
-                self._best_effort(spec.name, Action.PAUSE)
+                self._deactivate_nav(spec, Action.PAUSE)
         self._set_state(State.DEGRADED_NAV)
 
     # ------------------------------------------------------------ shutdown (005-R37)
@@ -259,12 +265,17 @@ class ManagerSequencer:
         return list(results)
 
     # ------------------------------------------------------------ helpers
+    def _deactivate_nav(self, spec: ManagerSpec, action: Action) -> None:
+        self._best_effort(spec.name, action)
+        self._best_effort(spec.name, Action.DEACTIVATE_NODES)
+
     def _best_effort(self, manager: str, action: Action) -> None:
         outcome = self._call(manager, action, self._startup_timeout_s)
         self._log('info' if outcome is Outcome.OK else 'warn', f'{manager}: {action.value} {outcome.value}')
 
     def _emit(self, severity: Severity, code: str, text: str) -> None:
         self._notifications += 1
+        self._codes.append(code)
         self._log('info', f'notification {severity.name} {code}: {text}')
         self._notify(severity, code, text)
 
