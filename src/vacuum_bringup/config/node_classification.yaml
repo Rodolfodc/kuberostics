@@ -1,0 +1,23 @@
+# Node classification (D-26, 005-R39): the machine-readable copy of the table in docs/lifecycle-managers.md.
+# Keep both in step. test/test_node_classification.py checks that every node of skeleton.launch.py is either
+# listed here (with a reason) or is a lifecycle node named in the node_names of a manager config.
+#
+# kind: manager  - a lifecycle manager (a plain node itself: it is the thing that manages)
+#       plain    - a plain node, with the reason (D-26)
+plain:
+  lifecycle_sequencer: {kind: plain, reason: "only orchestrates the managers; nothing to configure or clean up (D-26)"}
+  lifecycle_manager_core: {kind: manager, reason: "lifecycle manager (Nav2), manages the core nodes"}
+  lifecycle_manager_nav: {kind: manager, reason: "lifecycle manager (Nav2), manages the Nav2 servers"}
+  lifecycle_manager_optional: {kind: manager, reason: "lifecycle manager (Nav2), manages cloud and MQTT nodes"}
+  lifecycle_manager: {kind: manager, reason: "IA368II lifecycle manager, third-party (Art. II)"}
+  twist_mux: {kind: plain, reason: "third-party (Art. II)"}
+  my_robot_cmd_vel_node: {kind: plain, reason: "third-party wheel bridge (Art. II)"}
+  teleop_keyboard: {kind: plain, reason: "third-party teleop_twist_keyboard (Art. II)"}
+# IA368II nodes are lifecycle nodes managed by the IA368II `lifecycle_manager` (its own config, third-party).
+third_party_managed:
+  - myrobot
+  - behaviour_server
+  - cleaning_server
+  - autodocking_server
+  - charging_server
+  - charged_server

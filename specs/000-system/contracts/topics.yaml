@@ -78,6 +78,13 @@ topics:
     qos: default
     owner: supervisor
     since: "001"
+
+  - name: /myRobot/telemetry/lifecycle_sequencer
+    type: diagnostic_msgs/msg/DiagnosticArray
+    qos: default
+    owner: lifecycle_sequencer
+    since: "005"
+    note: "T521: sequencer state (ALL_ACTIVE, DEGRADED_NAV, ...) and step durations, 1 Hz; the supervisor will log when it stops (005-R37, not implemented yet)"
     note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz"
 
   - name: /myRobot/telemetry/stop_guard
@@ -160,6 +167,12 @@ lifecycle:
 
 # Public parameters (Art. I.1). Values are the defaults; the launch file may override them.
 parameters:
+  lifecycle_sequencer:
+    manager_startup_timeout_s: {type: double, default: 30.0, requirement: 005-R35}
+    manager_shutdown_timeout_s: {type: double, default: 15.0, requirement: 005-R37}
+    managers: {type: string_array, default: [lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional], requirement: 005-R35}
+    stop_guard_node: {type: string, default: stop_guard, requirement: 005-R36}
+    telemetry_rate_hz: {type: double, default: 1.0}
   supervisor:
     escape_timeout_s: {type: double, default: 20.0, requirement: 001-R09}
     escape_server_wait_s: {type: double, default: 2.0, requirement: 001-R09, note: "bounded wait for an undiscovered escape server before the stuck event counts as a failed escape; the escape_timeout_s clock is not extended, so a wait longer than escape_timeout_s is cut short by the timeout"}

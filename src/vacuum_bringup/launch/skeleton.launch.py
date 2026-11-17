@@ -1,7 +1,7 @@
 """skeleton.launch.py (T013, spec 001): brings up the whole skeleton with one command (001-R01).
 
     ros2 launch vacuum_bringup skeleton.launch.py [with_ia368ii:=false] [with_wheel_bridge:=false]
-                                                  [with_teleop:=false]
+                                                  [with_teleop:=false] [with_sequencer:=true]
 
 Blocks, each built by its own function:
   - IA368II nodes + their lifecycle manager   (with_ia368ii, default true: 001-R01 asks for them)
@@ -9,6 +9,8 @@ Blocks, each built by its own function:
   - twist_mux                                 (always; the ONLY publisher of /myRobot/cmd_vel, Art. VI)
   - 2025S2 wheel bridge                       (with_ia368ii and with_wheel_bridge; needs CoppeliaSim, D-06)
   - teleop_twist_keyboard                     (with_teleop; needs a terminal on stdin)
+  - lifecycle_sequencer + nav/optional managers (with_sequencer, default false, T521): the three managers start
+    in order core -> nav -> optional (005-R35); lifecycle_manager_core then runs with autostart false
 
 The IA368II packages are not in rosdep (they come from `vcs import`, Art. II), so everything that references
 them is conditional and resolved lazily: this file imports and builds without them, and the launch_testing
@@ -19,6 +21,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
+from launch_ros.descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 CMD_VEL = '/myRobot/cmd_vel'
@@ -59,6 +62,9 @@ def launch_arguments():
                                           'ignored when with_ia368ii is false'),
         DeclareLaunchArgument('with_teleop', default_value='true',
                               description='Start teleop_twist_keyboard (needs a terminal)'),
+        DeclareLaunchArgument('with_sequencer', default_value='false',
+                              description='T521: start lifecycle_sequencer plus lifecycle_manager_nav and '
+                                          '_optional, and let the sequencer (not autostart) start the managers'),
     ]
 
 
@@ -82,7 +88,23 @@ def core_nodes():
         package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_core',
         output='screen',
         parameters=[PathJoinSubstitution([FindPackageShare('vacuum_bringup'), 'config',
-                                          'lifecycle_core.yaml'])]))
+                                          'lifecycle_core.yaml']),
+                    # the YAML says autostart true (stand-alone use); with the sequencer it must be false
+                    {'autostart': ParameterValue(PythonExpression(
+                        ["'", LaunchConfiguration('with_sequencer'), "' != 'true'"]), value_type=bool)}]))
+    return nodes
+
+
+def sequencer_nodes(condition):
+    """T521: the other two managers (autostart false, in their YAML) and the sequencer that starts all three."""
+    def config(name):
+        return PathJoinSubstitution([FindPackageShare('vacuum_bringup'), 'config', name])
+    nodes = [Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name=manager,
+                  output='screen', parameters=[config(f'{manager.replace("lifecycle_manager", "lifecycle")}.yaml')],
+                  condition=condition)
+             for manager in ('lifecycle_manager_nav', 'lifecycle_manager_optional')]
+    nodes.append(Node(package='vacuum_bringup', executable='lifecycle_sequencer', name='lifecycle_sequencer',
+                      output='screen', parameters=[config('lifecycle_sequencer.yaml')], condition=condition))
     return nodes
 
 
@@ -115,10 +137,12 @@ def generate_launch_description():
         ["'", LaunchConfiguration('with_ia368ii'), "' == 'true' and '",
          LaunchConfiguration('with_wheel_bridge'), "' == 'true'"]))
     with_teleop = IfCondition(LaunchConfiguration('with_teleop'))
+    with_sequencer = IfCondition(LaunchConfiguration('with_sequencer'))
     return LaunchDescription([
         *launch_arguments(),
         *ia368ii_nodes(with_ia368ii),
         *core_nodes(),
+        *sequencer_nodes(with_sequencer),
         twist_mux_node(),
         wheel_bridge_node(with_bridge),
         teleop_node(with_teleop),
