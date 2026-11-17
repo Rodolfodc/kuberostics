@@ -11,7 +11,7 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
 from sensor_msgs.msg import CompressedImage, Image
 
-from vacuum_detection.image_codec import encode_jpeg
+from vacuum_detection.image_codec import check_quality, encode_jpeg
 from vacuum_detection.ros_common import QOS_SENSOR, build_diagnostics, node_now_sec, stamp_to_sec
 from vacuum_detection.throttle_core import ThrottleCore
 
@@ -35,10 +35,11 @@ class ImageThrottleNode(LifecycleNode):
         try:
             self._core = ThrottleCore(clock=lambda: node_now_sec(self),
                                       rate_hz=self.get_parameter('image_rate_hz').value, logger=log)
+            self._quality = int(self.get_parameter('jpeg_quality').value)
+            check_quality(self._quality)
         except ValueError as exc:
             log.error(f'invalid configuration: {exc}')
             return TransitionCallbackReturn.FAILURE
-        self._quality = int(self.get_parameter('jpeg_quality').value)
         self._pub = self.create_lifecycle_publisher(
             CompressedImage, self.get_parameter('output_topic').value, QOS_SENSOR)
         self._pub_telemetry = self.create_lifecycle_publisher(
