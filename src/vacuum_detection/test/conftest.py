@@ -1,0 +1,12 @@
+"""Isolates the in-process rclpy tests from every other ROS graph (Art. X).
+
+Discovery is restricted to localhost and the domain ID is picked per process inside the range reserved for this
+package (stubs 10-39, safety 40-69, supervisor 70-99, detection 100-129), before rclpy.init() reads the
+environment, so parallel containers or packages never talk to each other's nodes.
+"""
+import os
+import random
+
+os.environ['ROS_AUTOMATIC_DISCOVERY_RANGE'] = 'LOCALHOST'
+os.environ.pop('ROS_LOCALHOST_ONLY', None)
+os.environ['ROS_DOMAIN_ID'] = str(random.SystemRandom().randrange(100, 130))

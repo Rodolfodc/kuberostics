@@ -4,7 +4,7 @@ import pytest
 np = pytest.importorskip('numpy')
 cv2 = pytest.importorskip('cv2')
 
-from vacuum_detection.image_codec import encode_jpeg   # noqa: E402
+from vacuum_detection.image_codec import check_quality, encode_jpeg   # noqa: E402
 
 
 def solid(h, w, rgb):
@@ -47,3 +47,19 @@ def test_009a_R03_lower_quality_gives_a_smaller_payload():
 def test_009a_R03_unsupported_encoding_is_rejected():
     with pytest.raises(ValueError):
         encode_jpeg(b'\x00' * 16, 2, 2, 8, '32FC1', quality=80)
+
+
+def test_009a_R03_empty_image_raises_value_error_not_a_cv2_error():
+    with pytest.raises(ValueError):
+        encode_jpeg(b'', 0, 0, 0, 'rgb8', quality=80)
+
+
+@pytest.mark.parametrize('quality', [0, 101, -5])
+def test_009a_R03_quality_outside_1_to_100_is_rejected(quality):
+    with pytest.raises(ValueError):
+        check_quality(quality)
+
+
+@pytest.mark.parametrize('quality', [1, 80, 100])
+def test_009a_R03_quality_inside_1_to_100_is_accepted(quality):
+    check_quality(quality)

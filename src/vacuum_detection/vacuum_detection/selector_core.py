@@ -54,6 +54,16 @@ class SelectorCore:
         self.state = state
         self._m['transitions'] += 1
 
+    def restart_grace(self) -> None:
+        """Restarts the grace period of the cloud (call when the node goes active).
+
+        The core may be built long before the node starts receiving; without this a delayed activation would
+        open the breaker at once for a silence the cloud never had the chance to break.
+        """
+        now = self._clock()
+        self._last_good_cloud = now
+        self._last_cloud = now
+
     def tick(self) -> None:
         """Call periodically: detects the silence of the cloud (009a-R08) without needing a response."""
         now = self._clock()

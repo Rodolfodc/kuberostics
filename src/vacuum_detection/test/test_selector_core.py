@@ -501,3 +501,16 @@ def test_009a_R14_snapshot_reports_age_of_last_cloud_response_nan_before_the_fir
     clock.advance(0.1)
     local(core, clock)                      # a local response must not change the cloud age
     assert core.snapshot()['last_cloud_age_s'] == pytest.approx(0.2)
+
+
+def test_009a_R08_restart_grace_counts_the_open_threshold_from_the_restart_not_from_construction():
+    core, clock, events = make()
+    clock.advance(10.0)                     # node configured long before it was activated
+    core.restart_grace()
+    clock.advance(1.0)
+    core.tick()
+    assert core.state == CLOSED and events == []
+    clock.advance(0.6)                      # 1.6 s without a healthy cloud response since the restart
+    core.tick()
+    assert core.state == OPEN
+    assert events == [('WARN', 'CLOUD_DETECTOR_DOWN')]
