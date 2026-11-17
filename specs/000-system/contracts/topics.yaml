@@ -122,7 +122,7 @@ topics:
   - {name: /myRobot/perception/detections/cloud, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detector_cloud, since: "009a", note: "header = image header (timestamp echo); publishes an empty array when nothing is detected"}
   - {name: /myRobot/perception/detections/local, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detector_local, since: "009a"}
   - {name: /myRobot/perception/detections, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detection_selector, max_publishers: 1, since: "009a"}
-  - {name: /myRobot/perception/offload_status, type: vacuum_interfaces/msg/OffloadStatus, qos: ia368ii, owner: detection_selector, since: "009a"}
+  - {name: /myRobot/perception/offload_status, type: vacuum_interfaces/msg/OffloadStatus, qos: ia368ii, owner: detection_selector, since: "009a", note: "R14: published at 1 Hz (parameter status_rate_hz)"}
   - {name: /detections_markers, type: visualization_msgs/msg/MarkerArray, qos: default, owner: projector, frozen: true, since: "009a", note: "format consumed by the 2025S2 semantic node"}
 
 services:
