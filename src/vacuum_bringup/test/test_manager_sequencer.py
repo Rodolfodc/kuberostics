@@ -197,6 +197,25 @@ def test_005_R36_stop_guard_lost_in_failed_core_does_nothing():
     assert (Severity.ERROR, 'STOP_GUARD_LOST') not in rec.notes
 
 
+def test_005_R36_stop_guard_lost_during_startup_is_handled_when_startup_ends():
+    seq, managers, rec, _ = build()
+    managers.after_wait = lambda m: seq.on_stop_guard_lost() if m == NAV else None    # lost while starting nav
+    seq.run_startup()
+    assert (Severity.ERROR, 'STOP_GUARD_LOST') in rec.notes
+    assert (NAV, Action.PAUSE) in pairs(managers)
+    assert (NAV, Action.DEACTIVATE_NODES) in pairs(managers)
+    assert pairs(managers).index((OPT, Action.STARTUP)) < pairs(managers).index((NAV, Action.PAUSE))
+    assert seq.state is State.DEGRADED_NAV
+
+
+def test_005_R36_stop_guard_lost_before_startup_is_not_forgotten():
+    seq, managers, rec, _ = build()
+    seq.on_stop_guard_lost()
+    seq.run_startup()
+    assert (Severity.ERROR, 'STOP_GUARD_LOST') in rec.notes
+    assert (NAV, Action.PAUSE) in pairs(managers)
+
+
 def test_005_R37_shutdown_goes_in_reverse_order_core_last():
     seq, managers, _, _ = build()
     seq.run_startup()

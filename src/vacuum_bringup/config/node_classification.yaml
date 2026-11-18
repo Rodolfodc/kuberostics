@@ -2,6 +2,8 @@
 # Keep both in step. test/test_node_classification.py checks that every node of skeleton.launch.py is either
 # listed here (with a reason) or is a lifecycle node named in the node_names of a manager config.
 #
+# NOTE: the key `plain` lists every node that is NOT a managed lifecycle node, and that includes the lifecycle
+# managers themselves (kind: manager); they are plain nodes by nature.
 # kind: manager  - a lifecycle manager (a plain node itself: it is the thing that manages)
 #       plain    - a plain node, with the reason (D-26)
 plain:

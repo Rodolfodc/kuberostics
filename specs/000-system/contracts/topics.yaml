@@ -78,6 +78,7 @@ topics:
     qos: default
     owner: supervisor
     since: "001"
+    note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz"
 
   - name: /myRobot/telemetry/lifecycle_sequencer
     type: diagnostic_msgs/msg/DiagnosticArray
@@ -85,7 +86,6 @@ topics:
     owner: lifecycle_sequencer
     since: "005"
     note: "T521: sequencer state (ALL_ACTIVE, DEGRADED_NAV, ...) and step durations, 1 Hz; the supervisor will log when it stops (005-R37, not implemented yet)"
-    note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz"
 
   - name: /myRobot/telemetry/stop_guard
     type: diagnostic_msgs/msg/DiagnosticArray

@@ -135,6 +135,7 @@ class ManagerSequencer:
         self._shutdown_results: Optional[List[StepResult]] = None
         self._abort = False
         self._stop_guard_lost = False
+        self._guard_lost_pending = False     # lost before startup finished: handled when it does
         self._notifications = 0
         self._codes: List[str] = []
 
@@ -188,6 +189,9 @@ class ManagerSequencer:
             failed = min(failed, state, key=_SEVERITY_ORDER.index)
         if not self._abort:
             self._set_state(failed)
+            if self._guard_lost_pending:
+                self._guard_lost_pending = False
+                self.on_stop_guard_lost()
         return self._state
 
     def _start_one(self, spec: ManagerSpec) -> StepResult:
@@ -224,9 +228,13 @@ class ManagerSequencer:
     def on_stop_guard_lost(self) -> None:
         if self._stop_guard_lost or self._abort or self._shutdown_results is not None:
             return
-        if self._state in (State.NOT_STARTED, State.FAILED_CORE, State.SHUTTING_DOWN) or \
-                self._state in _STARTING.values():
-            self._log('warn', f'stop_guard lost ignored in state {self._state.value}')
+        if self._state is State.NOT_STARTED or self._state in _STARTING.values():
+            # Art. VI: never drop it. nav must not stay active without the stop lock guarantee.
+            self._log('warn', f'stop_guard lost in state {self._state.value}: handled when startup ends')
+            self._guard_lost_pending = True
+            return
+        if self._state in (State.FAILED_CORE, State.SHUTTING_DOWN):
+            self._log('info', f'stop_guard lost ignored in state {self._state.value} (nav is not running)')
             return
         self._stop_guard_lost = True
         self._emit(Severity.ERROR, 'STOP_GUARD_LOST', 'stop_guard is no longer active: nav deactivated')
