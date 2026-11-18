@@ -361,3 +361,58 @@ sequenceDiagram
   end
   Note over BEH,ESC: if the network fails, tries again the next time it is at the dock<br/>the robot never waits for the cloud to clean
 ```
+
+## 10. Lifecycle managers and node classification (spec 005, D-26)
+
+Three managers of our own (core, nav, optional) plus the unchanged IA368II one, started in order by a plain
+`lifecycle_sequencer`; shutdown goes in reverse with `stop_guard` last. Which nodes are lifecycle or plain, and why:
+`docs/lifecycle-managers.md`. Source: `docs/diagrams/lifecycle-managers.mmd`.
+
+```mermaid
+flowchart TB
+  classDef plain fill:#fff3cd,stroke:#b58900,color:#000
+  classDef life fill:#d4edda,stroke:#2e7d32,color:#000
+  classDef third fill:#eeeeee,stroke:#777,color:#000,stroke-dasharray: 4 3
+
+  LAUNCH(["skeleton.launch.py<br/>starts everything, then the sequencer takes over"])
+
+  subgraph PLAIN["Plain nodes (no state for a manager to control)"]
+    SEQ["lifecycle_sequencer<br/>orchestrates the managers"]:::plain
+    MUX["twist_mux · wheel bridge · teleop<br/>third-party, Art. II"]:::third
+  end
+
+  subgraph IA["IA368II lifecycle_manager (unchanged, own config)"]
+    BEH["behaviour_server · myrobot · servers"]:::life
+  end
+
+  subgraph CORE["1. lifecycle_manager_core · autostart"]
+    SG["stop_guard (first)"]:::life
+    ACT["coverage_server · escape_server · stuck_detector"]:::life
+    SUP["supervisor (last)"]:::life
+    MAPN["room_segmenter · odom_tf_bridge · exploration_server"]:::life
+  end
+
+  subgraph NAV["2. lifecycle_manager_nav · autostart false"]
+    PL["planner_server"]:::life
+    CT["controller_server"]:::life
+    BT["bt_navigator"]:::life
+  end
+
+  subgraph OPT["3. lifecycle_manager_optional · autostart false"]
+    MQ["MQTT bridge etc. (spec 009, empty for now)"]:::life
+  end
+
+  LAUNCH --> MUX
+  LAUNCH --> IA
+  LAUNCH --> SEQ
+  SEQ -- "start, wait is_active" --> CORE
+  CORE -- "then, wait is_active" --> NAV
+  NAV -- "then (when present)" --> OPT
+  SG --> ACT --> SUP
+  PL --> CT
+  BT --> CT
+
+  SEQ -. "shutdown, reverse: optional, nav, core<br/>stop_guard is the last to go down" .-> OPT
+```
+
+Rendered: `docs/diagrams/render/lifecycle-managers.svg`.
