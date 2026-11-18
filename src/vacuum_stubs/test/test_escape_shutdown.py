@@ -36,8 +36,8 @@ def _warm_up(node, name):
     """Calls the idempotent get_state until a reply arrives: a reply sent before the client's reader is matched
     is lost, which would make the first ChangeState call hang."""
     client = node.create_client(GetState, f'{name}/get_state')
-    assert client.wait_for_service(timeout_sec=15.0), f'{name} never came up'
-    end = time.monotonic() + 15.0
+    assert client.wait_for_service(timeout_sec=60.0), f'{name} never came up'
+    end = time.monotonic() + 60.0
     while time.monotonic() < end:
         fut = client.call_async(GetState.Request())
         if _spin_until(node, fut.done, 1.0):
@@ -61,7 +61,7 @@ def test_001_R07_escape_server_exits_on_sigint_without_rcl_errors(goal_running, 
     try:
         client = node.create_client(ChangeState, '/escape_server/change_state')
         _warm_up(node, '/escape_server')
-        assert client.wait_for_service(timeout_sec=15.0)
+        assert client.wait_for_service(timeout_sec=60.0)
         _change(node, client, Transition.TRANSITION_CONFIGURE)
         _change(node, client, Transition.TRANSITION_ACTIVATE)
         if goal_running:

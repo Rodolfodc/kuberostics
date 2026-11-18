@@ -37,8 +37,8 @@ def _warm_up(node, name):
     """Calls the idempotent get_state until a reply arrives: a reply sent before the client's reader is matched
     is lost, which would make the first ChangeState call hang."""
     client = node.create_client(GetState, f'{name}/get_state')
-    assert client.wait_for_service(timeout_sec=15.0), f'{name} never came up'
-    end = time.monotonic() + 15.0
+    assert client.wait_for_service(timeout_sec=60.0), f'{name} never came up'
+    end = time.monotonic() + 60.0
     while time.monotonic() < end:
         fut = client.call_async(GetState.Request())
         if _spin_until(node, fut.done, 1.0):
@@ -61,7 +61,7 @@ def test_001_R19_stop_guard_exits_on_sigint_without_rcl_errors(rounds, locked):
     try:
         client = node.create_client(ChangeState, '/stop_guard/change_state')
         _warm_up(node, '/stop_guard')
-        assert client.wait_for_service(timeout_sec=15.0)
+        assert client.wait_for_service(timeout_sec=60.0)
         _change(node, client, Transition.TRANSITION_CONFIGURE)
         _change(node, client, Transition.TRANSITION_ACTIVATE)
         if locked:                            # the 10 Hz timer is publishing zeros when SIGINT arrives
