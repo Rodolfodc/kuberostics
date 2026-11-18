@@ -25,7 +25,7 @@ depth camera ──▶ projector (depth + TF at the photo timestamp)     │
   `detection_selector` and `projector`.
 - `vacuum_detection/selector_core.py`: the circuit breaker machine as a pure Python class, without ROS, tested with pytest.
   Same pattern as the `SubmodeMachine` of spec 001.
-- `deploy/k8s/`: Deployment, Service and Zenoh router (if Q-06 = a), or bridge (if Q-06 = b).
+- `deploy/k8s/`: Deployment, Service and Zenoh router (if Q-06 = a), or bridge (if Q-06 = b). Proposed default: bridge (T902, see spec, "Robot to cloud transport").
 - `infra/modules/workloads/`: Terraform with the `kubernetes` provider pointing at K3s.
 - `docker/detector/Dockerfile`: with `ARG ROS_DISTRO`, built on the matrix `[jazzy, lyrical]`.
 
@@ -77,6 +77,17 @@ It also checks the monotonicity of the timestamps on `/myRobot/perception/detect
 
 ## Risks
 
-- Q-06 undecided until the measurement. The requirements do not depend on the transport, because health is measured in the application.
+- Q-06: T902 measured both on Lyrical (same host, synthetic). Proposal: `zenoh-bridge-ros2dds`, awaiting the project owner; the requirements do not depend on the transport, because health is measured in the application. Missing: Jazzy, real Wi-Fi, detector inference time, CPU (T919 to T922).
+- On a lossy link the bridge's age tail (p99 about 0.57 to 0.58 s depending on the percentile convention, max 0.62 s, without inference) is above `close_threshold_s` (0.5 s) and 45 ms from `max_age_s` (0.67 s): the breaker is expected to reclose with difficulty or stay on local. Thresholds are not changed here; re-tuning them for the bridge, or reconsidering `rmw_zenoh`, is a decision for the project owner if the real link is lossy (see the spec).
 - yolo11n on the robot CPU, even at 2 Hz, may compete with SLAM. Mitigation: measure in week 3 and reduce the resolution if needed.
 - Exact format of the `MarkerArray` expected by the 2025S2 semantic node to be confirmed (T903).
+
+## Transport (Q-06), T902 result and what depends on it
+
+- If the owner confirms the bridge: T911 declares in `deploy/k8s/` and Terraform a Pod with the detector plus a bridge sidecar
+  (allow-list: the two perception topics, R19), exposed by Service/NodePort; the robot runs one bridge with the same
+  allow-list (never `mux` or `cmd_vel` topics; the bridge is a new robot process outside `lifecycle_manager_core`, and cleaning must continue if it dies); the robot's local graph stays on CycloneDDS with localhost discovery as in the T902 bench.
+- If the owner chooses `rmw_zenoh`: T911 declares `rmw_zenohd` in the cluster and the cloud node with `RMW_IMPLEMENTATION=rmw_zenoh_cpp`;
+  the robot needs its own router and per-node RMW, with the ACL to meet R19, and Art. VI/X must be re-examined (a different
+  RMW for perception nodes only, two versions to qualify).
+- The measurements that would settle it are T919 (Jazzy), T920 (real Wi-Fi), T921 (inference time and CPU).
