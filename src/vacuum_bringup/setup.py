@@ -23,5 +23,8 @@ setup(
     maintainer_email='rodolfo.dalla.costa@hotmail.com',
     description='Launch files and configuration of the system',
     license='Apache-2.0',
-    entry_points={'console_scripts': []},
+    entry_points={'console_scripts': [
+        'lifecycle_sequencer = vacuum_bringup.sequencer_node:main',
+        'dummy_lifecycle_node = vacuum_bringup.dummy_lifecycle_node:main',
+    ]},
 )
