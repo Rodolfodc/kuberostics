@@ -113,22 +113,29 @@ def system():
     executor.add_node(harness)
     thread = threading.Thread(target=executor.spin, daemon=True)
     thread.start()
-    sup.trigger_configure()
-    sup.trigger_activate()
-    assert wait_for(lambda: harness.submode is not None), 'supervisor never published a submode'
-    # the late-server behaviour is covered by test_supervisor_escape_race.py; here every test starts after the
-    # supervisor has discovered both action servers of the harness, to stay fast and deterministic
-    assert wait_for(lambda: sup._cover_client.server_is_ready() and sup._escape_client.server_is_ready()), \
-        'supervisor never discovered the action servers'
-    yield sup, harness
-    harness.closing = True
-    sup.trigger_deactivate()
-    sup.trigger_cleanup()
-    executor.shutdown()
-    sup.destroy_node()
-    harness.destroy_node()
-    rclpy.try_shutdown()
-    thread.join(timeout=2)
+    try:
+        sup.trigger_configure()
+        sup.trigger_activate()
+        assert wait_for(lambda: harness.submode is not None, 30.0), 'supervisor never published a submode'
+        # the late-server behaviour is covered by test_supervisor_escape_race.py; here every test starts after
+        # the supervisor has discovered both action servers of the harness, to stay fast and deterministic
+        # (discovery lags on a loaded runner: condition wait with a generous bound)
+        assert wait_for(lambda: sup._cover_client.server_is_ready() and sup._escape_client.server_is_ready(),
+                        30.0), 'supervisor never discovered the action servers'
+        yield sup, harness
+    finally:
+        # always tear down: a failed setup must not leave the context initialised for the next test
+        harness.closing = True
+        try:
+            sup.trigger_deactivate()
+            sup.trigger_cleanup()
+        except Exception:                   # noqa: B902 - state may already be unconfigured after a failed setup
+            pass
+        executor.shutdown()
+        sup.destroy_node()
+        harness.destroy_node()
+        rclpy.try_shutdown()
+        thread.join(timeout=2)
 
 
 def cover_until_covering(h):

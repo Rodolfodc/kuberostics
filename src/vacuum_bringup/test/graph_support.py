@@ -282,17 +282,24 @@ def start_cleaning(tc, probe: Probe) -> None:
 
 
 def provoke_stuck(tc, probe: Probe) -> float:
-    """Calls the stuck_detector stub; returns the time just before the call.
+    """Calls the stuck_detector stub; returns the time just before the (last) call.
 
-    The stub publishes one StuckEvent per call. If it does so before the supervisor's subscription is matched
-    the event is lost (seen on a 1-CPU runner: the supervisor stayed in COVERING), so the graph must show the
-    supervisor subscribed to /myRobot/stuck first (condition wait, the 0.5 s assertion is untouched)."""
+    The stub publishes ONE StuckEvent per call. DDS only delivers it to readers its writer has already matched;
+    on a loaded 1-CPU runner the supervisor's reader can still be unmatched 2 s after it was created (seen:
+    "stuck event published" in the log, supervisor stayed in COVERING, nothing ignored or late). That is a lost
+    event, not a slow supervisor, so the call is repeated while the supervisor has shown no sign of the event
+    (no ESCAPING) after the full 001-R07 budget; the latency assertion in `assert_escaping_within` is applied,
+    unchanged, to the call that was delivered."""
     tc.assertTrue(probe.wait_for(lambda: probe.node.count_subscribers('/myRobot/stuck') >= 1, 30.0),
                   'nobody subscribed to /myRobot/stuck')
     time.sleep(0.5)                       # the publisher side of that match is discovered a moment later
-    t0 = time.monotonic()
-    response = probe.trigger('/myRobot/stuck_detector/trigger')
-    tc.assertTrue(response.success, response.message)
+    for _ in range(6):
+        t0 = time.monotonic()
+        response = probe.trigger('/myRobot/stuck_detector/trigger')
+        tc.assertTrue(response.success, response.message)
+        if probe.wait_for(lambda: probe.first_submode_time('ESCAPING', t0) is not None,
+                          0.5 + LOAD_MARGIN_S + 0.5):
+            return t0
     return t0
 
 
