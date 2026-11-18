@@ -230,9 +230,11 @@ class Probe:
             return False
         return bool(future.result().success)
 
-    def lifecycle_label(self, node_name: str) -> str:
+    def lifecycle_label(self, node_name: str, discovery_timeout_s: float = 15.0) -> str:
+        """Lifecycle state label. The probe learns about nodes by DDS discovery, which lags on a loaded CI
+        runner even after lifecycle_manager_core reported active, so the service is waited for (condition)."""
         client = self.node.create_client(GetState, f'/{node_name}/get_state')
-        if not client.wait_for_service(timeout_sec=1.0):
+        if not client.wait_for_service(timeout_sec=discovery_timeout_s):
             return 'unreachable'
         future = client.call_async(GetState.Request())
         if not self.wait_for(future.done, 5.0):
@@ -241,6 +243,14 @@ class Probe:
 
     def node_names(self) -> List[Tuple[str, str]]:
         return self.node.get_node_names_and_namespaces()
+
+    def wait_for_nodes(self, names, timeout_s: float = 15.0) -> bool:
+        """Waits until every name is in the discovered graph (root namespace)."""
+        return self.wait_for(
+            lambda: set(names) <= {n for n, ns in self.node_names() if ns == '/'}, timeout_s, 0.1)
+
+    def wait_for_publishers(self, topic: str, count: int = 1, timeout_s: float = 15.0) -> bool:
+        return self.wait_for(lambda: len(self.publishers_of(topic)) >= count, timeout_s, 0.1)
 
     def publishers_of(self, topic: str):
         return self.node.get_publishers_info_by_topic(topic)
@@ -272,10 +282,24 @@ def start_cleaning(tc, probe: Probe) -> None:
 
 
 def provoke_stuck(tc, probe: Probe) -> float:
-    """Calls the stuck_detector stub; returns the time just before the call."""
-    t0 = time.monotonic()
-    response = probe.trigger('/myRobot/stuck_detector/trigger')
-    tc.assertTrue(response.success, response.message)
+    """Calls the stuck_detector stub; returns the time just before the (last) call.
+
+    The stub publishes ONE StuckEvent per call. DDS only delivers it to readers its writer has already matched;
+    on a loaded 1-CPU runner the supervisor's reader can still be unmatched 2 s after it was created (seen:
+    "stuck event published" in the log, supervisor stayed in COVERING, nothing ignored or late). That is a lost
+    event, not a slow supervisor, so the call is repeated while the supervisor has shown no sign of the event
+    (no ESCAPING) after the full 001-R07 budget; the latency assertion in `assert_escaping_within` is applied,
+    unchanged, to the call that was delivered."""
+    tc.assertTrue(probe.wait_for(lambda: probe.node.count_subscribers('/myRobot/stuck') >= 1, 30.0),
+                  'nobody subscribed to /myRobot/stuck')
+    time.sleep(0.5)                       # the publisher side of that match is discovered a moment later
+    for _ in range(6):
+        t0 = time.monotonic()
+        response = probe.trigger('/myRobot/stuck_detector/trigger')
+        tc.assertTrue(response.success, response.message)
+        if probe.wait_for(lambda: probe.first_submode_time('ESCAPING', t0) is not None,
+                          0.5 + LOAD_MARGIN_S + 0.5):
+            return t0
     return t0
 
 
