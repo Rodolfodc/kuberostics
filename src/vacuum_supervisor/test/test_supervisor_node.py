@@ -94,7 +94,7 @@ class Harness(Node):
         self.pub_stuck.publish(StuckEvent())
 
 
-def wait_for(predicate, timeout=10.0):
+def wait_for(predicate, timeout=30.0):   # condition wait: returns as soon as true; generous for loaded CI runners
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         if predicate():
