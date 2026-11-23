@@ -271,6 +271,11 @@ def start_cleaning(tc, probe: Probe) -> None:
     time.sleep(1.0)
     tc.assertTrue(probe.wait_for(lambda: probe.last_submode() == 'NONE', 10.0),
                   f'supervisor did not publish NONE while IDLE (last: {probe.last_submode()!r})')
+    # Warm-up of the stuck path while the supervisor is in NONE (it ignores the event there). DDS delivers a
+    # sample published before the reader/writer match only after the match completes (seen: ESCAPING 1.3 s after
+    # the call on a loaded runner), so the match is completed here, outside any timed assertion.
+    probe.trigger('/myRobot/stuck_detector/trigger')
+    time.sleep(1.5)
     t0 = probe.set_mode('CLEANING')
     tc.assertTrue(probe.wait_for(lambda: probe.last_submode() == 'COVERING', 5.0),
                   f'COVERING never published (submodes: {probe.submodes(t0)})')
