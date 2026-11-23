@@ -21,6 +21,8 @@ from vacuum_stubs.coverage_server_node import CoverageServerNode  # noqa: E402
 from vacuum_stubs.escape_server_node import EscapeServerNode  # noqa: E402
 from vacuum_stubs.stuck_detector_node import StuckDetectorNode  # noqa: E402
 
+QOS_BUFFERED = QoSProfile(depth=100, reliability=ReliabilityPolicy.RELIABLE,
+                          durability=DurabilityPolicy.VOLATILE)
 QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.VOLATILE)
 
 
@@ -82,7 +84,10 @@ def make_system(node_cls, params=()):
 
 def collect_twists(h, topic):
     got = []
-    h.probe.create_subscription(Twist, topic, lambda m: got.append((time.monotonic(), m)), QOS)
+    # depth 100, not the contract's 1: with keep-last 1 a stalled probe thread drops the samples of a short
+    # phase (seen on a CI runner: the 0.3 s turn phase of the escape script was never observed). The writer's
+    # QoS (reliable, volatile) is unchanged; the depth is the test's own buffer.
+    h.probe.create_subscription(Twist, topic, lambda m: got.append((time.monotonic(), m)), QOS_BUFFERED)
     return got
 
 
