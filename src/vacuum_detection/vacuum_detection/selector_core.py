@@ -9,6 +9,7 @@ Order applied to each response: (1) health tracking and breaker transitions (clo
 (2) source gate (009a-R07), (3) age filter (009a-R05), (4) watermark filter (009a-R06).
 """
 import logging
+import math
 from typing import Any, Callable, Dict, Optional
 
 CLOSED = 'CLOSED'
@@ -39,17 +40,29 @@ class SelectorCore:
         self._last_good_cloud = clock()   # CLOSED: the grace period counts from startup
         self._last_cloud = clock()        # HALF_OPEN: arrival of the previous cloud response
         self._stable_since = 0.0
+        self._last_cloud_age = math.nan   # for OffloadStatus (009a-R14)
         self._m = {'forwarded': 0, 'dropped_stale': 0, 'dropped_watermark': 0,
                    'dropped_inactive': 0, 'transitions': 0}
 
     def snapshot(self) -> Dict[str, Any]:
         """State plus counters, for OffloadStatus and the periodic telemetry."""
-        return {'state': self.state, 'watermark': self.watermark, **self._m}
+        return {'state': self.state, 'watermark': self.watermark,
+                'last_cloud_age_s': self._last_cloud_age, **self._m}
 
     def _go(self, state: str, why: str) -> None:
         self._log.info(f'selector {self.state} -> {state}: {why}')
         self.state = state
         self._m['transitions'] += 1
+
+    def restart_grace(self) -> None:
+        """Restarts the grace period of the cloud (call when the node goes active).
+
+        The core may be built long before the node starts receiving; without this a delayed activation would
+        open the breaker at once for a silence the cloud never had the chance to break.
+        """
+        now = self._clock()
+        self._last_good_cloud = now
+        self._last_cloud = now
 
     def tick(self) -> None:
         """Call periodically: detects the silence of the cloud (009a-R08) without needing a response."""
@@ -86,6 +99,7 @@ class SelectorCore:
         return True
 
     def _track_cloud(self, now: float, age: float) -> None:
+        self._last_cloud_age = age
         self.tick()                                                 # silence before this response counts
         if self.state == CLOSED:
             if age <= self.max_age_s:                               # health = would be forwarded
