@@ -1,4 +1,4 @@
-"""Support code of the live-graph launch_testing tests (T014, spec 001). Not a test module.
+"""Support code of the live-graph launch_testing tests (spec 001). Not a test module.
 
 `Probe` is a rclpy node plus recorders running in its own executor thread. It plays the role of the
 orchestrator (publishes /myRobot/behaviour/mode like `behaviour_server`, since the tests run without IA368II)
@@ -44,7 +44,7 @@ STARTUP_TIMEOUT_S = 60.0
 LOAD_MARGIN_S = 0.5
 
 
-# Isolation from every other ROS graph (Art. X, same approach as the conftest.py of PR #7 / T020).
+# Isolation from every other ROS graph (Art. X, same approach as the conftest.py of the other packages).
 # Domain ID ranges per package: vacuum_stubs 10-39, vacuum_safety 40-69, vacuum_supervisor 70-99,
 # vacuum_bringup (these live-graph tests) 100-129. The base is random, chosen once per process; each test
 # module takes the next ID in the range, so graphs of consecutive modules never overlap. Discovery is
@@ -264,7 +264,7 @@ def start_cleaning(tc, probe: Probe) -> None:
     """Scenario 1 (001-R06): mode CLEANING -> COVERING within 0.5 s, and the coverage stub moves the robot."""
     tc.assertTrue(probe.wait_for_discovery(), 'supervisor never subscribed to /myRobot/behaviour/mode')
     # the supervisor's action clients must have discovered both servers: it treats an escape server it does
-    # not see yet as a failed escape (task T021, branch fix/supervisor-escape-race)
+    # not see yet as a failed escape (the supervisor escape race, see test_supervisor_escape_race.py)
     for action, action_type in (('/myRobot/cover_room', CoverRoom), ('/myRobot/escape', Escape)):
         tc.assertTrue(ActionClient(probe.node, action_type, action).wait_for_server(timeout_sec=15.0),
                       f'{action} server not available')
@@ -281,7 +281,7 @@ def start_cleaning(tc, probe: Probe) -> None:
                   f'COVERING never published (submodes: {probe.submodes(t0)})')
     delay = probe.first_submode_time('COVERING', t0) - t0
     tc.assertLessEqual(delay, 0.5 + LOAD_MARGIN_S, f'COVERING after {delay:.2f} s (001-R06 asks for 0.5 s)')
-    # the goal reached coverage_server: it drives forward through the mux (linear_x 0.15, T010)
+    # the goal reached coverage_server: it drives forward through the mux (linear_x 0.15, the coverage_server stub)
     tc.assertTrue(probe.wait_for(lambda: any(v[0] == 0.15 for v in probe.cmd_vel(t0)), 5.0),
                   'no coverage velocity on /myRobot/cmd_vel: cover_room goal not served')
 

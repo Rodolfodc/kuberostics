@@ -1,4 +1,4 @@
-"""T006: SubmodeMachine tests, one row of the transition table per case.
+"""SubmodeMachine tests, one row of the transition table per case.
 
 Each test cites the requirement it verifies (Art. VIII). No ROS: the logic is pure Python.
 """

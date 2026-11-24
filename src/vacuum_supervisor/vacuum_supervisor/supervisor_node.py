@@ -1,4 +1,4 @@
-"""`supervisor` LifecycleNode (T009, spec 001): thin glue between ROS and `SubmodeMachine`.
+"""`supervisor` LifecycleNode (spec 001): thin glue between ROS and `SubmodeMachine`.
 
 All decisions live in `SubmodeMachine` (pure Python). This node only wires topics, actions and the
 service to the machine and executes the `Effect`s it returns (D-18). Logs go through the node logger
@@ -11,7 +11,7 @@ import rclpy
 from action_msgs.msg import GoalStatus
 from builtin_interfaces.msg import Time
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical (T021).
+# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical.
 from rclpy._rclpy_pybind11 import RCLError
 from rclpy.action import ActionClient
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
@@ -35,7 +35,7 @@ class SupervisorNode(LifecycleNode):
         super().__init__(node_name, **kwargs)
         self.declare_parameter('escape_timeout_s', 20.0)      # 001-R09
         # How long a stuck event waits for a not yet discovered escape server before it counts as a failed
-        # escape (T021). The escape_timeout_s clock (001-R09) starts at the stuck event, not after this wait.
+        # escape. The escape_timeout_s clock (001-R09) starts at the stuck event, not after this wait.
         self.declare_parameter('escape_server_wait_s', 2.0)
         self.declare_parameter('publish_rate_hz', 5.0)        # submode and lock, plan 001
         self.declare_parameter('telemetry_rate_hz', 1.0)      # D-20
@@ -208,7 +208,7 @@ class SupervisorNode(LifecycleNode):
         self._try_send_escape()
 
     def _try_send_escape(self) -> None:
-        """Sends the escape goal once the server is discovered; gives up after `escape_server_wait_s` (T021).
+        """Sends the escape goal once the server is discovered; gives up after `escape_server_wait_s`.
 
         Called right away and then from the periodic tick, so the executor is never blocked.
         """
@@ -302,7 +302,7 @@ def main(args=None) -> None:
         executor.shutdown()
         try:
             node.destroy_node()
-        except RCLError:                         # the context was already invalidated by SIGINT (T021)
+        except RCLError:                         # the context was already invalidated by SIGINT
             pass
         rclpy.try_shutdown()
 

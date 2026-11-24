@@ -1,4 +1,4 @@
-"""`detection_selector` LifecycleNode (T907, spec 009a): thin glue over `SelectorCore`.
+"""`detection_selector` LifecycleNode (spec 009a): thin glue over `SelectorCore`.
 
 All decisions (circuit breaker, age and watermark filters) live in the pure core. This node only converts
 messages to (source, stamp), republishes what the core forwards, publishes `OffloadStatus` (R14) and the

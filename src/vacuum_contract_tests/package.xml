@@ -3,7 +3,7 @@
 <package format="3">
   <name>vacuum_contract_tests</name>
   <version>0.1.0</version>
-  <description>Contract tests (spec 001, T005): read topics.yaml and check the live graph for existence, type, QoS, max_publishers and sink topics. The live part runs only with VACUUM_CONTRACT_LIVE=1.</description>
+  <description>Contract tests (spec 001): read topics.yaml and check the live graph for existence, type, QoS, max_publishers and sink topics. The live part runs only with VACUUM_CONTRACT_LIVE=1.</description>
   <maintainer email="rodolfo.dalla.costa@hotmail.com">Rodolfo Dalla Costa</maintainer>
   <license>Apache-2.0</license>
 

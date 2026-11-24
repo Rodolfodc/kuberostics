@@ -1,4 +1,4 @@
-"""`stuck_detector` stub LifecycleNode (T012, 001-R07): each /myRobot/stuck_detector/trigger call publishes one
+"""`stuck_detector` stub LifecycleNode (001-R07): each /myRobot/stuck_detector/trigger call publishes one
 StuckEvent on /myRobot/stuck. Real detection is spec 005."""
 import rclpy
 from rclpy.executors import MultiThreadedExecutor

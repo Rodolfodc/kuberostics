@@ -2,10 +2,10 @@
 
 Not run by default: without a graph they are SKIPPED, with a reason. To run them:
 
-    ros2 launch vacuum_bringup skeleton.launch.py with_teleop:=false &     # T013
+    ros2 launch vacuum_bringup skeleton.launch.py with_teleop:=false &     # the skeleton launch
     VACUUM_CONTRACT_LIVE=1 python3 -m pytest src/vacuum_contract_tests/test/test_live_graph.py
 
-With VACUUM_CONTRACT_LIVE=1 and no graph the tests FAIL (T005: "must fail while the launch does not exist").
+With VACUUM_CONTRACT_LIVE=1 and no graph the tests FAIL (a missing launch must fail the check, not pass it).
 Knobs: VACUUM_CONTRACT_WITH_SIM=1 also expects the CoppeliaSim sensor topics (/scan, /camera, ...);
 VACUUM_CONTRACT_SETTLE_S (default 4) is the DDS discovery wait; VACUUM_TOPICS_YAML overrides the contract.
 Needs the IA368II nodes (launch default with_ia368ii:=true); topics of absent owners are reported as missing.

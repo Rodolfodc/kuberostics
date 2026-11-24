@@ -1,4 +1,4 @@
-"""T021: the supervisor does not treat a not yet discovered escape server as an immediate failed escape.
+"""The supervisor does not treat a not yet discovered escape server as an immediate failed escape.
 
 Regression of a race found by the node tests: `_send_escape` checked `server_is_ready()` once and, on a miss,
 reported a failed escape (lock + ESCAPE_FAILED, 001-R09) although the server was only seconds from being

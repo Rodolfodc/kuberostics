@@ -1,4 +1,4 @@
-"""T521: 005-R39 (and the static part of 005-R35): every node of skeleton.launch.py that is not on the plain list
+"""Node classification test: 005-R39 (and the static part of 005-R35): every node of skeleton.launch.py that is not on the plain list
 (config/node_classification.yaml, the copy of docs/lifecycle-managers.md) must be a lifecycle node named in the
 node_names of a lifecycle manager config. The launch description is built, never launched.
 """

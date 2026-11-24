@@ -1,4 +1,4 @@
-"""T306 (part): RoomTracker tests (003-R19, R20). Label rasters are hand-made, resolution 1 m per cell
+"""RoomTracker tests (003-R19, R20). Label rasters are hand-made, resolution 1 m per cell
 so that areas equal cell counts."""
 import dataclasses
 
