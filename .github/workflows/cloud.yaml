@@ -1,36 +1,19 @@
 name: cloud
-# Cloud side (009a-R17, R18): detector image per ROS distro and offline validation of Terraform and manifests.
+# Cloud side (009a-R17): offline validation of Terraform and manifests. The ~5 GB detector image is NOT built here (local only,
+# see docs in infra/README.md); GitHub Actions on the free plan is not the place for it.
 # Separate from ci.yaml on purpose. No cluster, no apply, no secrets, no weights.
 on:
   push:
     paths: ['docker/detector/**', 'deploy/**', 'infra/**', 'scripts/check-cloud.sh', 'scripts/check_cloud_manifests.py',
-            'scripts/test-chaos-tools.sh', 'tools/chaos/**', 'tools/tf.sh', 'compose.yaml', 'src/vacuum_detection/**',
+
             'src/vacuum_interfaces/**', '.github/workflows/cloud.yaml']
   pull_request:
     paths: ['docker/detector/**', 'deploy/**', 'infra/**', 'scripts/check-cloud.sh', 'scripts/check_cloud_manifests.py',
-            'scripts/test-chaos-tools.sh', 'tools/chaos/**', 'tools/tf.sh', 'compose.yaml', 'src/vacuum_detection/**',
+
             'src/vacuum_interfaces/**', '.github/workflows/cloud.yaml']
 permissions:
   contents: read
 jobs:
-  detector-image:
-    name: detector image (${{ matrix.distro }})
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false   # a failure on one distro must not hide the other (Art. X)
-      matrix:
-        distro: [jazzy, lyrical]
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Build the detector image
-        run: docker build -f docker/detector/Dockerfile --build-arg ROS_DISTRO=${{ matrix.distro }} -t vacuum-detector:${{ matrix.distro }} .
-      # The image imports its Python stack, the overlay builds, and the image carries no weights.
-      - name: Smoke test
-        run: |
-          docker run --rm --entrypoint /opt/detector/entrypoint.sh vacuum-detector:${{ matrix.distro }} \
-            python3 -c "import torch, ultralytics, cv2, rclpy; print(torch.__version__, ultralytics.__version__, cv2.__version__)"
-          docker run --rm --entrypoint /opt/detector/entrypoint.sh vacuum-detector:${{ matrix.distro }} ros2 pkg prefix vacuum_detection
-          test -z "$(docker run --rm --entrypoint sh vacuum-detector:${{ matrix.distro }} -c 'find / -xdev \( -name "*.pt" -o -name "*.onnx" \) -size +1M 2>/dev/null | grep -v /opt/venv')"
   manifests:
     name: terraform and manifests
     runs-on: ubuntu-latest

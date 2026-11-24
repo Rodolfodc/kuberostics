@@ -14,6 +14,16 @@ project's own kubeconfig). `apply`, `destroy` and `delete` need the user's confi
 | `../deploy/bridge/*.json5` | `zenoh-bridge-ros2dds` allow-lists (R19): `robot.json5` and `bridge-cloud.json5` |
 | `../docker/detector` | detector image, `ARG ROS_DISTRO` |
 
+## Detector image: built locally, never on GitHub Actions
+
+The image is about 5 GB (CPU torch, ultralytics, ROS). CI (`.github/workflows/cloud.yaml`) only validates Terraform and manifests.
+Build it by hand, one distro at a time (Art. X), from the repository root:
+
+```bash
+docker build -f docker/detector/Dockerfile --build-arg ROS_DISTRO=jazzy  -t vacuum-detector:jazzy  .
+docker build -f docker/detector/Dockerfile --build-arg ROS_DISTRO=lyrical -t vacuum-detector:lyrical .
+```
+
 ## Transport (Q-06): an assumption
 
 The project owner has **not** confirmed Q-06. `variable "transport"` is the switch:
