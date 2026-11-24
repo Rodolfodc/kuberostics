@@ -67,14 +67,15 @@ Source: T902, `deploy/measurements/robot-cloud-transport-benchmark.md` (PR of br
 Dependency: the selector rulings quoted below (health uses `max_age_s`, the invariant, HALF_OPEN silence) exist only in
 PR #13; **merge PR #13 first**. This section also must not merge before PR #16 (T902) is settled.
 
-The figures below were recomputed from the committed CSVs (`deploy/measurements/transport-benchmark/*.csv`) with the stated subset and
-convention, and may be updated by the final summary of PR #16.
+The figures below (also in `deploy/measurements/transport-benchmark/stats.md`) were computed from raw CSVs kept locally (not
+versioned, per the rule that generated artifacts stay out of git) by `scripts/transport_bench_stats.py`, with the stated subset and
+convention; re-running `scripts/transport-bench.sh` and then the script regenerates them. They may be updated by the final summary of PR #16.
 
 ### What was measured (Lyrical only)
 
 `rmw_zenoh` 0.10.6 against `zenoh-bridge-ros2dds` 1.10.2, 640x480 JPEG (80 kB, synthetic) at 2 Hz, round trip =
 robot clock at reception minus the `header.stamp` echoed by a stand-in detector (the age of R05, without inference time),
-one run per cell, robot and K3s Pod on the same host. Each wan CSV has 607 numeric rows (608 lines, one empty). Two
+one run per cell, robot and K3s Pod on the same host. Each wan raw CSV has 607 numeric rows (608 lines, one empty). Two
 subsets and conventions were computed: (A) the first 600 rows with the bench's index method `sorted[int(p/100*n)]`
 (the figures of the T902 summary), and (B) all 607 rows with linear interpolation (`statistics.quantiles`, inclusive).
 Values are rounded to 1 ms because one run does not support more.
@@ -87,7 +88,7 @@ Values are rounded to 1 ms because one run does not support more.
 The p99 depends on the convention and the subset (bridge 566 to 580 ms, `rmw_zenoh` 366 to 408 ms): quote it as "about
 0.57 to 0.58 s" for the bridge; in both conventions it is above 0.5 s. The lan cells (p50 4.05 ms `rmw_zenoh`, 5.15 ms
 bridge; p99 4.67 and 5.89 ms) are quoted from the T902 summary and were not recomputed here. Neither transport lost an image
-(both over TCP) nor reordered. From the bridge wan CSV: 42 of 607 responses (6.9 %) exceed 0.5 s, none exceed 0.67 s;
+(both over TCP) nor reordered. From the bridge wan raw CSV: 42 of 607 responses (6.9 %) exceed 0.5 s, none exceed 0.67 s;
 68 % of the windows of 6 consecutive responses (3 s at 2 Hz) are entirely at or below 0.5 s. For `rmw_zenoh`, none exceed 0.5 s.
 
 Limits: same-host lower bound (not Wi-Fi), synthetic image, a single run per cell, `wan` is a netem model on the uplink

@@ -94,7 +94,7 @@ The complete machine-readable list is in `contracts/topics.yaml`.
 - Q-01: CoppeliaSim version and path of the *House* scene. The object names (`/myRobot/leftMotor`)
   must match the 2025S2 scene.
 - ~~Q-02~~: closed by D-13.
-- Q-04 (answered partially, T003b, `deploy/measurements/t003b-ia368ii.md`): *yes for the orchestrator, no for `my_robot_pkg`
+- Q-04 (answered partially, T003b, `deploy/measurements/ia368ii-lyrical-jazzy-bringup.md`): *yes for the orchestrator, no for `my_robot_pkg`
   on Lyrical until the logger incompatibility is handled under Art. II.* Pin `51a5fa2c`, Docker, no simulator:
   the three packages (`myrobot_interfaces`, `myrobot_bringup`, `my_robot_pkg`) build on Jazzy and Lyrical; the upstream
   `bringup.launch.py` brings up six nodes plus `lifecycle_manager`, all active and mode `CHARGED`, on both. Of the 11
@@ -140,7 +140,7 @@ The complete machine-readable list is in `contracts/topics.yaml`.
   the same host (`rmw_zenoh` 0.10.6, bridge 1.10.2; the versions above were not re-verified), p50 RTT in ms:
   lan 4.05 (`rmw_zenoh`) against 5.15 (bridge); wan (netem 20 ms +/- 5 ms, 1 % loss, uplink) about 150 against 393;
   wan p99 about 366 to 408 against 566 to 580 (the range is the subset and convention: all 607 numeric rows with
-  linear interpolation, or the first 600 rows with the bench's index method; recomputed from the CSVs, may be updated by the
+  linear interpolation, or the first 600 rows with the bench's index method; computed from raw CSVs kept locally and not versioned, may be updated by the
   final T902 summary, see spec 009a); no loss or reordering. Recommendation: the bridge, for structural
   reasons (allow-list enforces 009a-R03, motion loop stays on DDS, one binary for both distros; Art. VI and X);
   `rmw_zenoh` is better on a lossy link. Warning: the bridge's p99 on the lossy link (0.58 s) is above
