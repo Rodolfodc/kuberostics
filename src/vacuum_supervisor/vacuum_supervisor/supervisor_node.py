@@ -50,7 +50,7 @@ class SupervisorNode(LifecycleNode):
         # 005-R30: rows of the plan "Supervisor: new rows"; off until amendment A2 of spec 001 is applied.
         self.declare_parameter('dock_after_coverage', False)
         self.declare_parameter('dock_request_timeout_s', 30.0)
-        # T520: in CLEANING the IA368II behaviour_server answers "stop" with AUTODOCKING (and sets
+        # 005-R30: in CLEANING the IA368II behaviour_server answers "stop" with AUTODOCKING (and sets
         # stop_requested, so after charging it ends in CHARGED instead of resuming CLEANING).
         self.declare_parameter('start_stop_service', '/myRobot/start_stop')
         self.declare_parameter('dock_command', 'stop')
