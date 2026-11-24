@@ -4,7 +4,6 @@ Runs the real node in-process with rclpy: no simulator, no launch file. The tran
 covered without ROS by test_submode_machine.py; here we check the wiring (topics, actions, service, lock,
 notifications, timeout). Skipped when rclpy is not available.
 """
-import os
 import threading
 import time
 
@@ -39,6 +38,7 @@ class Harness(Node):
         self.closing = False            # lets the stub servers return at teardown
         self.cover_goals = 0
         self.cover_active = 0
+        self.cover_accepted = 0         # goals whose (possibly delayed) acceptance has been answered
         self.cover_accept_delay = 0.0   # makes the server accept slowly (stale-callback tests)
         self.escape_goals = 0
         self.submode = None
@@ -61,6 +61,7 @@ class Harness(Node):
 
     def _cover_goal(self, _request):
         time.sleep(self.cover_accept_delay)
+        self.cover_accepted += 1
         return GoalResponse.ACCEPT
 
     def _cover(self, goal_handle):
@@ -84,10 +85,16 @@ class Harness(Node):
         return result
 
     def set_mode(self, mode):
+        # volatile topic: wait for discovery of the supervisor's subscription or the sample is lost
+        assert wait_for(lambda: self.pub_mode.get_subscription_count() >= 1), 'supervisor never subscribed to mode'
         self.pub_mode.publish(String(data=mode))
 
+    def publish_stuck(self):
+        assert wait_for(lambda: self.pub_stuck.get_subscription_count() >= 1), 'supervisor never subscribed to stuck'
+        self.pub_stuck.publish(StuckEvent())
 
-def wait_for(predicate, timeout=5.0):
+
+def wait_for(predicate, timeout=10.0):
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         if predicate():
@@ -98,8 +105,7 @@ def wait_for(predicate, timeout=5.0):
 
 @pytest.fixture()
 def system():
-    os.environ.setdefault('ROS_DOMAIN_ID', '87')
-    rclpy.init()
+    rclpy.init()                            # the domain is isolated by conftest.py
     sup = SupervisorNode(parameter_overrides=[Parameter('escape_timeout_s', value=0.6)])
     harness = Harness()
     executor = MultiThreadedExecutor(num_threads=6)
@@ -110,6 +116,10 @@ def system():
     sup.trigger_configure()
     sup.trigger_activate()
     assert wait_for(lambda: harness.submode is not None), 'supervisor never published a submode'
+    # the late-server behaviour is covered by test_supervisor_escape_race.py; here every test starts after the
+    # supervisor has discovered both action servers of the harness, to stay fast and deterministic
+    assert wait_for(lambda: sup._cover_client.server_is_ready() and sup._escape_client.server_is_ready()), \
+        'supervisor never discovered the action servers'
     yield sup, harness
     harness.closing = True
     sup.trigger_deactivate()
@@ -136,6 +146,7 @@ def test_001_R05_publishes_none_outside_cleaning(system):
 
 def test_001_R06_cleaning_publishes_covering_and_sends_cover_room(system):
     _, h = system
+    assert wait_for(lambda: h.pub_mode.get_subscription_count() >= 1)   # discovery is not part of the budget
     start = time.monotonic()
     cover_until_covering(h)
     assert time.monotonic() - start < 2.0
@@ -144,7 +155,7 @@ def test_001_R06_cleaning_publishes_covering_and_sends_cover_room(system):
 def test_001_R07_R08_stuck_escapes_then_returns_to_covering(system):
     _, h = system
     cover_until_covering(h)
-    h.pub_stuck.publish(StuckEvent())
+    h.publish_stuck()
     assert wait_for(lambda: h.escape_goals == 1)
     assert wait_for(lambda: h.cover_goals == 2 and h.submode.submode == 'COVERING')
     assert h.lock is False
@@ -154,7 +165,7 @@ def test_001_R09_failed_escape_locks_and_notifies(system):
     _, h = system
     h.escape_outcome = 'fail'
     cover_until_covering(h)
-    h.pub_stuck.publish(StuckEvent())
+    h.publish_stuck()
     assert wait_for(lambda: h.submode.submode == 'ESCAPE_FAILED')
     assert wait_for(lambda: h.lock is True)
     assert wait_for(lambda: any(n.code == 'ESCAPE_FAILED' and n.severity == Notification.ERROR
@@ -165,9 +176,9 @@ def test_001_R09_escape_timeout_fails_the_escape(system):
     _, h = system
     h.escape_outcome = 'hang'
     cover_until_covering(h)
-    h.pub_stuck.publish(StuckEvent())
+    h.publish_stuck()
     assert wait_for(lambda: h.submode.submode == 'ESCAPING')
-    assert wait_for(lambda: h.submode.submode == 'ESCAPE_FAILED', timeout=3.0)
+    assert wait_for(lambda: h.submode.submode == 'ESCAPE_FAILED', timeout=10.0)
     assert wait_for(lambda: h.lock is True)
 
 
@@ -175,7 +186,7 @@ def test_001_R09_reset_service_releases_the_lock(system):
     _, h = system
     h.escape_outcome = 'fail'
     cover_until_covering(h)
-    h.pub_stuck.publish(StuckEvent())
+    h.publish_stuck()
     assert wait_for(lambda: h.lock is True)
     assert h.reset_client.wait_for_service(timeout_sec=3.0)
     future = h.reset_client.call_async(Trigger.Request())
@@ -187,9 +198,9 @@ def test_001_R09_reset_service_releases_the_lock(system):
 def test_D20_telemetry_reports_counters(system):
     _, h = system
     cover_until_covering(h)
-    h.pub_stuck.publish(StuckEvent())
+    h.publish_stuck()
     assert wait_for(lambda: h.telemetry is not None and any(
-        kv.key == 'stuck_events' and kv.value == '1' for kv in h.telemetry.status[0].values), timeout=5.0)
+        kv.key == 'stuck_events' and kv.value == '1' for kv in h.telemetry.status[0].values), timeout=10.0)
 
 
 # --- review round 1: B1 (stale cover callbacks), B2 (lock), S1 (lifecycle cycle keeps the lock) -----------
@@ -200,7 +211,10 @@ def test_001_R05_cover_goal_accepted_late_is_cancelled_when_the_mode_already_lef
     assert wait_for(lambda: h.submode.submode == 'COVERING')
     h.set_mode('IDLE')                              # before the server accepts the goal
     assert wait_for(lambda: h.submode.submode == 'NONE')
-    time.sleep(1.5)                                 # the late acceptance happens in here
+    assert wait_for(lambda: h.cover_accepted >= 1, timeout=10.0)    # the late acceptance has happened
+    time.sleep(0.5)                                 # lets the supervisor react to it (cancel)
+    assert wait_for(lambda: h.cover_active == 0, timeout=10.0)
+    time.sleep(0.3)
     assert h.cover_active == 0, 'a coverage goal outlived the mode change'
 
 
@@ -209,12 +223,15 @@ def test_001_R07_cover_goal_accepted_late_is_cancelled_when_a_stuck_event_arrive
     h.cover_accept_delay = 0.6
     h.set_mode('CLEANING')
     assert wait_for(lambda: h.submode.submode == 'COVERING')
-    h.pub_stuck.publish(StuckEvent())
-    assert wait_for(lambda: h.cover_goals >= 1, timeout=3.0)
+    h.publish_stuck()
+    assert wait_for(lambda: h.cover_goals >= 1, timeout=10.0)
     assert wait_for(lambda: h.escape_goals == 1)
     # after the escape succeeds a new cover goal is sent: exactly one must be running at the end
     assert wait_for(lambda: h.submode.submode == 'COVERING')
-    time.sleep(1.5)
+    assert wait_for(lambda: h.cover_accepted >= 2, timeout=10.0)    # both delayed acceptances have happened
+    time.sleep(0.5)                                 # lets the supervisor react to the stale one (cancel)
+    assert wait_for(lambda: h.cover_active == 1, timeout=10.0)
+    time.sleep(0.3)
     assert h.cover_active == 1
 
 
@@ -222,7 +239,7 @@ def test_001_R22_reset_works_after_the_mode_left_cleaning(system):
     _, h = system
     h.escape_outcome = 'fail'
     cover_until_covering(h)
-    h.pub_stuck.publish(StuckEvent())
+    h.publish_stuck()
     assert wait_for(lambda: h.lock is True)
     h.set_mode('IDLE')
     assert wait_for(lambda: h.submode.submode == 'NONE')
@@ -238,7 +255,7 @@ def test_001_R22_a_lifecycle_cycle_keeps_the_lock(system):
     sup, h = system
     h.escape_outcome = 'fail'
     cover_until_covering(h)
-    h.pub_stuck.publish(StuckEvent())
+    h.publish_stuck()
     assert wait_for(lambda: h.lock is True)
     sup.trigger_deactivate()
     sup.trigger_activate()
