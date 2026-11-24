@@ -23,18 +23,20 @@ class LiveChecks:
 
     def test_02_only_the_selector_publishes_the_final_topic(self):
         """009a-R01 and the contract (max_publishers 1, owner detection_selector), with check_topic."""
+        # the publisher's node name is learned by discovery; it is `_NODE_NAME_UNKNOWN_` for a while on Jazzy
         self.assertTrue(self.probe.wait_for(
-            lambda: len(self.probe.node.get_publishers_info_by_topic(ls.FINAL_TOPIC)) >= 1, 30.0))
+            lambda: 'detection_selector' in self.probe.publisher_nodes(ls.FINAL_TOPIC), 30.0), 'publisher not discovered')
         self.assertEqual(self.probe.contract_problems(ls.FINAL_TOPIC), [])
-        names = [p.node_name for p in self.probe.node.get_publishers_info_by_topic(ls.FINAL_TOPIC)]
+        names = self.probe.publisher_nodes(ls.FINAL_TOPIC)
         self.assertEqual(names, ['detection_selector'])
 
     def test_03_the_local_detector_publishes_the_local_topic(self):
         """009a-R04: the hot-standby detector is in the graph in both modes, on the contract topic."""
+        # the publisher's node name is learned by discovery; it is `_NODE_NAME_UNKNOWN_` for a while on Jazzy
         self.assertTrue(self.probe.wait_for(
-            lambda: len(self.probe.node.get_publishers_info_by_topic(ls.LOCAL_TOPIC)) >= 1, 30.0))
+            lambda: 'detector_local' in self.probe.publisher_nodes(ls.LOCAL_TOPIC), 30.0), 'publisher not discovered')
         self.assertEqual(self.probe.contract_problems(ls.LOCAL_TOPIC), [])
-        names = [p.node_name for p in self.probe.node.get_publishers_info_by_topic(ls.LOCAL_TOPIC)]
+        names = self.probe.publisher_nodes(ls.LOCAL_TOPIC)
         self.assertEqual(names, ['detector_local'])
 
     def test_04_images_reach_the_final_topic_through_the_selector(self):

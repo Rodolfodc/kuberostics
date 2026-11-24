@@ -112,6 +112,9 @@ class Probe:
                 for i in self.node.get_subscriptions_info_by_topic(topic)]
         return exp, pubs, subs
 
+    def publisher_nodes(self, topic):
+        return [i.node_name for i in self.node.get_publishers_info_by_topic(topic)]
+
     def contract_problems(self, topic):
         """check_topic of the contract helpers on the live endpoints; the probe's own subscription is ignored."""
         exp, pubs, subs = self.endpoints(topic)
