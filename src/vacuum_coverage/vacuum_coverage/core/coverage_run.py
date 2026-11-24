@@ -82,13 +82,15 @@ class CoverageRun:
         (the node rejects the goal)."""
         self._room_id = room_id
         self._last_pose = None
-        saved = self._store.take(room_id, t)
-        if saved is not None:
+        if self._store.matches(room_id, t):
+            saved = self._store.take(room_id, t)
             self._session = saved
             saved.resume(t)
             self.region_source = 'resumed'
             return True
+        # validate first: a rejected goal (unknown room, no region) leaves the saved session untouched
         region = self._regions.build(raster, robot_xy, room_id, rooms, labels)
+        self._store.clear()          # an accepted goal for another room (or after the window) drops the old state
         self.region_source = region.source
         waypoints = self._planner.plan(raster, region.mask, passes)
         coverable = coverable_mask(raster, region.mask, self._planner.clearance_m, self._cfg.tool_radius_m,

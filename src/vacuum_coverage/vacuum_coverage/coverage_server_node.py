@@ -70,6 +70,10 @@ def covered_to_grid(raster: Raster, data: np.ndarray, stamp) -> OccupancyGrid:
     return msg
 
 
+class _Rejected(Exception):
+    """A goal is refused before any state of the run is touched."""
+
+
 class CoverageServerNode(LifecycleNode):
     def __init__(self, node_name: str = 'coverage_server', **kwargs):
         super().__init__(node_name, **kwargs)
@@ -83,6 +87,7 @@ class CoverageServerNode(LifecycleNode):
         self._active = False
         self._generation = 0
         self._busy = False
+        self._goal_lock = threading.Lock()
         self._run: Optional[CoverageRun] = None
         self._pending_run: Optional[CoverageRun] = None
         self._nav_lock = threading.Lock()
@@ -197,20 +202,26 @@ class CoverageServerNode(LifecycleNode):
     def _on_goal(self, goal) -> GoalResponse:
         if not self._active:
             return self._reject('node not active')
-        if self._busy:
-            return self._reject('another goal is active')
-        if self._raster is None:
-            return self._reject('no map received yet')
-        if not self._nav.server_is_ready():
-            return self._reject(f'{self.get_parameter("nav_action").value} is not available (005-R36)')
-        pose = self._pose()
-        if pose is None:
-            return self._reject(f'no TF {MAP_FRAME} -> {BASE_FRAME}')
+        with self._goal_lock:               # check and claim are one step: two simultaneous goals cannot both pass
+            if self._busy:
+                return self._reject('another goal is active')
+            self._busy = True
         try:
+            if self._raster is None:
+                raise _Rejected('no map received yet')
+            if not self._nav.server_is_ready():
+                raise _Rejected(f'{self.get_parameter("nav_action").value} is not available (005-R36)')
+            pose = self._pose()
+            if pose is None:
+                raise _Rejected(f'no TF {MAP_FRAME} -> {BASE_FRAME}')
+            # begin() consumes the saved session only when this goal is accepted (it validates first)
             resumed = self._run.begin(self._now(), self._raster, pose, goal.room_id, max(1, int(goal.passes)))
-        except (UnknownRoom, NoRegion) as exc:
+        except (_Rejected, UnknownRoom, NoRegion) as exc:
+            self._busy = False
             return self._reject(str(exc))
-        self._busy = True
+        except Exception:
+            self._busy = False
+            raise
         if resumed:
             self._counters['resumed'] += 1
         self.get_logger().info(

@@ -142,3 +142,13 @@ def test_R21_pose_marking_interpolates_short_hops():
     run.on_pose(0.3, 0.5)
     run.on_pose(0.9, 0.5)
     assert run.session.tracker.covered_count > 0
+
+
+def test_R32_rejected_goal_does_not_consume_the_saved_session():
+    run = CoverageRun(CoverageConfig(resume_window_s=120.0))
+    run.begin(0.0, rect_room(2.0, 2.0), (1.0, 1.0), '', 1)
+    run.step(0.0)
+    run.suspend(1.0)
+    with pytest.raises(UnknownRoom):
+        run.begin(2.0, rect_room(2.0, 2.0), (1.0, 1.0), 'room_99', 1)
+    assert run.begin(3.0, rect_room(2.0, 2.0), (1.0, 1.0), '', 1) is True

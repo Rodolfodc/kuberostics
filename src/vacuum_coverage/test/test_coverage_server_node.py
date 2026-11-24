@@ -290,3 +290,12 @@ def test_R27_telemetry_path_and_covered_grid_are_published(system):
     assert min(s.covered[-1].data) == -1
     values = s.status_values()
     assert {'goals', 'succeeded', 'failed', 'cancelled', 'skipped_waypoints', 'covered_ratio'} <= set(values)
+
+
+def test_R16_two_simultaneous_goals_accept_exactly_one(system):
+    s = system(script=lambda i, x, y: HANG)
+    s.up()
+    s.wait_ready()
+    futures = [s.client.send_goal_async(CoverRoom.Goal(room_id='', passes=1)) for _ in range(4)]
+    assert wait_for(lambda: all(f.done() for f in futures), 10.0)
+    assert sum(1 for f in futures if f.result().accepted) == 1

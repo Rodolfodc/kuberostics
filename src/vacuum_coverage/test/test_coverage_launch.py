@@ -1,13 +1,12 @@
 """launch_testing of launch/coverage.launch.py: the real coverage_server process alone, with the fakes of the
 test (static map, fake NavigateToPose server, TF) instead of Nav2 and the simulator (005-R28, 005-R26).
 
-The domain ID comes from conftest.py (range 215-232) and discovery is restricted to localhost; the launched
+The domain ID comes from conftest.py (range 1-9, disjoint from every other package, see conftest.py) and discovery is restricted to localhost; the launched
 node gets the same values through actions, because launch_testing restores the environment after
 generate_test_description. Requirements: 005-R16, R19, R21, R27, R28; node exit code 0 at teardown (Art. III).
 """
 import os
 import threading
-import time
 import unittest
 
 import launch_testing
@@ -76,14 +75,14 @@ class TestCoverageAlone(unittest.TestCase):
         client = ActionClient(self.probe, CoverRoom, '/myRobot/cover_room')
         self.assertTrue(client.wait_for_server(timeout_sec=30.0))
         accepted = []
-        for _ in range(200):               # the node needs the latched map and the first TF before accepting
+
+        def try_goal():             # the node needs the latched map and the first TF before accepting
             future = client.send_goal_async(CoverRoom.Goal(room_id='', passes=1))
-            self.assertTrue(wait_for(future.done, 10.0))
-            handle = future.result()
-            if handle.accepted:
-                accepted.append(handle)
-                break
-            time.sleep(0.05)
+            if wait_for(future.done, 10.0) and future.result().accepted:
+                accepted.append(future.result())
+            return bool(accepted)
+
+        wait_for(try_goal, 30.0)
         self.assertTrue(accepted, 'goal never accepted')
         result_future = accepted[0].get_result_async()
         self.assertTrue(wait_for(result_future.done, 60.0))
