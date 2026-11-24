@@ -1,11 +1,17 @@
-# T003b: do the pinned IA368II packages build and run on Lyrical (and Jazzy)? (001, input to Q-04)
+# Do the pinned IA368II packages build and run on Lyrical (and Jazzy)? (Task T003b; 001, input to Q-04)
 
 Measured 2026-11-13 with `scripts/ia368ii-check-docker.sh` (repo mounted read-only, `vcs import src/deps < deps.repos`
 done inside the container, nothing written to the working tree). No simulator, wheel bridge
 (`my_robot_cmd_vel_node`) not started. Pin: IA368II `51a5fa2c816c7ee712c963843e5d747b3ed2a98f`.
 Images (as tracked in `scripts/setup_env.sh`): Jazzy `osrf/ros:jazzy-desktop-full` (Python 3.12.3),
 Lyrical `ros:lyrical-ros-base` (Python 3.14.4). The raw base images were used (docker/lyrical from PR #5 was not needed).
-Raw logs per distro: `t003b/<distro>/` (`report.txt`, `rosdep.log`, `build.log`, `launch.log`, `graph.txt`, one log per executable).
+
+**Data policy:** the raw outputs (build, rosdep and launch logs, one log per executable, `graph.txt`, `report.txt`; 24 files per
+run) are generated and kept only on the machine that ran the check, in
+`deploy/measurements/ia368ii-bringup-check/local-logs/<distro>/` (`jazzy`, `jazzy-base`, `lyrical`). They are gitignored and not
+versioned. Everything needed to read the result is summarised in this report. Regenerate them with
+`scripts/ia368ii-check-docker.sh both` (add `--jazzy-base` for the `jazzy-base` run, `--report-only` to always exit 0); the
+script needs only Docker and writes nothing into the working tree except `local-logs/`.
 
 ## Summary
 
@@ -22,8 +28,8 @@ without changes. No `colcon test` was run (the packages have only the ament lint
 
 ## Controlled comparison: Jazzy on `ros:jazzy-ros-base` (same flavour as Lyrical), re-run after the script changes
 
-Run with `scripts/ia368ii-check-docker.sh jazzy --jazzy-base` (logs in `t003b/jazzy-base/`), together with `both` re-run
-(`t003b/jazzy/`, `t003b/lyrical/` were overwritten with the re-run; results of both runs agree except where noted).
+Run with `scripts/ia368ii-check-docker.sh jazzy --jazzy-base` (logs in `local-logs/jazzy-base/`), together with `both` re-run
+(`local-logs/jazzy/`, `local-logs/lyrical/` were overwritten with the re-run; results of both runs agree except where noted).
 The script now prints the unresolved rosdep keys explicitly and returns a non-zero exit code on a build failure or a
 pin mismatch (`--report-only` for pure measurement).
 
@@ -39,6 +45,15 @@ With the image flavour equal, the only difference left is the distro: `my_robot_
 Lyrical at the same line with `AttributeError ... 'warn'`. That confirms the `.warn` removal as a real Lyrical
 difference and not an image artefact. `cartographer` and `explorer` fail on both `ros-base` images for a missing `scipy`
 (an image difference: `desktop-full` ships it). `rf2o_laser_odometry` has a rosdep key on Jazzy but not on Lyrical.
+
+## Bring-up graph (what `ros2 launch myrobot_bringup bringup.launch.py` showed, 20 s after start, identical on Jazzy and Lyrical)
+
+- Nodes (6 managed, plus the manager): `/myrobot` (`myrobot_server`), `/behaviour_server`, `/cleaning_server`,
+  `/autodocking_server`, `/charging_server`, `/charged_server`, and `/lifecycle_manager`.
+- Lifecycle state of each of the six: `active`.
+- `/myRobot/behaviour/mode` publishes `CHARGED` as its first sample; on Lyrical `/lifecycle_manager/managed_nodes_activated` is also present.
+- Build: `myrobot_interfaces`, `myrobot_bringup`, `my_robot_pkg` finished 3/3 on Jazzy (`desktop-full` and `ros-base`) and on
+  Lyrical; pin check `IA368II = 51a5fa2c...` ok on all three runs.
 
 ## What fails, and why
 

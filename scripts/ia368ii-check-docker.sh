@@ -4,10 +4,12 @@
 # and the third-party checkout (`vcs import` of deps.repos) lives only inside the container (Art. II).
 # Usage: scripts/ia368ii-check-docker.sh [jazzy|lyrical|both] [--jazzy-base] [--report-only]   (default both)
 #        --jazzy-base   run Jazzy on the base flavour (same flavour as Lyrical) instead of desktop-full;
-#                       output goes to t003b/jazzy-base/ so the only difference to Lyrical is the distro (Art. X)
+#                       output goes to local-logs/jazzy-base/ so the only difference to Lyrical is the distro (Art. X)
 #        --report-only  always exit 0 (measurement mode); default: exit 1 on a failed build or a pin mismatch
 #        ROS_IMAGE=<image> overrides the image, valid only with a single distro (not with `both`)
-# Output: deploy/measurements/t003b/<distro>/ (build/rosdep logs, per-node run logs, report.txt)
+# Output: deploy/measurements/ia368ii-bringup-check/local-logs/<distro>/ (build/rosdep logs, per-node run logs, graph.txt,
+#         report.txt). Generated, gitignored, local machine only; the written results are in
+#         deploy/measurements/ia368ii-lyrical-jazzy-bringup.md
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -82,8 +84,8 @@ trap '[[ -n "$NAME" ]] && docker rm -f "$NAME" >/dev/null 2>&1' EXIT
 trap 'exit 130' INT TERM
 FAIL=0
 run() {   # $1 distro  $2 image  $3 output label
-  local distro="$1" image="${ROS_IMAGE:-$2}" label="$3" dest="$REPO/deploy/measurements/t003b/$3"
-  local name="t003b-$label-$$"; NAME="$name"     # unique per run; only this container is ever removed
+  local distro="$1" image="${ROS_IMAGE:-$2}" label="$3" dest="$REPO/deploy/measurements/ia368ii-bringup-check/local-logs/$3"
+  local name="ia368ii-check-$label-$$"; NAME="$name"     # unique per run; only this container is ever removed
   echo ">> $label ($image)"
   mkdir -p "$dest"
   docker create --name "$name" -e DISTRO="$distro" -e IMAGE="$image" -e PIN="$PIN" -v "$REPO":/repo:ro "$image" bash -c "$INNER" >/dev/null
