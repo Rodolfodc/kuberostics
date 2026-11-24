@@ -71,7 +71,7 @@ shutdown: optional -> nav -> core   (reverse; stop_guard last)
 
 - `ManagerSequencer` (pure Python, injected clock and a `call_manager(name, command)` callback) holds the state machine: `STARTING_CORE`, `STARTING_NAV`, `STARTING_OPTIONAL`, `ALL_ACTIVE`, `FAILED_CORE`, `DEGRADED_NAV`, `DEGRADED_OPTIONAL`, `SHUTTING_DOWN`. It only decides; the thin node `lifecycle_sequencer` calls the Nav2 manager services (`~/manage_nodes` and `~/is_active`, names to confirm in T521) with `autostart: false` on the nav and optional managers and publishes the state in `/myRobot/telemetry/lifecycle_sequencer` and `Notification`s. The sequencer is a plain node outside any manager (it manages the managers and has no state for a manager to control; D-26, Q-17 closed). Diagram, node classification and reasons: `docs/diagrams/lifecycle-managers.mmd` and `docs/lifecycle-managers.md`. If the sequencer dies after start-up the robot keeps running, but the ordered shutdown and `stop_guard` last are no longer guaranteed (accepted residual).
 - Failure rules are in 005-R36. In every state teleoperation (`mux/teleop`) and the stop lock keep working because they depend only on `twist_mux`, `stop_guard` and `teleop`.
-- Contract entries (applied with T521 and PR #27; the L1/L2 readiness and probe parameters of `proposal-stuck-manager-recovery.md` in contract batch 1): node `lifecycle_sequencer` and `/myRobot/telemetry/lifecycle_sequencer` (`diagnostic_msgs/DiagnosticArray`, `default`); parameters `manager_startup_timeout_s` 30.0, `manager_shutdown_timeout_s` 15.0, `managers` (ordered list: `[lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional]`).
+- Contract entries (applied with T521 and PR #27): node `lifecycle_sequencer` and `/myRobot/telemetry/lifecycle_sequencer` (`diagnostic_msgs/DiagnosticArray`, `default`); parameters `manager_startup_timeout_s` 30.0, `manager_shutdown_timeout_s` 15.0, `managers` (ordered list: `[lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional]`).
 - The D-09 amendment (three managers, the order above) is applied by the architect to spec 000 later; until then this spec is the proposal.
 
 ## Escape: timeout and fallback (Art. VI.3)
@@ -115,8 +115,8 @@ The 001 row "NONE, mode CLEANING: sends `cover_room`" is suppressed while `cover
 - `escape_server`: parameters of `EscapeConfig` not in the block: `front_stop_m` 0.15, `angle_tolerance_rad` 0.05, `distance_tolerance_m` 0.01, `range_cap_m` 5.0, `max_linear_speed_m_s` 0.30 and `max_angular_speed_rad_s` 1.0 (placeholders until T503); plus `front_sector_half_width_rad` and `rear_sector_half_width_rad` 0.35 (about 20 degrees, the value of the `scan_utils` tests; unverified, tuned in T503/T514).
 - `stuck_detector`: `cmd_timeout_s` 0.5, `max_sample_gap_s` 0.5 (from `StuckCore`), `scan_max_age_s` 0.5 (005-R04), `map_frame` `map`, `base_frame` `base_link`; `bumper_topic` is `std_msgs/msg/Bool`, rising edge (Q-11 decided).
 - `supervisor`: also `start_stop_service` (`/myRobot/start_stop`) and `dock_command` (`stop`), both pending T520.
-- `lifecycle_sequencer`: `manager_ready_timeout_s` 30.0, `discovery_settle_s` 1.0, `manager_probe_timeout_s` 2.0 (L1, L2); notification `MANAGER_UNRESPONSIVE` in `interfaces.md`.
-- Notifications `COVERAGE_DONE`, `COVERAGE_FAILED`, `DOCK_REQUEST_FAILED` listed in `interfaces.md`.
+- Not in this batch: the L1/L2 parameters and `MANAGER_UNRESPONSIVE` of `proposal-stuck-manager-recovery.md` (005-R40/R42 exist only in that proposal); they ship with the sequencer work.
+- Notifications `COVERAGE_DONE`, `COVERAGE_FAILED`, `DOCK_REQUEST_FAILED` added to the notification registry of `interfaces.md`.
 - The diagram update below is still pending (separate change).
 
 
