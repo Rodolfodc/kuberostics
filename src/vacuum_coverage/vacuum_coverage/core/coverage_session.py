@@ -31,6 +31,8 @@ class Step:
     success: Optional[bool] = None
     reason: str = ''
     cancel_goal: bool = False
+    degraded: bool = False        # success below target_ratio but at or above min_acceptable_ratio
+    covered_ratio: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -39,7 +41,8 @@ class SessionLimits:
     waypoint_timeout_s: float = 120.0
     coverage_timeout_s: float = 1800.0
     max_skip_ratio: float = 0.3
-    target_ratio: float = 0.90
+    target_ratio: float = 0.95
+    min_acceptable_ratio: float = 0.70   # waypoints exhausted below target: >= this is a degraded success
     retries: int = 1          # R20: one retry, then skip
 
 
@@ -83,7 +86,8 @@ class CoverageSession:
     # ---- decisions --------------------------------------------------------------------------------------
     def step(self, t: float) -> Step:
         if self._done is not None:
-            return Step(StepKind.DONE, success=self._done.success, reason=self._done.reason)
+            return Step(StepKind.DONE, success=self._done.success, reason=self._done.reason,
+                        degraded=self._done.degraded, covered_ratio=self._done.covered_ratio)
         if self._active(t) > self._lim.coverage_timeout_s:
             return self._finish(False, 'coverage_timeout')
         if (self._index < len(self._wps) and self._wps[self._index].pass_index >= self._last_pass
@@ -101,7 +105,12 @@ class CoverageSession:
                 return Step(StepKind.CANCEL, self._wps[wp_index], wp_index)
             return Step(StepKind.WAIT, self._wps[self._index], self._index)
         if self._index >= len(self._wps):
-            return self._finish(True, 'exhausted')
+            ratio = self._tracker.covered_ratio
+            if ratio >= self._lim.target_ratio:
+                return self._finish(True, 'exhausted')
+            if ratio >= self._lim.min_acceptable_ratio:
+                return self._finish(True, 'exhausted_degraded', degraded=True)
+            return self._finish(False, 'below_min_ratio')
         self._in_flight = True
         self._sent_t = t
         self._attempts += 1
@@ -124,6 +133,10 @@ class CoverageSession:
     @property
     def finished(self) -> bool:
         return self._done is not None
+
+    @property
+    def degraded(self) -> bool:
+        return bool(self._done and self._done.degraded)
 
     @property
     def success(self) -> Optional[bool]:
@@ -162,12 +175,13 @@ class CoverageSession:
             return self._finish(False, 'skip_ratio', cancel=False)
         return None
 
-    def _finish(self, success: bool, reason: str, cancel: bool = True) -> Step:
-        step = Step(StepKind.DONE, success=success, reason=reason, cancel_goal=cancel and self._in_flight)
+    def _finish(self, success: bool, reason: str, cancel: bool = True, degraded: bool = False) -> Step:
+        step = Step(StepKind.DONE, success=success, reason=reason, cancel_goal=cancel and self._in_flight,
+                    degraded=degraded, covered_ratio=self._tracker.covered_ratio)
         self._done = step
         self._in_flight = False if cancel else self._in_flight
-        self._log('coverage_session: done success=%s reason=%s ratio=%.3f skipped=%d'
-                  % (success, reason, self._tracker.covered_ratio, self._skipped))
+        self._log('coverage_session: done success=%s degraded=%s reason=%s ratio=%.3f skipped=%d'
+                  % (success, degraded, reason, self._tracker.covered_ratio, self._skipped))
         return step
 
     def _accumulate(self, t: float) -> None:

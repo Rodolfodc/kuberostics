@@ -7,7 +7,7 @@ Real coverage of spec 005. Contains the pure-Python cores only (no ROS imports, 
 | `RegionBuilder` | `core/region_builder.py` | which cells a `CoverRoom` goal cleans (005-R16) |
 | `CoveragePlanner` | `core/coverage_planner.py` | boustrophedon waypoints (005-R17) |
 | `CoverageTracker` | `core/coverage_tracker.py` | covered mask and `covered_ratio` (005-R21) |
-| `CoverageSession`, `ResumeStore` | `core/coverage_session.py` | retry-once-then-skip, timeouts, early success, resume (005-R20, R21, R32) |
+| `CoverageSession`, `ResumeStore` | `core/coverage_session.py` | retry-once-then-skip, timeouts, early success, resume (005-R20, R21, R32; `target_ratio` 0.95, degraded success from `min_acceptable_ratio` 0.70) |
 
 Grid code is reused from `vacuum_mapping` (`Raster`, `erode`); `core/grid_ops.py` adds `dilate` and the
 reachable/coverable masks. A shared `vacuum_grid` package is planned by T309 of spec 003.

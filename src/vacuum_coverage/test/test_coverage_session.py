@@ -16,6 +16,7 @@ def session(waypoints, passes=1, tracker=None, **limits):
     raster = rect_room(3.0, 2.0)
     region = raster.cells == FREE
     tracker = tracker or CoverageTracker(raster, coverable_mask(raster, region, 0.21, 0.15), 0.15, region=region)
+    limits.setdefault('min_acceptable_ratio', 0.0)     # retry/skip tests do not care about the ratio
     return CoverageSession(waypoints, tracker, passes, SessionLimits(**limits)), tracker
 
 
@@ -139,7 +140,54 @@ def test_005_R21_goal_with_no_waypoints_succeeds_immediately():
     s, _ = session([])
     s.start(0.0)
     step = s.step(0.0)
-    assert step.kind is StepKind.DONE and step.success and step.reason == 'exhausted'
+    assert step.kind is StepKind.DONE and step.success and step.reason.startswith('exhausted')
+
+
+def cover_fraction(tracker, fraction):
+    """Mark cells until about `fraction` of the coverable cells are covered."""
+    for x in [0.3 + 0.05 * i for i in range(50)]:
+        for y in [0.3 + 0.05 * j for j in range(30)]:
+            if tracker.covered_ratio >= fraction:
+                return
+            tracker.mark_pose(x, y)
+
+
+def test_005_R21_default_limits_are_target_095_and_min_acceptable_070():
+    lim = SessionLimits()
+    assert lim.target_ratio == 0.95 and lim.min_acceptable_ratio == 0.70
+
+
+def test_005_R21_exhausted_at_or_above_target_is_a_plain_success():
+    s, tracker = session([], target_ratio=0.95, min_acceptable_ratio=0.70)
+    cover_fraction(tracker, 0.96)
+    s.start(0.0)
+    step = s.step(0.0)
+    assert step.success and not step.degraded and step.reason == 'exhausted'
+    assert step.covered_ratio >= 0.95
+
+
+def test_005_R21_exhausted_between_minimum_and_target_is_a_degraded_success_with_the_ratio():
+    s, tracker = session([], target_ratio=0.95, min_acceptable_ratio=0.70)
+    cover_fraction(tracker, 0.80)
+    s.start(0.0)
+    step = s.step(0.0)
+    assert step.success and step.degraded and step.reason == 'exhausted_degraded'
+    assert 0.70 <= step.covered_ratio < 0.95
+    assert s.degraded and s.step(1.0).degraded               # stays reported once finished
+
+
+def test_005_R21_exhausted_below_the_minimum_is_a_failure():
+    s, tracker = session([], target_ratio=0.95, min_acceptable_ratio=0.70)
+    cover_fraction(tracker, 0.40)
+    s.start(0.0)
+    step = s.step(0.0)
+    assert not step.success and not step.degraded and step.reason == 'below_min_ratio'
+
+
+def test_005_R21_ratio_exactly_at_the_minimum_counts_as_degraded_success():
+    s, tracker = session([], target_ratio=0.95, min_acceptable_ratio=0.0)
+    step = s.step(0.0)                                         # ratio 0.0 >= 0.0
+    assert step.success and step.degraded
 
 
 def test_005_R21_snapshot_reports_progress_for_telemetry():
