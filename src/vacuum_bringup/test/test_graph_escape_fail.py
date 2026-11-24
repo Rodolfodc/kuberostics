@@ -1,4 +1,4 @@
-"""T014, spec 001: live graph, scenario 3 with the escape stub on `outcome: fail`, plus the stop lock against
+"""Live-graph test (spec 001), scenario 3 with the escape stub on `outcome: fail`, plus the stop lock against
 teleoperation (scenario 4, "the stop lock still takes precedence over teleoperation").
 
 `outcome` is set on the running escape_server through its parameter service before the first goal (the

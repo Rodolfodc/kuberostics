@@ -1,4 +1,4 @@
-"""T014, spec 001: live graph, scenarios 1, 2 and 4 with the escape stub on `outcome: succeed` (the default).
+"""Live-graph test (spec 001), scenarios 1, 2 and 4 with the escape stub on `outcome: succeed` (the default).
 
 Launches the real skeleton.launch.py (with_ia368ii:=false, with_wheel_bridge:=false, with_teleop:=false) and
 plays the orchestrator from a probe node. Also checks the graph itself: the core manager reports its nodes

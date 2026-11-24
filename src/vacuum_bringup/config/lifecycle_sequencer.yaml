@@ -1,4 +1,4 @@
-# lifecycle_sequencer (T521, 005-R35, R37): order and timeouts of the manager sequence. Declared in
+# lifecycle_sequencer (005-R35, R37): order and timeouts of the manager sequence. Declared in
 # specs/000-system/contracts/topics.yaml.
 lifecycle_sequencer:
   ros__parameters:

@@ -1,4 +1,4 @@
-"""ManagerSequencer (T521, spec 005, 005-R35 to R37, D-26): pure Python, no ROS imports.
+"""ManagerSequencer (spec 005, 005-R35 to R37, D-26): pure Python, no ROS imports.
 
 It decides in which order the lifecycle managers are started and stopped and what a failure means. It does
 not talk to ROS and it never sleeps: the caller injects
