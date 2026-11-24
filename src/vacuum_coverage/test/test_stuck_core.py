@@ -137,7 +137,7 @@ def test_005_R02_command_drop_resets_the_window():
     assert events == []
     events, t = run(core, 1.0, cmd=(0.0, 0.0), t0=t + DT)          # zero Twist of the stop lock (D-22)
     assert events == []
-    events, _ = run(core, 2.5, t0=t + DT)                           # 2.5 s of command: window restarted
+    events, t = run(core, 2.5, t0=t + DT)                           # 2.5 s of command: window restarted
     assert events == []
     events, _ = run(core, 1.5, t0=t + DT)
     assert events
