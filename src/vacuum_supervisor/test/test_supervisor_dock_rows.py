@@ -44,16 +44,28 @@ class Peer(Node):
         self.closing = False
         self._outcome = None            # None = keep running; True/False = finish with that result
         self.submode = None
+        self.submode_count = 0          # one per supervisor tick (publish_rate_hz); a clock for negative checks
         self.notifications = []
         self.dock_requests = 0
         self.pub_mode = self.create_publisher(String, '/myRobot/behaviour/mode', QOS)
-        self.create_subscription(Submode, '/myRobot/behaviour/submode', lambda m: setattr(self, 'submode', m), QOS)
+        self.create_subscription(Submode, '/myRobot/behaviour/submode', self._on_submode, QOS)
         self.create_subscription(Notification, '/myRobot/notifications', self.notifications.append, 10)
         cb = ReentrantCallbackGroup()
         ActionServer(self, CoverRoom, '/myRobot/cover_room', self._cover, callback_group=cb,
                      cancel_callback=lambda _: CancelResponse.ACCEPT)
         ActionServer(self, Escape, '/myRobot/escape', self._escape, callback_group=cb,
                      cancel_callback=lambda _: CancelResponse.ACCEPT)
+
+    def _on_submode(self, msg):
+        self.submode = msg
+        self.submode_count += 1
+
+    def settle(self, ticks=3):
+        """Waits for `ticks` more supervisor ticks. Goals are sent from the tick, so after this a goal that the
+        supervisor wanted to send has been sent (negative checks wait on this event count, not on wall time)."""
+        target = self.submode_count + ticks
+        assert wait_for(lambda: self.submode_count >= target), 'the supervisor stopped ticking'
+        time.sleep(0.1)                 # only the delivery of an already sent goal to the action server
 
     def _cover(self, goal_handle):
         self.cover_goals += 1
@@ -142,7 +154,7 @@ def test_005_R30_cover_success_notifies_done_requests_docking_and_publishes_none
     # the orchestrator keeps publishing CLEANING (every 0.2 s): no new cover_room while coverage_blocked
     for _ in range(3):
         peer.set_mode('CLEANING')
-        time.sleep(0.25)
+        peer.settle(1)
     assert peer.cover_goals == 1
     assert peer.submode.submode == 'NONE'
     assert peer.dock_requests == 1
@@ -163,20 +175,22 @@ def test_005_R30_dock_timer_expiry_notifies_error_and_sends_no_goal(system):
     peer.finish_cover(True)
     assert wait_for(lambda: (Notification.ERROR, 'DOCK_REQUEST_FAILED') in peer.codes())
     peer.set_mode('CLEANING')
-    time.sleep(0.5)
+    peer.settle()
     assert peer.cover_goals == 1
     assert peer.submode.submode == 'NONE'
     assert peer.codes().count((Notification.ERROR, 'DOCK_REQUEST_FAILED')) == 1
 
 
 def test_005_R30_autodocking_before_the_timer_cancels_it(system):
-    _, peer = system(dock_request_timeout_s=0.6)
+    sup, peer = system(dock_request_timeout_s=0.6)
     start_covering(peer)
     peer.finish_cover(True)
-    assert wait_for(lambda: peer.dock_requests == 1)
+    assert wait_for(lambda: peer.dock_requests == 1 and sup._dock_timer is not None)
     peer.set_mode('AUTODOCKING')
     assert wait_for(lambda: peer.submode.mode == 'AUTODOCKING')
-    time.sleep(1.0)                                     # longer than the timer
+    # the timer must be gone (a destroyed timer cannot fire), then a few ticks for any late notification
+    assert wait_for(lambda: sup._dock_timer is None), 'AUTODOCKING did not cancel the dock timer'
+    peer.settle()
     assert (Notification.ERROR, 'DOCK_REQUEST_FAILED') not in peer.codes()
     assert peer.submode.submode == 'NONE'
 
@@ -197,7 +211,7 @@ def test_005_R30_rows_are_off_by_default_and_the_001_behaviour_holds(system):
     _, peer = system(dock_after_coverage=False)
     start_covering(peer)
     peer.finish_cover(True)
-    time.sleep(0.8)
+    peer.settle(4)
     assert peer.submode.submode == 'COVERING'
     assert peer.dock_requests == 0
     assert peer.codes() == []
