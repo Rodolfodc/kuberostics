@@ -24,7 +24,7 @@ States: `NOT_STARTED`, `STARTING_CORE`, `STARTING_NAV`, `STARTING_OPTIONAL`, `AL
 - core fails: nav and optional are not started, ERROR `CORE_START_FAILED`, state `FAILED_CORE`;
 - nav fails: the nav manager is reset and every node it left active is then deactivated one by one (the Nav2 manager of Jazzy aborts RESET/PAUSE at the first node that cannot make the transition, so `planner_server` could stay active), WARN `NAV_UNAVAILABLE`, `DEGRADED_NAV`, optional is still tried;
 - optional fails: WARN `OPTIONAL_UNAVAILABLE`, `DEGRADED_OPTIONAL`, nothing else is touched;
-- `stop_guard` leaves `active` while running: nav is paused, ERROR `STOP_GUARD_LOST`, `DEGRADED_NAV`.
+- `stop_guard` leaves `active` while running (confirmed with `get_state` on every transition event and every `stop_guard_poll_period_s`, because a volatile event can be missed; two unreachable samples in a row also count): nav is paused, ERROR `STOP_GUARD_LOST`, `DEGRADED_NAV`.
 
 Shutdown: reverse order of the managers that were started; one failing stop does not prevent the next; the whole
 sequence stays within `manager_shutdown_timeout_s` (each step gets an equal share of what is left).
