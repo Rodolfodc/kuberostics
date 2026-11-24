@@ -1,0 +1,8 @@
+# lifecycle_manager_nav (T521, 005-R35, Q-09): planner_server, controller_server, bt_navigator (T510 fills the
+# list in; until then the manager is empty and trivially active). Started by lifecycle_sequencer, never by itself
+# (autostart: false), and only after lifecycle_manager_core is active.
+lifecycle_manager_nav:
+  ros__parameters:
+    autostart: false
+    bond_timeout: 0.0
+    node_names: []
