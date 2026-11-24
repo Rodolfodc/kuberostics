@@ -3,7 +3,7 @@
 ## Phase 0: preparation
 
 - [ ] **T901** Add `OffloadStatus` to `vacuum_interfaces`. (009a-R14)
-- [x] **T902** [P] (done on Lyrical, same host; `deploy/measurements/t902-transport.md`; Q-06 recommendation: bridge, awaiting the project owner) Measure the robot ↔ K3s transport with `rmw_zenoh` and with `zenoh-bridge-ros2dds`: latency and rate with a compressed RGB image at 2 Hz. Decide Q-06. (009a-R03)
+- [x] **T902** [P] (done on Lyrical, same host; `deploy/measurements/robot-cloud-transport-benchmark.md`; Q-06 recommendation: bridge, awaiting the project owner) Measure the robot ↔ K3s transport with `rmw_zenoh` and with `zenoh-bridge-ros2dds`: latency and rate with a compressed RGB image at 2 Hz. Decide Q-06. (009a-R03)
 - [ ] **T903** [P] Read the 2025S2 semantic node and record the exact format of `/detections_markers` it expects. (009a-R13)
 
 ## Phase 1: tests first
@@ -28,7 +28,7 @@
 
 ## Phase 4: transport follow-ups (Q-06, from T902)
 
-- [ ] **T919** [devops] Repeat T902 with `scripts/transport-bench.sh --distro jazzy` (image `t902-bench:jazzy`; `rmw_zenoh` 0.2.x on Jazzy against the bridge 1.10.2), same 4 cells. Depends on T902 and T910 (distro images). (009a-R18, Q-06)
+- [ ] **T919** [devops] Repeat T902 with `scripts/transport-bench.sh --distro jazzy` (image `transport-bench:jazzy`; `rmw_zenoh` 0.2.x on Jazzy against the bridge 1.10.2), same 4 cells. Depends on T902 and T910 (distro images). (009a-R18, Q-06)
 - [ ] **T920** [devops] Repeat T902 on the real robot-to-cluster link (Wi-Fi, not same host), both transports, with a real House-scene image, and record CPU of each transport. Depends on T902 and on a real image source (T909). If the bridge's age exceeds `close_threshold_s` in more than a small fraction of responses, reopen Q-06 in favour of `rmw_zenoh`. (009a-R03, R10, Q-06)
 - [ ] **T921** [devops] [P] Measure inference time of yolo11x in the K3s Pod (and yolo11n locally) so the real age (transport plus inference) can be compared with `close_threshold_s` and `max_age_s`. Depends on T906, T910. (009a-R05, R10)
 - [ ] **T922** [devops] [ros-dev] Add to T913 one run with `tc netem` (20 ms +/- 5 ms, 1 % loss) on the uplink and report time to CLOSED and the share of `dropped_stale`. Depends on T907, T913. (009a-R16)

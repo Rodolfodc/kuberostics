@@ -62,12 +62,12 @@ With 0.20 m tolerance and 0.30 m/s, the limit is about 0.67 s.
 ## Robot to cloud transport (Q-06): measurement and proposal
 
 Status: **recommendation recorded, awaiting the project owner.** Q-06 stays open in spec 000 until the owner confirms.
-Source: T902, `deploy/measurements/t902-transport.md` (PR of branch `feat/t902-transport-measurement`).
+Source: T902, `deploy/measurements/robot-cloud-transport-benchmark.md` (PR of branch `feat/t902-transport-measurement`).
 
 Dependency: the selector rulings quoted below (health uses `max_age_s`, the invariant, HALF_OPEN silence) exist only in
 PR #13; **merge PR #13 first**. This section also must not merge before PR #16 (T902) is settled.
 
-The figures below were recomputed from the committed CSVs (`deploy/measurements/t902/*.csv`) with the stated subset and
+The figures below were recomputed from the committed CSVs (`deploy/measurements/transport-benchmark/*.csv`) with the stated subset and
 convention, and may be updated by the final summary of PR #16.
 
 ### What was measured (Lyrical only)

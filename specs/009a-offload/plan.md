@@ -70,7 +70,7 @@ It also checks the monotonicity of the timestamps on `/myRobot/perception/detect
 
 - If the owner confirms the bridge: T911 declares in `deploy/k8s/` and Terraform a Pod with the detector plus a bridge sidecar
   (allow-list: the two perception topics, R19), exposed by Service/NodePort; the robot runs one bridge with the same
-  allow-list (never `mux` or `cmd_vel` topics; the bridge is a new robot process outside `lifecycle_manager_core`, and cleaning must continue if it dies); the robot's local graph stays on CycloneDDS with localhost discovery as in the T902 bench.
+  allow-list (never `mux` or `cmd_vel` topics; the bridge is a new robot process outside `lifecycle_manager_core`, and cleaning must continue if it dies); the robot's local graph stays on CycloneDDS with localhost discovery as in the robot-cloud transport benchmark (T902).
 - If the owner chooses `rmw_zenoh`: T911 declares `rmw_zenohd` in the cluster and the cloud node with `RMW_IMPLEMENTATION=rmw_zenoh_cpp`;
   the robot needs its own router and per-node RMW, with the ACL to meet R19, and Art. VI/X must be re-examined (a different
   RMW for perception nodes only, two versions to qualify).
