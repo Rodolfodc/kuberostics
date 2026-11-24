@@ -86,9 +86,9 @@ def test_005_R08_rear_none_means_scan_does_not_cover_the_rear_and_the_check_is_s
     drive(s, sim, rear_fn=lambda sim, sc: None, trace=trace)
     assert next(p for t, st, p in trace if st == 'TURN')[0] == pytest.approx(-0.20, abs=0.02)
 
-    s, sim = started(left=3.0, right=1.0), Sim()
+
 def test_005_R08_turns_toward_the_freer_side_left():
-    s, sim, trace = started(left=3.0, right=1.0), Sim(), []
+    s, sim = started(left=3.0, right=1.0), Sim()
     result, cmds = drive(s, sim)
     assert result.success
     assert any(c.angular > 0 for c in cmds) and not any(c.angular < 0 for c in cmds)
