@@ -90,7 +90,8 @@ def test_003_R18_R26_start_up_with_map_file_publishes_room_labels_and_rooms(ros,
     h.close()
 
 
-def test_003_R18_segment_service_before_any_map_fails_cleanly(ros, tmp_path):
+def test_003_R18_segment_service_before_any_map_fails_cleanly(ros, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)      # without map_file the rooms file goes to ./maps
     h = Harness(tmp_path, map_file='')
     h.node.trigger_configure()
     h.node.trigger_activate()
@@ -99,7 +100,8 @@ def test_003_R18_segment_service_before_any_map_fails_cleanly(ros, tmp_path):
     h.close()
 
 
-def test_003_R18_segment_service_runs_on_demand_when_map_file_is_not_set(ros, tmp_path):
+def test_003_R18_segment_service_runs_on_demand_when_map_file_is_not_set(ros, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     h = Harness(tmp_path, map_file='')
     h.node.trigger_configure()
     h.node.trigger_activate()
