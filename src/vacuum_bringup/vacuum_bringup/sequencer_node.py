@@ -60,7 +60,6 @@ class SequencerNode(Node):
         guard = self.get_parameter('stop_guard_node').value
         self.create_subscription(TransitionEvent, f'/{guard}/transition_event', self._on_guard_event, 10)
         self._guard = guard
-        self._watch = GuardWatch()          # spacing is set below, once the poll period is known
         self._poll_period_s = max(0.1, float(self.get_parameter('stop_guard_poll_period_s').value))
         # unreachable samples count only when almost a poll period apart (events can come in bursts)
         self._watch = GuardWatch(min_spacing_s=0.9 * self._poll_period_s)

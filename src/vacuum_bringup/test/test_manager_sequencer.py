@@ -362,7 +362,7 @@ def test_005_R36_guard_watch_a_burst_of_close_samples_counts_as_one_hiccup():
     assert watch.feed('unreachable', 11.00) is True        # a second sample a poll period later is a loss
 
 
-def test_005_R36_stop_guard_lost_reported_from_another_thread_during_startup_is_applied_after_it():
+def test_005_R36_stop_guard_lost_reported_before_startup_is_applied_after_it():
     # the safe-guard branch (pending flag), also covered by the startup tests above; here with the guard
     # reported before the first manager is touched
     seq, managers, rec, _ = build()
