@@ -331,7 +331,8 @@ def assert_latency(tc, probe: Probe, submode: str, t0: float, requirement: str, 
     otherwise `t0`, the probe's clock just before it published the mode). The time at which this probe got
     scheduled to read the message does not count. The tolerance is 0.5 s + TICK_MARGIN_S + JITTER_FACTOR times the
     sleep overshoot this probe saw since `t0` (capped at JITTER_CAP_S), so it grows with the load of this run and
-    stays at 0.75 s on an idle machine. Delay, tolerance and jitter are printed on every call."""
+    stays at 0.75 s on an idle machine; the ceiling is 0.75 s + 2 x 0.5 s = 1.75 s.
+    Delay, tolerance and jitter are printed on every call."""
     stamp = probe.first_submode_stamp(submode, t0)
     tc.assertIsNotNone(stamp, f'no {submode} message stamped after the trigger')
     delay = stamp - (t0 if start is None else start)
@@ -339,6 +340,7 @@ def assert_latency(tc, probe: Probe, submode: str, t0: float, requirement: str, 
     allowed = 0.5 + TICK_MARGIN_S + JITTER_FACTOR * jitter
     received = probe.first_submode_time(submode, t0)           # when this probe read it: informational only
     received_s = float('nan') if received is None else received - t0
+    tc.assertGreaterEqual(delay, 0.0, f'{submode} stamped {-delay:.3f} s before its trigger (stale message?)')
     print(f'LATENCY {requirement} {submode} delay={delay:.3f} allowed={allowed:.3f} jitter={jitter:.3f} '
           f'probe_received_after={received_s:.3f}', flush=True)
     tc.assertLessEqual(delay, allowed, f'{submode} after {delay:.2f} s (allowed {allowed:.2f} s = 0.5 s of '
@@ -371,7 +373,9 @@ def assert_escaping_within(tc, probe: Probe, t0: float) -> None:
     """001-R07: ESCAPING within 0.5 s of the stuck event."""
     tc.assertTrue(probe.wait_for(lambda: probe.first_submode_time('ESCAPING', t0) is not None, 5.0),
                   f'ESCAPING never published (submodes: {probe.submodes(t0)})')
-    assert_latency(tc, probe, 'ESCAPING', t0, '001-R07', start=probe.first_stuck_stamp(t0))
+    started = probe.first_stuck_stamp(t0)
+    tc.assertIsNotNone(started, 'the probe never saw the StuckEvent that triggered the escape')
+    assert_latency(tc, probe, 'ESCAPING', t0, '001-R07', start=started)
 
 
 def assert_escape_failed(tc, probe: Probe, t0: float, within_s: float) -> None:
