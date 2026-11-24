@@ -131,6 +131,14 @@ class CoverageSession:
 
     # ---- state ------------------------------------------------------------------------------------------
     @property
+    def tracker(self) -> CoverageTracker:
+        return self._tracker
+
+    @property
+    def waypoints(self) -> List[Waypoint]:
+        return list(self._wps)
+
+    @property
     def finished(self) -> bool:
         return self._done is not None
 
