@@ -1,7 +1,7 @@
 """launch_testing of launch/coverage.launch.py: the real coverage_server process alone, with the fakes of the
 test (static map, fake NavigateToPose server, TF) instead of Nav2 and the simulator (005-R28, 005-R26).
 
-The domain ID comes from conftest.py (range 1-9, disjoint from every other package, see conftest.py) and discovery is restricted to localhost; the launched
+The domain ID comes from conftest.py (range 1-5; sim bridge 6-9, stubs 10-39, safety 40-69, supervisor 70-99, bringup 100-129, sequencer graph 130-159, detection 160-189, contract tests 190-219, mapping 220-232, domain 0 free) and discovery is restricted to localhost; the launched
 node gets the same values through actions, because launch_testing restores the environment after
 generate_test_description. Requirements: 005-R16, R19, R21, R27, R28; node exit code 0 at teardown (Art. III).
 """

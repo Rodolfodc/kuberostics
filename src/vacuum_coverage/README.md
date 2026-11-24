@@ -34,8 +34,8 @@ stays reserved for the stub. It publishes `/myRobot/coverage/path`, `/myRobot/co
 - Run alone: `ros2 launch vacuum_coverage coverage.launch.py` (autostart configure + activate); needs `/map`,
   TF `map -> base_link` and a `NavigateToPose` server (the tests use fakes).
 - Tests: `test_coverage_run.py` (pure), `test_coverage_server_node.py` (in-process rclpy with a fake Nav2) and
-  `test_coverage_launch.py` (launch_testing). ROS_DOMAIN_ID is drawn from 1-9 by `test/conftest.py`,
-  disjoint from every other allocation: stubs 10-39, safety 40-69, supervisor 70-99, bringup 100-129, sequencer
+  `test_coverage_launch.py` (launch_testing). ROS_DOMAIN_ID is drawn from 1-5 by `test/conftest.py`,
+  disjoint from every other allocation: sim bridge 6-9, stubs 10-39, safety 40-69, supervisor 70-99, bringup 100-129, sequencer
   graph 130-159, detection 160-189, contract tests 190-219, mapping 220-232 (Fast DDS maximum 232); domain 0 is the
   default and is kept free.
 
