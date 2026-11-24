@@ -153,7 +153,7 @@ topics:
 
   # ---- mapping and rooms (spec 003) ----
   - {name: /map, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: [slam_toolbox, map_server], since: "003", note: "exactly one of them runs (map_file selects map_server); the contract test shall accept either owner"}
-  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, max_publishers: 1, since: "003", note: "003-R13; no publisher while exploration is cut; the contract test tolerates it, as for mux/coverage"}
+  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, max_publishers: 1, reserved: true, since: "003", note: "003-R13; reserved: no publisher while exploration is cut (map_file path), tolerated as for mux/coverage; drop reserved when exploration_server lands"}
   - {name: /myRobot/map/room_labels, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: room_segmenter, since: "003", note: "003-R18: value = Room.index from 1, 0 = no room, -1 = unknown; same geometry as /map"}
   - {name: /myRobot/map/rooms,       type: vacuum_interfaces/msg/RoomArray, qos: latched, owner: room_segmenter, since: "003"}
   - {name: /myRobot/telemetry/odom_tf_bridge,     type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: odom_tf_bridge, since: "003"}
@@ -199,10 +199,12 @@ lifecycle:
   ia368ii_manager: [myrobot, behaviour_server, cleaning_server, autodocking_server, charging_server, charged_server]
   # spec 003 adds odom_tf_bridge, exploration_server and room_segmenter here when its nodes land (003-R26)
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]
-  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
+  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # when the nav nodes land (T510); Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
   lifecycle_manager_optional: []      # detection chain of 009a (detector_local, image_throttle, detection_selector) when the sequencer launch includes it; MQTT bridge in spec 009; detector_cloud runs in K3s, outside the robot managers
 
 # Public parameters (Art. I.1). Values are the defaults; the launch file may override them.
+# Blocks are keyed by node name, except `detector` (keyed by executable: it runs as detector_local and
+# detector_cloud) and `mapping` (keyed by launch file: launch arguments of mapping.launch.py, not a node).
 parameters:
   lifecycle_sequencer:
     manager_startup_timeout_s: {type: double, default: 30.0, requirement: 005-R35}
@@ -211,11 +213,6 @@ parameters:
     stop_guard_node: {type: string, default: stop_guard, requirement: 005-R36}
     telemetry_rate_hz: {type: double, default: 1.0}
     stop_guard_poll_period_s: {type: double, default: 1.0, requirement: 005-R36, note: "how often the sequencer confirms with get_state that stop_guard is still active; transition events alone can be missed"}
-    # L1 and L2 of specs/005-coverage-and-escape/proposal-stuck-manager-recovery.md (PR #32); 005-R40 and R42 are
-    # proposed there and merged into spec.md by T526. No restart (L3 discarded).
-    manager_ready_timeout_s: {type: double, default: 30.0, requirement: 005-R40, note: "bounded wait for the group to be ready (manager services answer, every node unconfigured) before STARTUP; separate from manager_startup_timeout_s"}
-    discovery_settle_s: {type: double, default: 1.0, requirement: 005-R40, note: "settle margin after the last positive readiness check"}
-    manager_probe_timeout_s: {type: double, default: 2.0, requirement: 005-R42, note: "is_active probe after a manager command times out; no answer = MANAGER_UNRESPONSIVE"}
   supervisor:
     escape_timeout_s: {type: double, default: 20.0, requirement: 001-R09}
     escape_server_wait_s: {type: double, default: 2.0, requirement: 001-R09, note: "bounded wait for an undiscovered escape server before the stuck event counts as a failed escape; the escape_timeout_s clock is not extended, so a wait longer than escape_timeout_s is cut short by the timeout"}
