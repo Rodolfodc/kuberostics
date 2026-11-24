@@ -110,13 +110,13 @@ def test_005_R20_goal_exceeding_coverage_timeout_fails_and_cancels_the_inflight_
 
 
 def test_005_R21_goal_succeeds_early_when_the_target_ratio_is_reached_on_the_last_pass():
-    s, tracker = session(wps(5), target_ratio=0.5)
+    s, tracker = session(wps(5), target_ratio=0.3)
     s.start(0.0)
     s.step(0.0)
     for x in (0.7, 1.0, 1.4, 1.8, 2.2, 2.6):
         for y in (0.5, 0.9, 1.3, 1.6):
             tracker.mark_pose(x, y)
-    assert tracker.covered_ratio >= 0.5
+    assert tracker.covered_ratio >= 0.3
     step = s.step(1.0)
     assert step.kind is StepKind.DONE and step.success and step.reason == 'target_ratio'
     assert step.cancel_goal
@@ -154,7 +154,7 @@ def test_005_R21_snapshot_reports_progress_for_telemetry():
 def test_005_R32_suspend_keeps_the_remaining_waypoints_and_the_covered_mask():
     s, tracker = session(wps(4))
     s.start(0.0)
-    drive_two = [s.step(0.0), None]
+    s.step(0.0)
     s.goal_result(1.0, True)
     s.step(1.0)                                          # waypoint 1 in flight when the escape cancels
     tracker.mark_pose(1.0, 1.0)

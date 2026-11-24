@@ -135,7 +135,7 @@ def test_005_R17_invalid_parameters_are_rejected():
 def coverage_after(raster, region, passes=1, tool=0.15):
     planner = CoveragePlanner()
     wps = planner.plan(raster, region, passes=passes)
-    coverable = coverable_mask(raster, region, CLEARANCE, tool)
+    coverable = coverable_mask(raster, region, CLEARANCE, tool, planner.lane_spacing_m)
     tracker = CoverageTracker(raster, coverable, tool, region=region)
     simulate_pass(tracker, reachable_mask(raster, CLEARANCE) & region, raster, wps)
     return tracker.covered_ratio
@@ -163,3 +163,11 @@ def test_005_R18_two_passes_cover_at_least_as_much_as_one():
     raster = with_box(rect_room(4.0, 3.0), 1.8, 1.3, 2.2, 1.7)
     region = free_region(raster)
     assert coverage_after(raster, region, passes=2) >= coverage_after(raster, region, passes=1)
+
+
+def test_005_R18_the_coverable_definition_is_not_trivially_small():
+    """The 95 % is measured against most of the room, not against a sliver of it."""
+    raster = rect_room(4.0, 3.0)
+    region = free_region(raster)
+    coverable = coverable_mask(raster, region, CLEARANCE, 0.15, 0.25)
+    assert coverable.sum() >= 0.75 * region.sum()     # the rest is the wall strip no robot can reach

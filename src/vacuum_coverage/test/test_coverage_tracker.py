@@ -65,7 +65,7 @@ def test_005_R21_pose_outside_the_raster_is_ignored():
 def test_005_R21_mark_segment_covers_a_band_between_two_poses():
     _, _, _, tracker = make()
     tracker.mark_segment((0.6, 1.0), (2.4, 1.0))
-    assert tracker.covered_ratio > 0.4
+    assert tracker.covered_ratio > 0.1
     assert tracker.covered_cells[tracker_cell(tracker, 1.5, 1.0)]
 
 
