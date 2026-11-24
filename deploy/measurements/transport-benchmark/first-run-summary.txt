@@ -1,0 +1,4 @@
+SUMMARY lyrical-rmw-lan payload_B=80187 sent=600 received=600 lost=0 loss_pct=0.00 reordered=0 recv_rate_hz=2.000 rtt_ms_min=2.64 p50=4.05 p95=4.48 p99=4.67 max=5.69 mean=4.00
+SUMMARY lyrical-bridge-lan payload_B=80187 sent=600 received=600 lost=0 loss_pct=0.00 reordered=0 recv_rate_hz=2.000 rtt_ms_min=3.32 p50=5.16 p95=5.52 p99=5.86 max=9.52 mean=5.03
+SUMMARY lyrical-rmw-wan payload_B=80187 sent=600 received=600 lost=0 loss_pct=0.00 reordered=0 recv_rate_hz=2.000 rtt_ms_min=63.16 p50=149.33 p95=309.69 p99=407.74 max=430.25 mean=165.34
+SUMMARY lyrical-bridge-wan payload_B=80187 sent=600 received=600 lost=0 loss_pct=0.00 reordered=0 recv_rate_hz=2.000 rtt_ms_min=147.09 p50=395.19 p95=500.50 p99=544.08 max=613.26 mean=387.52

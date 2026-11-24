@@ -32,7 +32,7 @@ stub for a real implementation without touching the rest.
 | 001-R01 | The system shall come up with a single `ros2 launch vacuum_bringup skeleton.launch.py`, containing the IA368II nodes, `twist_mux`, the supervisor and the stubs. | launch_testing |
 | 001-R02 | When startup finishes, the IA368II lifecycle manager and `lifecycle_manager_core` shall answer `true` on `is_active`. | launch_testing |
 | 001-R03 | The system shall have exactly one publisher on `/myRobot/cmd_vel`, and it shall be `twist_mux`. | contract |
-| 001-R04 | Every interface marked `since: "001"` or `frozen: true` in `topics.yaml` shall exist with the declared type and QoS. | contract |
+| 001-R04 | Every interface in `topics.yaml` whose `since` is `"001"`, or that has no `since` (inherited, frozen), shall exist with the declared type and QoS. Interfaces with a later `since` (even if `frozen: true`, e.g. `/detections_markers`, `"009a"`) are out of scope for this spec and are required only from their own spec onward. | contract |
 | 001-R05 | While the orchestrator mode is neither CLEANING nor AUTODOCKING, the supervisor shall publish the NONE submode. | unit |
 | 001-R06 | When the mode changes to CLEANING, the supervisor shall publish COVERING within 0.5 s and send a goal to `/myRobot/cover_room`. | launch_testing |
 | 001-R07 | When it receives a `StuckEvent` with submode COVERING or with mode AUTODOCKING, the supervisor shall cancel the ongoing action, publish ESCAPING within 0.5 s and send a goal to `/myRobot/escape`. | launch_testing |
