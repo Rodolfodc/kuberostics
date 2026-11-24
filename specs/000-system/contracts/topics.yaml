@@ -11,6 +11,11 @@
 #     A missing `since` means "001" (inherited and present from the skeleton on). A frozen
 #     entry with a later `since` (e.g. /detections_markers, "009a") is required only from that
 #     spec onward; before that, the contract tests must skip it. Frozen and `since` are independent.
+#   owner may be a list when exactly one of several nodes runs at a time (e.g. /map: slam_toolbox or
+#     map_server); the contract test shall accept any of them (contract batch 1; the test does not handle
+#     a list yet, which is harmless while every such entry has a later `since`).
+#   reserved: true = the entry keeps its name, type and twist_mux subscription but has no owner in the
+#     default launch (e.g. /myRobot/mux/coverage after D-24); the contract test tolerates no publisher.
 #
 # IA368II QoS: QoSProfile(depth=1) => reliable, volatile, keep_last 1.
 
@@ -125,7 +130,7 @@ topics:
   - {name: /myRobot/mux/stop,     type: geometry_msgs/msg/Twist, qos: ia368ii, owner: stop_guard,         priority: 250, since: "001", note: "D-22: zero velocity, published only while lock_stop is true"}
   - {name: /myRobot/mux/escape,   type: geometry_msgs/msg/Twist, qos: ia368ii, owner: escape_server,      priority: 80,  since: "001"}
   - {name: /myRobot/mux/nav,      type: geometry_msgs/msg/Twist, qos: ia368ii, owner: controller_server,  priority: 60,  since: "005"}
-  - {name: /myRobot/mux/coverage, type: geometry_msgs/msg/Twist, qos: ia368ii, owner: coverage_server,    priority: 50,  since: "001"}
+  - {name: /myRobot/mux/coverage, type: geometry_msgs/msg/Twist, qos: ia368ii, reserved: true,             priority: 50,  since: "001", note: "D-24, Q-10: no owner; the real coverage_server publishes no Twist (Nav2 drives on mux/nav); only the stub publishes here, with with_stubs:=true"}
   - {name: /myRobot/mux/docking,  type: geometry_msgs/msg/Twist, qos: ia368ii, owner: autodocking_server, priority: 40,  since: "001"}
   - {name: /myRobot/legacy/cleaning_cmd_vel, type: geometry_msgs/msg/Twist, qos: ia368ii, owner: cleaning_server, sink: true, since: "001", note: "D-04: nobody subscribes"}
 
@@ -138,6 +143,21 @@ topics:
   - {name: /myRobot/telemetry/detection_selector, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detection_selector, since: "009a", note: "D-20: breaker state, counters and watermark at status_rate_hz"}
   - {name: /myRobot/telemetry/image_throttle, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: image_throttle, since: "009a", note: "D-20: passed, dropped_rate, restarts, encode_errors at telemetry_rate_hz"}
   - {name: /detections_markers, type: visualization_msgs/msg/MarkerArray, qos: default, owner: projector, frozen: true, since: "009a", note: "format consumed by the 2025S2 semantic node"}
+  - {name: /myRobot/telemetry/detector_local, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detector_local, since: "009a", note: "D-20: processed count and inference timing at telemetry_rate_hz; topic is /myRobot/telemetry/<node name>"}
+  - {name: /myRobot/telemetry/detector_cloud, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detector_cloud, since: "009a", note: "same executable as detector_local, run in K3s under the node name detector_cloud"}
+
+  # ---- coverage (spec 005) ----
+  - {name: /myRobot/coverage/path,    type: nav_msgs/msg/Path,          qos: default, owner: coverage_server, since: "005", note: "lane waypoints of the current pass, for the interface (spec 007); published once per pass"}
+  - {name: /myRobot/coverage/covered, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: coverage_server, since: "005", note: "100 = covered, 0 = not covered, -1 = outside the coverable region (005-R21); 1 Hz"}
+
+  # ---- mapping and rooms (spec 003) ----
+  - {name: /map, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: [slam_toolbox, map_server], since: "003", note: "exactly one of them runs (map_file selects map_server); the contract test shall accept either owner"}
+  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, max_publishers: 1, since: "003", note: "003-R13; no publisher while exploration is cut; the contract test tolerates it, as for mux/coverage"}
+  - {name: /myRobot/map/room_labels, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: room_segmenter, since: "003", note: "003-R18: value = Room.index from 1, 0 = no room, -1 = unknown; same geometry as /map"}
+  - {name: /myRobot/map/rooms,       type: vacuum_interfaces/msg/RoomArray, qos: latched, owner: room_segmenter, since: "003"}
+  - {name: /myRobot/telemetry/odom_tf_bridge,     type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: odom_tf_bridge, since: "003"}
+  - {name: /myRobot/telemetry/exploration_server, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: exploration_server, since: "003"}
+  - {name: /myRobot/telemetry/room_segmenter,     type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: room_segmenter, since: "003"}
 
 services:
   - name: /myRobot/start_stop
@@ -155,7 +175,11 @@ services:
     type: std_srvs/srv/Trigger
     owner: stuck_detector
     since: "001"
-    note: "stub (T012): publishes one StuckEvent per call; real detection is spec 005"
+    note: "stub (T012): publishes one StuckEvent per call; kept by the real node as a test hook (005-R06)"
+
+  - {name: /myRobot/map/save,        type: std_srvs/srv/Trigger,               owner: room_segmenter, since: "003", note: "003-R07"}
+  - {name: /myRobot/map/segment,     type: std_srvs/srv/Trigger,               owner: room_segmenter, since: "003", note: "003-R18"}
+  - {name: /myRobot/rooms/set_label, type: vacuum_interfaces/srv/SetRoomLabel, owner: room_segmenter, since: "003", note: "003-R23"}
 
 actions:
   - name: /myRobot/escape
@@ -166,11 +190,16 @@ actions:
     type: vacuum_interfaces/action/CoverRoom
     owner: coverage_server
     since: "001"
+  - {name: /myRobot/explore,  type: vacuum_interfaces/action/Explore,     owner: exploration_server, since: "003", note: "003-R10; optional and late (cut candidate)"}
+  # consumed Nav2 interface, declared so the contract tests see it (third party, Art. II)
+  - {name: /navigate_to_pose, type: nav2_msgs/action/NavigateToPose,      owner: bt_navigator, frozen: true, since: "005"}
 
 lifecycle:
   ia368ii_manager: [myrobot, behaviour_server, cleaning_server, autodocking_server, charging_server, charged_server]
+  # spec 003 adds odom_tf_bridge, exploration_server and room_segmenter here when its nodes land (003-R26)
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]
-  lifecycle_manager_optional: []      # MQTT bridge enters in spec 009
+  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
+  lifecycle_manager_optional: []      # detection chain of 009a (detector_local, image_throttle, detection_selector) when the sequencer launch includes it; MQTT bridge in spec 009; detector_cloud runs in K3s, outside the robot managers
 
 # Public parameters (Art. I.1). Values are the defaults; the launch file may override them.
 parameters:
@@ -180,6 +209,12 @@ parameters:
     managers: {type: string_array, default: [lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional], requirement: 005-R35}
     stop_guard_node: {type: string, default: stop_guard, requirement: 005-R36}
     telemetry_rate_hz: {type: double, default: 1.0}
+    stop_guard_poll_period_s: {type: double, default: 1.0, requirement: 005-R36, note: "how often the sequencer confirms with get_state that stop_guard is still active; transition events alone can be missed"}
+    # L1 and L2 of specs/005-coverage-and-escape/proposal-stuck-manager-recovery.md (PR #32); 005-R40 and R42 are
+    # proposed there and merged into spec.md by T526. No restart (L3 discarded).
+    manager_ready_timeout_s: {type: double, default: 30.0, requirement: 005-R40, note: "bounded wait for the group to be ready (manager services answer, every node unconfigured) before STARTUP; separate from manager_startup_timeout_s"}
+    discovery_settle_s: {type: double, default: 1.0, requirement: 005-R40, note: "settle margin after the last positive readiness check"}
+    manager_probe_timeout_s: {type: double, default: 2.0, requirement: 005-R42, note: "is_active probe after a manager command times out; no answer = MANAGER_UNRESPONSIVE"}
   supervisor:
     escape_timeout_s: {type: double, default: 20.0, requirement: 001-R09}
     escape_server_wait_s: {type: double, default: 2.0, requirement: 001-R09, note: "bounded wait for an undiscovered escape server before the stuck event counts as a failed escape; the escape_timeout_s clock is not extended, so a wait longer than escape_timeout_s is cut short by the timeout"}
@@ -188,24 +223,86 @@ parameters:
     mode_topic: {type: string, default: /myRobot/behaviour/mode}
     cover_room_action: {type: string, default: /myRobot/cover_room}
     escape_action: {type: string, default: /myRobot/escape}
+    dock_after_coverage: {type: bool, default: false, requirement: 005-R30, note: "true needs amendment A2 of spec 001"}
+    dock_request_timeout_s: {type: double, default: 30.0, requirement: 005-R30}
+    start_stop_service: {type: string, default: /myRobot/start_stop, requirement: 005-R30, note: "docking request mechanism, candidate until T520 confirms it"}
+    dock_command: {type: string, default: stop, requirement: 005-R30, note: "command sent on start_stop_service to request docking (unverified, T520)"}
+    feedback_stale_s: {type: double, default: 2.5, requirement: 005-R34}
+    nav_cancel_s: {type: double, default: 1.0, requirement: 005-R34}
+    nav_cancel_action: {type: string, default: /navigate_to_pose, requirement: 005-R34}
+    explore_on_start: {type: bool, default: false, requirement: 003-R14, note: "true needs amendment A1 of spec 001; false until exploration exists"}
+    explore_action: {type: string, default: /myRobot/explore}
   stop_guard:
     publish_rate_hz: {type: double, default: 10.0, note: "must stay above 1 / timeout of the mux stop input (0.5 s)"}
     telemetry_rate_hz: {type: double, default: 1.0}
+  # coverage_server, escape_server, stuck_detector: the stub (vacuum_stubs, with_stubs:=true) and the real node
+  # (vacuum_coverage) share the node name (005-R26); parameters marked "stub only" are ignored by the real node.
   coverage_server:
     telemetry_rate_hz: {type: double, default: 1.0}
-    linear_x: {type: double, default: 0.15, note: "constant forward speed while a CoverRoom goal is active (stub, T010)"}
-    angular_z: {type: double, default: 0.0}
-    publish_rate_hz: {type: double, default: 10.0}
+    linear_x: {type: double, default: 0.15, note: "stub only: constant forward speed while a CoverRoom goal is active (T010)"}
+    angular_z: {type: double, default: 0.0, note: "stub only"}
+    publish_rate_hz: {type: double, default: 10.0, note: "stub only"}
+    lane_spacing_m: {type: double, default: 0.25, requirement: 005-R17}
+    robot_radius_m: {type: double, default: 0.16, requirement: 005-R17}
+    margin_m: {type: double, default: 0.05, requirement: 005-R17}
+    min_segment_m: {type: double, default: 0.30, requirement: 005-R17}
+    tool_radius_m: {type: double, default: 0.15, requirement: 005-R21}
+    target_ratio: {type: double, default: 0.95, requirement: 005-R21, note: "success threshold of covered / coverable"}
+    min_acceptable_ratio: {type: double, default: 0.70, requirement: 005-R21, note: "degraded success (success=true, covered_ratio reported) when the session ends below target_ratio; below it, failure; must be <= target_ratio"}
+    max_skip_ratio: {type: double, default: 0.3, requirement: 005-R20}
+    coverage_timeout_s: {type: double, default: 1800.0, requirement: 005-R20}
+    waypoint_timeout_s: {type: double, default: 120.0, requirement: 005-R20}
+    resume_window_s: {type: double, default: 120.0, requirement: 005-R32}
+    max_region_area_m2: {type: double, default: 150.0, requirement: 005-R16}
+    map_topic: {type: string, default: /map}
+    nav_action: {type: string, default: /navigate_to_pose, requirement: 005-R19}
+    # nav_goal_timeout_s (180 s, 005-R34) is a Timeout of nav_bt.xml, not a node parameter: not declared here.
   escape_server:
     telemetry_rate_hz: {type: double, default: 1.0}
-    outcome: {type: string, default: succeed, values: [succeed, fail, hang], requirement: 001-R16}
-    reverse_s: {type: double, default: 1.0, note: "stub script: reverse for reverse_s, then turn for turn_s (T011)"}
-    turn_s: {type: double, default: 1.0}
-    reverse_linear_x: {type: double, default: -0.1}
-    turn_angular_z: {type: double, default: 0.8}
-    publish_rate_hz: {type: double, default: 10.0}
+    outcome: {type: string, default: auto, values: [auto, succeed, fail, hang], requirement: 005-R14, note: "extends the 001 values (001-R16); the launch sets succeed for the stub and auto for the real node (005-R33)"}
+    reverse_s: {type: double, default: 1.0, note: "stub only: reverse for reverse_s, then turn for turn_s (T011)"}
+    turn_s: {type: double, default: 1.0, note: "stub only"}
+    reverse_linear_x: {type: double, default: -0.1, note: "stub only"}
+    turn_angular_z: {type: double, default: 0.8, note: "stub only"}
+    publish_rate_hz: {type: double, default: 10.0, note: "mux/escape rate while a goal runs (stub and real, 005-R12)"}
+    reverse_m: {type: double, default: 0.20, requirement: 005-R08}
+    rear_clearance_m: {type: double, default: 0.15, requirement: 005-R08}
+    turn_deg_base: {type: double, default: 90.0, requirement: 005-R08}
+    turn_deg_step: {type: double, default: 45.0, requirement: 005-R08}
+    front_clearance_m: {type: double, default: 0.40, requirement: 005-R10}
+    max_attempts: {type: int, default: 3, requirement: 005-R10}
+    fallback_forward_m: {type: double, default: 0.30, requirement: 005-R11}
+    default_timeout_s: {type: double, default: 17.0, requirement: 005-R12}
+    reverse_speed_m_s: {type: double, default: 0.15, requirement: 005-R08, note: "stub script used 0.1; limit from T503"}
+    turn_speed_rad_s: {type: double, default: 1.0, requirement: 005-R08, note: "stub script used 0.8; limit from T503"}
+    primary_budget_s: {type: double, default: 5.0, requirement: 005-R10}
+    fallback_budget_s: {type: double, default: 11.5, requirement: 005-R11}
+    front_stop_m: {type: double, default: 0.15, requirement: 005-R11, note: "the fallback advance stops, and fails, below this front range"}
+    angle_tolerance_rad: {type: double, default: 0.05, note: "a turn ends within this of its target"}
+    distance_tolerance_m: {type: double, default: 0.01, note: "a reverse or advance ends within this of its target"}
+    range_cap_m: {type: double, default: 5.0, requirement: 005-R08, note: "ranges (inf included) are capped at this when the side means of the event scan are compared"}
+    max_linear_speed_m_s: {type: double, default: 0.30, requirement: 005-R11, note: "wheel-bridge limit, PLACEHOLDER until T503 (0.30 = limit of spec 009a); configure fails when reverse_speed_m_s exceeds it"}
+    max_angular_speed_rad_s: {type: double, default: 1.0, requirement: 005-R11, note: "wheel-bridge limit, PLACEHOLDER until T503; configure fails when turn_speed_rad_s exceeds it"}
+    front_sector_half_width_rad: {type: double, default: 0.35, requirement: 005-R10, note: "front clearance = minimum valid range within +-this of 0 rad (about 20 deg, the value of the scan_utils tests; unverified, tune in T503/T514)"}
+    rear_sector_half_width_rad: {type: double, default: 0.35, requirement: 005-R08, note: "rear clearance = minimum within +-this of pi; no valid reading there = rear check skipped (front-only laser)"}
+    odom_topic: {type: string, default: /myrobot/odom, note: "D-07"}
+    scan_topic: {type: string, default: /scan}
   stuck_detector:
     telemetry_rate_hz: {type: double, default: 1.0}
+    cmd_linear_min_m_s: {type: double, default: 0.05, requirement: 005-R01}
+    cmd_angular_min_rad_s: {type: double, default: 0.20, requirement: 005-R01}
+    window_s: {type: double, default: 3.0, requirement: 005-R01}
+    min_translation_m: {type: double, default: 0.03, requirement: 005-R01}
+    min_rotation_rad: {type: double, default: 0.10, requirement: 005-R01}
+    cooldown_s: {type: double, default: 5.0, requirement: 005-R03}
+    cmd_timeout_s: {type: double, default: 0.5, requirement: 005-R02, note: "a command older than this counts as zero (twist_mux goes silent on an input timeout instead of sending zero)"}
+    max_sample_gap_s: {type: double, default: 0.5, requirement: 005-R01, note: "a larger gap between pose samples resets the window"}
+    scan_max_age_s: {type: double, default: 0.5, requirement: 005-R04, note: "scan_ranges of the event come from a /scan younger than this, else empty"}
+    map_frame: {type: string, default: map, requirement: 005-R04}
+    base_frame: {type: string, default: base_link, requirement: 005-R04}
+    odom_topic: {type: string, default: /myrobot/odom, note: "D-07"}
+    scan_topic: {type: string, default: /scan}
+    bumper_topic: {type: string, default: "", requirement: 005-R05, note: "std_msgs/msg/Bool, a rising edge (false -> true) is one press (Q-11 decided); empty = BUMPER disabled"}
   detection_selector:
     max_age_s: {type: double, default: 0.67, requirement: 009a-R05, note: "= position_tolerance_m / v_max_m_s (0.20 / 0.30)"}
     open_threshold_s: {type: double, default: 1.5, requirement: 009a-R08, note: "never below max_age_s"}
@@ -222,3 +319,48 @@ parameters:
     telemetry_rate_hz: {type: double, default: 1.0}
     input_topic: {type: string, default: /camera, note: "RGB only; depth never leaves the robot"}
     output_topic: {type: string, default: /myRobot/perception/rgb_throttled/compressed}
+  # Defaults of the `detector` executable (vacuum_detection). It runs under two node names, with launch overrides:
+  #   detector_local (robot, hot standby, 009a-R04): weights yolo11n.pt, input_type image, input_topic /camera,
+  #     output_topic .../detections/local with offload:=true, /myRobot/perception/detections with offload:=false (009a-R01);
+  #   detector_cloud (K3s): weights yolo11x.pt, input_type compressed,
+  #     input_topic /myRobot/perception/rgb_throttled/compressed, output_topic /myRobot/perception/detections/cloud.
+  detector:
+    backend: {type: string, default: ultralytics, values: [ultralytics, "null"], note: "\"null\" detects nothing (bring-up and graph tests without weights); ultralytics is an optional pip dependency"}
+    weights: {type: string, default: yolo11n.pt, note: "the model is chosen by its weights file: yolo11n.pt on the robot, yolo11x.pt in K3s"}
+    device: {type: string, default: cpu, note: "cpu, cuda:0, ..."}
+    score_threshold: {type: double, default: 0.25}
+    iou_threshold: {type: double, default: 0.45}
+    image_size: {type: int, default: 640}
+    max_detections: {type: int, default: 100}
+    input_type: {type: string, default: image, values: [image, compressed], note: "image = sensor_msgs/Image (local), compressed = sensor_msgs/CompressedImage (cloud)"}
+    input_topic: {type: string, default: /camera}
+    output_topic: {type: string, default: /myRobot/perception/detections/local, requirement: 009a-R02, note: "Detection2DArray with the header of the input image; an empty array when nothing is detected"}
+    telemetry_rate_hz: {type: double, default: 1.0, note: "/myRobot/telemetry/<node name>"}
+  odom_tf_bridge:
+    odom_topic: {type: string, default: /myrobot/odom, note: "D-07"}
+    odom_frame: {type: string, default: odom}
+    base_frame: {type: string, default: base_link}
+    zero_at_first_message: {type: bool, default: false, note: "true if /myrobot/odom is in the world frame (Q-14)"}
+  mapping:                          # launch arguments and static TF parameters of mapping.launch.py, not a node
+    odom_source: {type: string, default: sim, values: [sim, laser], requirement: 003-R01}
+    map_file: {type: string, default: "", requirement: 003-R06}
+    map_name: {type: string, default: house}
+    start_pose_xyyaw: {type: double_array, default: [0.0, 0.0, 0.0], requirement: 003-R30, note: "read from maps/<map_name>_rooms.yaml with map_file"}
+    scan_frame: {type: string, default: laser_link, note: "to be measured, T301"}
+    laser_to_base_xyz_rpy: {type: double_array, default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], note: "to be measured, T301"}
+    camera_to_base_xyz_rpy: {type: double_array, default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], note: "to be measured, T301"}
+  exploration_server:
+    min_frontier_cells: {type: int, default: 8, requirement: 003-R09}
+    gain_weight: {type: double, default: 0.05}
+    robot_radius_m: {type: double, default: 0.16}
+    frontier_timeout_s: {type: double, default: 60.0, requirement: 003-R10}
+    explore_timeout_s: {type: double, default: 900.0, requirement: 003-R11}
+    map_loaded: {type: bool, default: false, requirement: 003-R06, note: "set by the launch with map_file; explored = true"}
+    max_blacklist_ratio: {type: double, default: 0.5, requirement: 003-R11}
+    nav_action: {type: string, default: /navigate_to_pose}
+  room_segmenter:
+    door_width_m: {type: double, default: 0.9, requirement: 003-R16, note: "to be measured, T301"}
+    min_room_area_m2: {type: double, default: 2.0, requirement: 003-R16}
+    min_votes: {type: int, default: 2, requirement: 003-R21}
+    observations_topic: {type: string, default: /detections_markers, requirement: 003-R22}
+    rules_file: {type: string, default: config/room_rules.yaml}
