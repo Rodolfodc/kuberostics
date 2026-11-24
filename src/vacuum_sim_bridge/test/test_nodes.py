@@ -163,3 +163,37 @@ def test_odometry_node_rejects_an_unknown_source():
     with pytest.raises(ValueError):
         from rclpy.parameter import Parameter
         OdometryNode(client=FakeSim(), parameter_overrides=[Parameter('odom_source', value='gps')])
+
+
+def test_vision_node_handles_sensors_only_when_asked():
+    sim = FakeSim()
+    sim.rgb = (bytes(4 * 2 * 3), 4, 2)
+    sim.depth = (np.zeros(8, dtype=np.float32).tobytes(), 4, 2)
+    node, probe, ex = make(VisionNode, sim, {'rate_hz': 50.0})
+    got = []
+    probe.create_subscription(Image, '/camera', got.append, 10)
+    assert spin_until(ex, lambda: got)
+    assert not getattr(sim, 'handled', [])
+    node.destroy_node()
+    sim2 = FakeSim()
+    sim2.rgb, sim2.depth = sim.rgb, sim.depth
+    node, probe, ex = make(VisionNode, sim2, {'rate_hz': 50.0, 'explicit_sensor_handling': True})
+    got = []
+    probe.create_subscription(Image, '/camera', got.append, 10)
+    assert spin_until(ex, lambda: got)
+    assert set(sim2.handled) == {sim2.objects['/myRobot/kinect/rgb'], sim2.objects['/myRobot/kinect/depth']}
+    node.destroy_node()
+
+
+def test_odometry_node_warns_on_a_large_wheel_jump():
+    sim = FakeSim()
+    node, probe, ex = make(OdometryNode, sim, {'rate_hz': 50.0, 'odom_source': 'wheels'})
+    warnings = []
+    node.get_logger().warning = lambda m, **k: warnings.append(m)
+    odom = []
+    probe.create_subscription(Odometry, '/myrobot/odom', odom.append, 10)
+    assert spin_until(ex, lambda: odom)
+    assert not warnings
+    sim.joints[sim.objects['/myRobot/leftMotor']] = 2.0           # > quarter turn in one poll
+    assert spin_until(ex, lambda: warnings)
+    node.destroy_node()

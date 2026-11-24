@@ -24,9 +24,23 @@ class SimClient(Protocol):
     def set_wheel_speeds(self, robot: int, left: float, right: float) -> None:
         """Write both wheel speed signals (m/s) in ONE call so the controller never sees only one of them."""
 
+    def handle_vision_sensor(self, handle: int) -> None:
+        """Render one frame of a sensor that is set to explicit handling."""
+
     def read_rgb(self, handle: int) -> Optional[Tuple[bytes, int, int]]: ...
 
     def read_depth(self, handle: int) -> Optional[Tuple[bytes, int, int]]: ...
+
+
+_TRANSIENT_NAMES = ('ZMQError', 'Again', 'ConnectionError', 'TimeoutError')
+_API_MARKERS = ('not found', 'nil value', 'no such', 'unknown function', 'not exist', 'attempt to call')
+
+
+def is_api_error(exc: Exception) -> bool:
+    """True only for 'the API does not exist / was refused' errors, never for connection problems."""
+    if isinstance(exc, (OSError, TimeoutError)) or type(exc).__name__ in _TRANSIENT_NAMES:
+        return False
+    return any(m in str(exc).lower() for m in _API_MARKERS)
 
 
 class ZmqSimClient:
@@ -34,11 +48,13 @@ class ZmqSimClient:
     .sim/p3/verify*.py; behaviour is verified only against the live simulator (tests marked `sim`). The atomic
     wheel write is UNVERIFIED and falls back to two setFloatSignal calls with a warning."""
 
-    def __init__(self, host: str = 'localhost', port: int = 23000, logger=None):
-        from coppeliasim_zmqremoteapi_client import RemoteAPIClient   # lazy: not a rosdep key
+    def __init__(self, host: str = 'localhost', port: int = 23000, logger=None, sim=None):
         self._lock = threading.RLock()
-        self._client = RemoteAPIClient(host=host, port=port)
-        self._sim = self._client.require('sim')
+        if sim is None:   # `sim` is injectable for tests
+            from coppeliasim_zmqremoteapi_client import RemoteAPIClient   # lazy: not a rosdep key
+            self._client = RemoteAPIClient(host=host, port=port)
+            sim = self._client.require('sim')
+        self._sim = sim
         self._log = logger
         self._atomic_ok = True
         self._sandbox = None
@@ -74,12 +90,18 @@ class ZmqSimClient:
                             f'sim.setFloatSignal("{names[1]}", {right!r})')
                     self._sim.executeScriptString(code, self._sandbox)   # one request: both signals together
                     return
-                except Exception as exc:   # API missing or refused: degrade, once
-                    self._atomic_ok = False
+                except Exception as exc:
+                    if not is_api_error(exc):
+                        raise      # transient (connection drop, timeout): the caller retries, nothing latched
+                    self._atomic_ok = False   # the API itself is missing or refused: degrade permanently
                     if self._log:
                         self._log.warning(f'atomic wheel write unavailable ({exc}); using two calls')
             self._sim.setFloatSignal(names[1], right)     # the pair used in .sim/p3/verify3.py
             self._sim.setFloatSignal(names[0], left)
+
+    def handle_vision_sensor(self, handle):
+        with self._lock:
+            self._sim.handleVisionSensor(handle)
 
     def read_rgb(self, handle):
         # getVisionSensorImg(handle) -> (bytes, [w, h]); the kinect sensors render on their own during the

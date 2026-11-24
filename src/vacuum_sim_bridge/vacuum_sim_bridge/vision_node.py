@@ -1,4 +1,4 @@
-"""my_robot_vision_node: /camera (rgb8) and /camera_depth (32FC1, metres) from kinect/rgb and kinect/depth."""
+"""my_robot_vision_node (plain Node on purpose, see README): /camera (rgb8) and /camera_depth (32FC1, metres) from kinect/rgb and kinect/depth."""
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
@@ -13,6 +13,11 @@ class VisionNode(Node):
         super().__init__('my_robot_vision_node', **kwargs)
         declare_connection(self)
         self.declare_parameter('rate_hz', 10.0)
+        # Default off until verified live. The kinect sensors auto-render every simulation step (about 1.2 MB
+        # leaked per step); when the sensors are set to explicit handling they only render when asked, so this
+        # makes the node call handleVisionSensor on both before each frame.
+        self.declare_parameter('explicit_sensor_handling', False)
+        self._explicit = bool(self.get_parameter('explicit_sensor_handling').value)
         self._p = declare_profile(self)
         self._client = client if client is not None else make_client(self)
         self._rgb = self._depth = None
@@ -38,6 +43,9 @@ class VisionNode(Node):
             if self._rgb is None:
                 self._rgb = self._client.get_object(self._p.rgb_sensor_path)
                 self._depth = self._client.get_object(self._p.depth_sensor_path)
+            if self._explicit:
+                self._client.handle_vision_sensor(self._rgb)
+                self._client.handle_vision_sensor(self._depth)
             rgb = self._client.read_rgb(self._rgb)
             depth = self._client.read_depth(self._depth)
         except Exception as exc:

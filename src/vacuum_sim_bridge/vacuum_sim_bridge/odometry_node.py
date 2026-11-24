@@ -1,15 +1,17 @@
-"""my_robot_odometry_node: /myrobot/odom (nav_msgs/Odometry) and TF odom -> footprint -> base_link.
+"""my_robot_odometry_node (plain Node on purpose, see README): /myrobot/odom (nav_msgs/Odometry) and TF odom -> footprint -> base_link.
 
 odom_source: 'ground_truth' (default, model pose relative to the first sample, as the 2025S2 project used the
 simulator ground truth, Q-03) or 'wheels' (integrated joint angles; only valid while a wheel turns less than half a revolution
 between two polls, so not when the simulation runs much faster than the poll rate)."""
+import math
+
 import rclpy
 from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
 
-from vacuum_sim_bridge.geometry import quaternion_from_yaw
+from vacuum_sim_bridge.geometry import quaternion_from_yaw, wrap_angle
 from vacuum_sim_bridge.node_support import (declare_connection, declare_profile, make_client,
                                             static_transform)
 from vacuum_sim_bridge.odometry_core import GroundTruthOdometry, WheelOdometry
@@ -29,6 +31,7 @@ class OdometryNode(Node):
         self._core = GroundTruthOdometry(self._p) if source == 'ground_truth' else WheelOdometry(self._p)
         self._client = client if client is not None else make_client(self)
         self._handles = None
+        self._last_joints = None
         self._pub = self.create_publisher(Odometry, '/myrobot/odom', 10)
         self._tf = TransformBroadcaster(self)
         self._static = static_transform(self, self._p.footprint_frame, self._p.base_frame,
@@ -45,8 +48,17 @@ class OdometryNode(Node):
         t = self._client.get_sim_time()
         if self._source == 'ground_truth':
             return self._core.update(self._client.get_object_pose(self._handles[0]), t)
-        return self._core.update(self._client.get_joint_position(self._handles[0]),
-                                 self._client.get_joint_position(self._handles[1]), t)
+        joints = (self._client.get_joint_position(self._handles[0]),
+                  self._client.get_joint_position(self._handles[1]))
+        if self._last_joints is not None:
+            jump = max(abs(wrap_angle(a - b)) for a, b in zip(joints, self._last_joints))
+            raw = max(abs(a - b) for a, b in zip(joints, self._last_joints))
+            if jump > math.pi / 2 or raw > math.pi / 2:
+                self.get_logger().warning(
+                    f'wheel joint moved {math.degrees(max(jump, raw)):.0f} deg in one poll (> quarter turn): '
+                    'wheel odometry may alias, poll faster or use odom_source=ground_truth')
+        self._last_joints = joints
+        return self._core.update(*joints, t)
 
     def tick(self):
         try:

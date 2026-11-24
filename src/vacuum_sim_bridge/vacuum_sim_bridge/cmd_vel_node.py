@@ -1,4 +1,4 @@
-"""my_robot_cmd_vel_node: /cmd_vel (unstamped Twist; the launch remaps it to /myRobot/cmd_vel, D-06) -> wheel
+"""my_robot_cmd_vel_node (plain Node on purpose, see README): /cmd_vel (unstamped Twist; the launch remaps it to /myRobot/cmd_vel, D-06) -> wheel
 speed signals of the model. Rewrites the signals every cycle (the model clears them) and zeroes them when the
 command stream stops."""
 import time

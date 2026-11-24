@@ -48,3 +48,7 @@ class FakeSim:
     def read_depth(self, handle):
         self._check()
         return self.depth
+
+    def handle_vision_sensor(self, handle):
+        self._check()
+        self.handled = getattr(self, 'handled', []) + [handle]

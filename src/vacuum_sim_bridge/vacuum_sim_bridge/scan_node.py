@@ -1,4 +1,4 @@
-"""my_robot_scan_node: /scan from the model's distSignal (replaces the stock node of the same name, D-07)."""
+"""my_robot_scan_node (plain Node on purpose, see README): /scan from the model's distSignal (replaces the stock node of the same name, D-07)."""
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
