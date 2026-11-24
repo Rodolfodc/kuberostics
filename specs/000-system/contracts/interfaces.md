@@ -1,6 +1,7 @@
 # New types of the `vacuum_interfaces` package (spec 001)
 
-Draft of the `.msg` and `.action` files. Task T002 of spec 001 copies this content into the package.
+Draft of the `.msg`, `.srv` and `.action` files. Task T002 of spec 001 copies this content into the package; the room
+types of spec 003 are copied by T303.
 
 ## msg/Submode.msg
 
@@ -103,9 +104,70 @@ string room_id      # empty = current room
 uint8 passes
 ---
 # Result
-bool success
-float32 covered_ratio
+bool success          # true when covered_ratio >= target_ratio, or a degraded result >= min_acceptable_ratio (005-R21)
+float32 covered_ratio # covered / coverable cells of the region (005-R21)
 ---
 # Feedback
 float32 covered_ratio
 ```
+
+## msg/Room.msg (spec 003)
+
+```
+uint8 DEFAULT=0
+uint8 RULE=1
+uint8 USER=2
+
+uint16 index                    # value in room_labels, from 1, stable (003-R19)
+string id                       # room_%02d of index (003-R20); CoverRoom.room_id (003-R25)
+string label                    # default = id
+uint8 label_source              # DEFAULT, RULE or USER
+geometry_msgs/Point centroid    # frame map
+float32 area_m2
+```
+
+## msg/RoomArray.msg (spec 003)
+
+```
+std_msgs/Header header          # frame map, stamp of the map used
+vacuum_interfaces/Room[] rooms
+```
+
+## srv/SetRoomLabel.srv (spec 003)
+
+```
+string id           # Room.id
+string label
+---
+bool success        # false for an unknown id (003-R23)
+string message
+```
+
+## action/Explore.action (spec 003)
+
+```
+# Goal
+float32 timeout_s               # 0 = parameter explore_timeout_s
+---
+# Result
+bool success
+uint32 frontiers_done
+uint32 frontiers_blacklisted
+float32 duration_s
+---
+# Feedback (1 Hz or faster, 003-R31)
+uint32 frontiers_remaining
+float32 elapsed_s
+```
+
+## Notification codes added by contract batch 1
+
+`code` stays a free string, so these rows change no type. When the registry of PR #29 (table after `Notification.msg`)
+is merged, these rows move into it. "Defined in" points at code on unmerged branches.
+
+| `code` | Severity | `source` | Meaning | Defined in |
+|---|---|---|---|---|
+| `COVERAGE_DONE` | INFO | `supervisor` | `cover_room` ended with success while the mode is CLEANING; docking requested (005-R30) | `vacuum_supervisor/submode_machine.py` (branch `feat/supervisor-coverage-rows`) |
+| `COVERAGE_FAILED` | WARN | `supervisor` | `cover_room` ended with failure while the mode is CLEANING; docking requested (005-R30) | `vacuum_supervisor/submode_machine.py` (branch `feat/supervisor-coverage-rows`) |
+| `DOCK_REQUEST_FAILED` | ERROR | `supervisor` | the mode did not become AUTODOCKING within `dock_request_timeout_s`; stays in NONE (005-R30) | `vacuum_supervisor/submode_machine.py` (branch `feat/supervisor-coverage-rows`) |
+| `MANAGER_UNRESPONSIVE` | WARN (nav, optional), ERROR (core) | `lifecycle_sequencer` | a lifecycle manager did not answer the `is_active` probe after a command timed out; no further manager command in this run; the text lists the node states (005-R42, proposed in PR #32) | `vacuum_bringup/manager_sequencer.py` (to be written, T523) |
