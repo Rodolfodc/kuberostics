@@ -1,4 +1,4 @@
-"""EscapeScript (spec 005, T505): the scripted escape on a simulated clock and a simulated robot. No ROS."""
+"""EscapeScript (spec 005): the scripted escape on a simulated clock and a simulated robot. No ROS."""
 import math
 
 import pytest
