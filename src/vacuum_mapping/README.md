@@ -16,6 +16,9 @@ unresolved); the segmenter uses only numpy and plain breadth-first searches.
 | `core/room_segmenter.py` | `RoomSegmenter.segment(raster)` -> raw label raster (erosion, seeds, nearest-seed growth) | T306/T313, 003-R16, R17 |
 | `core/room_tracker.py` | `RoomTracker.track(previous, raw_labels, ...)` -> `TrackedMap` with stable indexes | T306/T313, 003-R19, R20 |
 | `core/room_labeler.py` | `RoomLabeler.label_rooms(...)` weighted vote of observations -> rooms | T307/T314, 003-R21 |
+| `core/frontier_finder.py` | `FrontierFinder.find(grid, robot_xy, blacklist)` -> ordered `Frontier(centroid, size)`; uses `vacuum_grid.GridView` | T305/T309, 003-R09 |
+| `core/marker_observations.py` | `ObservationBuffer`: `/detections_markers` markers -> `Observation`s keyed by marker id (republish-safe) | T314, 003-R22 |
+| `config/room_rules.yaml` | placeholder class -> room label table (real classes come with spec 004) | T314, 003-R21 |
 | `map_io.py` | nav2 `map.yaml` + `.pgm` <-> `Raster` | 003-R33, R34 |
 | `rooms_io.py` | `<map>_rooms.yaml` and `room_rules.yaml` <-> dataclasses | 003-R21, R23, R30 |
 | `map_diff_cli.py` | `ros2 run vacuum_mapping map_diff <committed.yaml> <new.yaml> [-o report.md]` | T325 |
@@ -91,6 +94,9 @@ Test names carry the requirement id (`test_003_R17_...`). Test grids are tiny sy
 
 ## Not here yet
 
-`FrontierFinder` and `GridView` (T305, T309; they belong in the shared `vacuum_grid` package), all nodes,
-`config/room_rules.yaml`, `config/mapping.yaml`, `maps/`. The interfaces (`Room`, `RoomArray`, ...) are
-mirrored by the plain dataclasses in `core/types.py` until the contract change is applied.
+The nodes (`room_segmenter`, `exploration_server`, `odom_tf_bridge`), `config/mapping.yaml`, `maps/` and
+the launch file. The interfaces (`Room`, `RoomArray`, `Explore`, `SetRoomLabel`) are NOT in
+`contracts/topics.yaml` / `interfaces.md` yet (only proposed in `specs/003-mapping/plan.md`), so
+`vacuum_interfaces` does not have them and the nodes wait for the contract change. Until then `core/types.py`
+mirrors them as plain dataclasses. `GridView` lives in the shared package `src/vacuum_grid` (no ROS); the
+duplicate cell arithmetic of `Raster` is pinned to it by `test/test_grid_conventions.py` and can be merged later.
