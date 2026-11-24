@@ -1,4 +1,4 @@
-%% Deployment view: what runs where, by component. Reflects main 59fdd2b (merged PRs #5 to #13, #16 to #18, #20 to #23, #25) plus open PRs #14, #15, #26 (2026-11-24). Refresh after merges.
+%% Deployment view: what runs where, by component. Reflects main c48b385 (merged PRs #5 to #14, #16 to #18, #20 to #23, #25) plus open PRs #15, #26 (2026-11-24). Refresh after merges.
 %% Colour: green = merged on main; light green dashed = partial (pure core merged, ROS node planned); amber = in an open PR (number); grey = planned only.
 %% Shape: rectangle = lifecycle node under a manager; hexagon = plain node (D-26); dashed border = third-party (Art. II).
 flowchart TB
@@ -20,7 +20,7 @@ flowchart TB
   end
 
   subgraph HOST["HOST machine (outside Docker)"]
-    SIM["CoppeliaSim 4.10 (third-party)<br/>House scene + myRobot.ttm<br/>ZeroMQ remote API :23000<br/>3.6 steps/s with robot, measured by the bench (#14, #15, open)"]:::pr
+    SIM["CoppeliaSim 4.10 (third-party)<br/>House scene + myRobot.ttm<br/>ZeroMQ remote API :23000<br/>3.6 steps/s with robot, bench merged (#14), record of D-11 open (#15)"]:::pr
   end
 
   subgraph ROBOT["ROBOT: ROS 2 containers, Jazzy or Lyrical, network_mode host, /myRobot"]
@@ -89,7 +89,7 @@ flowchart TB
 
   subgraph DEV["OPERATOR and DEV tooling (host)"]
     direction LR
-    DEVT["scripts/test-docker.sh, CI matrix (#5),<br/>tools/sim_bench base, tools/sim.sh,<br/>ia368ii-check (#17), transport-bench (#16),<br/>render-diagrams.sh<br/>(sim bench extension #14, naming cleanup #26: open)"]:::merged
+    DEVT["scripts/test-docker.sh, CI matrix (#5),<br/>tools/sim_bench (#14), tools/sim.sh,<br/>ia368ii-check (#17), transport-bench (#16),<br/>render-diagrams.sh<br/>(naming cleanup #26: open)"]:::merged
   end
 
   LMC -.->|"manages"| SUP

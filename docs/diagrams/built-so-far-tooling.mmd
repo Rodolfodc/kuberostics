@@ -1,4 +1,4 @@
-%% Built so far (tooling, specs and decisions): reflects main 59fdd2b (merged PRs #5 to #13, #16 to #18, #20 to #23, #25) plus open PRs #14, #15, #26, as read on 2026-11-24. Refresh after merges.
+%% Built so far (tooling, specs and decisions): reflects main c48b385 (merged PRs #5 to #14, #16 to #18, #20 to #23, #25) plus open PRs #15, #26, as read on 2026-11-24. Refresh after merges.
 %% Legend: green = merged on main; amber = in an open PR (number in label); grey = planned only.
 flowchart TB
   classDef merged fill:#d4edda,stroke:#2e7d32,color:#000
@@ -47,8 +47,7 @@ flowchart TB
 
   subgraph MEAS["Measurements and checks (need simulator or cluster)"]
     direction LR
-    SB["tools/sim_bench<br/>bench.py, inspect_scene.py (on main)"]:::merged
-    SB2["bench extension<br/>--no-robot, --no-kinect (#14, open)"]:::pr
+    SB["tools/sim_bench<br/>bench.py, inspect_scene.py<br/>--no-robot, --no-kinect (#14)"]:::merged
     IC["ia368ii-check-docker.sh (#17)<br/>Lyrical: RcutilsLogger.warn crash"]:::merged
     TB["transport benchmark (#16)<br/>rmw_zenoh vs zenoh-bridge"]:::merged
   end
@@ -66,7 +65,6 @@ flowchart TB
   TD --> TESTS
   IMG -->|"runs"| TD
   SB --> R1
-  SB2 --> R1
   IC --> R2
   TB --> R3
   R1 --> S000
