@@ -1,11 +1,10 @@
 """The checks shared by the two live-graph launch tests (not a test module)."""
-import unittest
-
 import launch_support as ls
 
 
-class LiveChecks(unittest.TestCase):
-    """Subclasses set OFFLOAD; the graph itself is started by generate_test_description of their module."""
+class LiveChecks:
+    """Mixin (not a TestCase, so it is not collected by itself): subclasses are `(LiveChecks, unittest.TestCase)` and
+    set OFFLOAD; the graph itself is started by generate_test_description of their module."""
     OFFLOAD = None
     probe = None
 
@@ -49,5 +48,11 @@ class LiveChecks(unittest.TestCase):
 
     def test_05_throttle_presence_follows_offload(self):
         """009a-R03: image_throttle (the only node that sends RGB to the cloud) exists only with offload:=true."""
-        names = {n for n, ns in self.probe.node.get_node_names_and_namespaces()}
-        self.assertEqual('image_throttle' in names, bool(self.OFFLOAD))
+        def names():
+            return {n for n, ns in self.probe.node.get_node_names_and_namespaces()}
+        self.assertTrue(self.probe.wait_for(
+            lambda: {'detector_local', 'detection_selector'} <= names(), 30.0), 'chain nodes not discovered')
+        if self.OFFLOAD:
+            self.assertTrue(self.probe.wait_for(lambda: 'image_throttle' in names(), 30.0))
+        else:
+            self.assertNotIn('image_throttle', names())

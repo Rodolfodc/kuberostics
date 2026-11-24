@@ -1,6 +1,7 @@
 """009a-R01: live graph of detection.launch.py with offload:=true and backend:=null (no weights, no simulator)."""
 import os
 import sys
+import unittest
 
 import pytest
 
@@ -14,5 +15,5 @@ def generate_test_description():
     return ls.launch_description(offload=True)
 
 
-class TestOffloadTrue(LiveChecks):
+class TestOffloadTrue(LiveChecks, unittest.TestCase):
     OFFLOAD = True

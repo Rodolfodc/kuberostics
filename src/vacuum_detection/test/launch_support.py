@@ -73,6 +73,10 @@ class Probe:
         self._thread = threading.Thread(target=self._executor.spin, daemon=True)
         self._thread.start()
         contract = load_contract(find_contract())
+        # build_expectations() only covers `since: "001"` entries (001-R04 scope). The two 009a topics checked here
+        # are built the same way, by dropping their `since`: the contract helpers stay the single rule.
+        contract['topics'] = [{k: v for k, v in e.items() if k != 'since'} for e in contract['topics']
+                              if e['name'] in (FINAL_TOPIC, LOCAL_TOPIC)]
         self.expectations = {e.name: e for e in build_expectations(contract) if e.kind == 'topic'}
 
     def close(self) -> None:
