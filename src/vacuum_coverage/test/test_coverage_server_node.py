@@ -31,12 +31,12 @@ MUX_INPUTS = ['teleop', 'stop', 'escape', 'nav', 'coverage', 'docking']
 
 
 class System:
-    def __init__(self, script=None, params=(), with_nav=True, with_map=True):
+    def __init__(self, script=None, params=(), with_nav=True, with_map=True, serve_nav=True):
         rclpy.init()
         self.node = CoverageServerNode(parameter_overrides=[Parameter(k, value=v) for k, v in params])
         self.probe = Node('coverage_probe')
         self.nodes = [self.node, self.probe]
-        self.nav = FakeNav(script or (lambda i, x, y: REACH)) if with_nav else None
+        self.nav = FakeNav(script or (lambda i, x, y: REACH), serve=serve_nav) if with_nav else None
         if self.nav:
             self.nodes.append(self.nav)
         if with_map:
@@ -79,14 +79,23 @@ class System:
     def status_values(self):
         return {kv.key: kv.value for kv in self.telemetry[-1].status[0].values}
 
+    def wait_ready(self):
+        """Map, TF and the fake Nav2 server discovered: the node accepts goals from here on."""
+        assert wait_for(lambda: self.node.has_map and self.node._nav.server_is_ready() and self.node._pose() is not None, 20.0)
+
     def close(self):
-        self.node.trigger_deactivate()
-        self.node.trigger_cleanup()
-        self.executor.shutdown()
-        for n in self.nodes:
-            n.destroy_node()
-        rclpy.try_shutdown()
-        self.thread.join(timeout=2)
+        try:
+            for transition in (self.node.trigger_deactivate, self.node.trigger_cleanup):
+                try:
+                    transition()
+                except Exception:           # already deactivated by the test (Jazzy raises, Lyrical does not)
+                    pass
+        finally:
+            self.executor.shutdown()
+            for n in self.nodes:
+                n.destroy_node()
+            rclpy.try_shutdown()
+            self.thread.join(timeout=2)
 
 
 @pytest.fixture
@@ -139,8 +148,10 @@ def test_R26_documented_defaults_match_the_contract():
 
 
 def test_R36_goal_rejected_while_navigation_is_not_available(system):
-    s = system(with_nav=False)
+    s = system(serve_nav=False)             # map and TF exist, only the /navigate_to_pose server is missing
     s.up()
+    assert wait_for(lambda: s.node.has_map and s.node._pose() is not None, 20.0)
+    assert not s.node._nav.server_is_ready()
     assert not s.send().accepted
 
 
@@ -153,14 +164,14 @@ def test_R16_goal_rejected_without_a_map(system):
 def test_R16_unknown_room_id_rejected_without_room_topics(system):
     s = system()
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     assert not s.send(room_id='room_99').accepted
 
 
 def test_R19_R21_success_publishes_no_velocity_and_reports_ratio(system):
     s = system()
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     handle = s.send()
     assert handle.accepted
     res = s.result(handle)
@@ -175,7 +186,7 @@ def test_R21_degraded_success_between_min_and_target(system):
     keep = int(0.8 * waypoint_count())
     s = system(script=lambda i, x, y: REACH if i < keep else ABORT, params=[('max_skip_ratio', 1.0)])
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     res = s.result(s.send())
     assert res.result.success is True
     assert 0.70 <= res.result.covered_ratio < 0.95
@@ -184,7 +195,7 @@ def test_R21_degraded_success_between_min_and_target(system):
 def test_R20_R21_failure_below_min_ratio(system):
     s = system(script=lambda i, x, y: ABORT, params=[('max_skip_ratio', 1.0)])
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     res = s.result(s.send())
     assert res.status == GoalStatus.STATUS_ABORTED
     assert res.result.success is False
@@ -199,7 +210,7 @@ def test_R20_hanging_waypoint_is_cancelled_retried_once_then_skipped(system):
 
     s = system(script=script, params=[('waypoint_timeout_s', 0.5)])
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     res = s.result(s.send())
     assert s.nav.goals[0] == s.nav.goals[1] != s.nav.goals[2], 'retry once, then skip'
     assert len(s.nav.cancel_times) >= 2
@@ -210,7 +221,7 @@ def test_R20_hanging_waypoint_is_cancelled_retried_once_then_skipped(system):
 def test_R22_cancel_cancels_the_nav_goal_within_half_a_second(system):
     s = system(script=lambda i, x, y: HANG)
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     handle = s.send()
     assert wait_for(lambda: s.nav.goals, 10.0)
     t0 = time.monotonic()
@@ -229,7 +240,7 @@ def test_R32_same_room_after_cancel_resumes_at_the_interrupted_waypoint(system):
 
     s = system(script=script)
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     handle = s.send()
     assert wait_for(lambda: len(s.nav.goals) == 4, 10.0)       # three reached, the fourth hangs
     interrupted = s.nav.goals[3]
@@ -247,7 +258,7 @@ def test_R32_same_room_after_cancel_resumes_at_the_interrupted_waypoint(system):
 def test_R31_deactivate_cancels_the_nav_goal_in_flight(system):
     s = system(script=lambda i, x, y: HANG)
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     handle = s.send()
     assert wait_for(lambda: s.nav.goals, 10.0)
     s.node.trigger_deactivate()
@@ -258,7 +269,7 @@ def test_R31_deactivate_cancels_the_nav_goal_in_flight(system):
 def test_R34_feedback_at_one_hertz_or_faster_while_a_goal_is_active(system):
     s = system(script=lambda i, x, y: HANG)
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     s.send()
     assert wait_for(lambda: len(s.feedback) >= 4, 10.0)
     gaps = [b[0] - a[0] for a, b in zip(s.feedback, s.feedback[1:])]
@@ -268,7 +279,7 @@ def test_R34_feedback_at_one_hertz_or_faster_while_a_goal_is_active(system):
 def test_R27_telemetry_path_and_covered_grid_are_published(system):
     s = system()
     s.up()
-    assert wait_for(lambda: s.node.has_map, 10.0)
+    s.wait_ready()
     assert wait_for(lambda: s.telemetry, 5.0)
     assert s.status_values()['state'] == 'idle'
     s.result(s.send())

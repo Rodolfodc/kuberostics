@@ -40,9 +40,9 @@ def raster_to_grid(raster, stamp=None) -> OccupancyGrid:
 
 class FakeNav(Node):
     """`script(index, x, y)` returns REACH, ABORT or HANG for the index-th goal received (0-based).
-    REACH moves the fake robot in 0.05 m steps (about 5 m/s) and succeeds; HANG waits for a cancel."""
+    REACH moves the fake robot in 0.05 m steps (about 5 m/s at most) and succeeds; HANG waits for a cancel."""
 
-    def __init__(self, script, start=(1.0, 1.0), name='fake_nav2'):
+    def __init__(self, script, start=(1.0, 1.0), name='fake_nav2', serve=True):
         super().__init__(name)
         self.script = script
         self.pose = list(start)
@@ -52,7 +52,7 @@ class FakeNav(Node):
         self._lock = threading.Lock()
         self._tf = TransformBroadcaster(self)
         self.create_timer(0.01, self._publish_tf)
-        self.server = ActionServer(
+        self.server = None if not serve else ActionServer(
             self, NavigateToPose, '/navigate_to_pose', execute_callback=self._execute,
             goal_callback=lambda _: GoalResponse.ACCEPT, cancel_callback=self._on_cancel,
             callback_group=ReentrantCallbackGroup())
@@ -92,7 +92,7 @@ class FakeNav(Node):
                     goal_handle.canceled()
                     return NavigateToPose.Result()
                 self.pose[:] = [sx + (p.x - sx) * i / n, sy + (p.y - sy) * i / n]
-                time.sleep(0.004)
+                time.sleep(0.01)
             goal_handle.succeed()
             return NavigateToPose.Result()
         finally:
