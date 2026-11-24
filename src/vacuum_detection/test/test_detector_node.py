@@ -145,9 +145,9 @@ def test_009a_R02_telemetry_carries_the_inference_time(ros):
 
 def test_009a_R02_full_lifecycle_cycle_leaves_nothing_behind(ros):
     node = DetectorNode(model=FakeModel([]))
-    assert node.trigger_configure().label == 'inactive'
-    assert node.trigger_activate().label == 'active'
-    assert node.trigger_deactivate().label == 'inactive'
-    assert node.trigger_cleanup().label == 'unconfigured'
+    assert node.trigger_configure() == TransitionCallbackReturn.SUCCESS
+    assert node.trigger_activate() == TransitionCallbackReturn.SUCCESS
+    assert node.trigger_deactivate() == TransitionCallbackReturn.SUCCESS
+    assert node.trigger_cleanup() == TransitionCallbackReturn.SUCCESS
     assert node._timer is None and node._core is None
-    assert node.trigger_configure().label == 'inactive'          # and it can be configured again
+    assert node.trigger_configure() == TransitionCallbackReturn.SUCCESS          # and it can be configured again
