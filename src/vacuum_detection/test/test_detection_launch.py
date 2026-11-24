@@ -5,6 +5,7 @@ import importlib.util
 import pathlib
 
 import pytest
+import yaml
 
 pytest.importorskip('launch_ros')
 from launch import LaunchContext                                   # noqa: E402
@@ -33,7 +34,7 @@ def by_name(actions):
 def plain(value):
     """Resolves the substitutions launch_ros leaves in a parameter value (tuples of substitutions, nested)."""
     if isinstance(value, tuple) and value and not isinstance(value[0], (str, int, float, bool, list, tuple)):
-        return resolve(value)
+        return yaml.safe_load(resolve(value))   # launch_ros encodes each value as a YAML document
     if isinstance(value, (list, tuple)):
         return [plain(v) for v in value]
     return value
