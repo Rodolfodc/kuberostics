@@ -1,0 +1,10 @@
+// zenoh-bridge-ros2dds, robot side (009a-R19): only the compressed RGB leaves, only the cloud detections come back.
+// Never add a twist_mux input, /myRobot/cmd_vel or any other topic here (Art. VI). The bridge is NOT part of
+// lifecycle_manager_core: if it dies the robot keeps cleaning on the local detector (Art. VII).
+// Run: compose.yaml, service `bridge`, profile `offload`; set BRIDGE_CLOUD_ENDPOINT=tcp/<node-ip>:30448.
+{
+  plugins: { ros2dds: { allow: {
+    publishers:  ["/myRobot/perception/rgb_throttled/compressed"],
+    subscribers: ["/myRobot/perception/detections/cloud"],
+  } } },
+}

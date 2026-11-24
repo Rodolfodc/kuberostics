@@ -1,0 +1,22 @@
+# Robot-side services outside the ROS graph. Only the transport bridge for now (009a-R19, Q-06 proposal: zenoh-bridge-ros2dds).
+# The project owner has NOT confirmed Q-06: with rmw_zenoh this service is not used (profile `offload` is opt-in).
+# The bridge is NOT under lifecycle_manager_core: if it dies the robot keeps cleaning on the local detector (Art. VII), and
+# Docker restarts it. Placement (optional lifecycle group vs separately supervised) is still an open owner decision.
+# Usage: BRIDGE_CLOUD_ENDPOINT=tcp/<k3d node IP>:30448 ROS_DISTRO=jazzy docker compose --profile offload up bridge
+services:
+  bridge:
+    profiles: ["offload"]
+    # Pinned by digest (same as scripts/transport-bench.sh); the tag is tracked in scripts/setup_env.sh.
+    image: eclipse/zenoh-bridge-ros2dds:1.10.2@sha256:0183b7e83790a8c57a069743776c2d913041760eb19e64d8cc4fbf7374269034
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+      ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+    # The allow-list lets only the two perception topics cross (R19): never add mux or cmd_vel topics.
+    command: ["-e", "${BRIDGE_CLOUD_ENDPOINT:?set BRIDGE_CLOUD_ENDPOINT=tcp/<node ip>:30448}", "--no-multicast-scouting", "-c", "/cfg/bridge.json5"]
+    volumes:
+      - ./deploy/bridge/robot.json5:/cfg/bridge.json5:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
