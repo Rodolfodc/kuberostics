@@ -27,6 +27,13 @@ from vacuum_supervisor.supervisor_node import SupervisorNode  # noqa: E402
 QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.VOLATILE)
 
 
+# Scheduling slack only (not a requirement): how late, beyond the configured wait, the failure may be observed on a
+# loaded CI runner (measured 3.7 s and 4.2 s over a 0.8 s wait at one CPU). The requirement is the configured wait
+# (lower bound, exact: the deadline starts after t_stuck) and "not the escape_timeout_s clock" (15 s or 30 s here);
+# the slack must stay well below those so a supervisor that ignored the wait would still be caught.
+SCHEDULING_SLACK_S = 10.0
+
+
 def wait_for(predicate, timeout=30.0):   # condition wait: returns as soon as true; generous for loaded CI runners
     end = time.monotonic() + timeout
     while time.monotonic() < end:
@@ -131,10 +138,11 @@ def test_001_R07_late_escape_server_is_waited_for_instead_of_failing_the_escape(
 
 def test_001_R09_escape_server_never_discovered_fails_after_escape_server_wait_s(system):
     sup, peer = system({'escape_timeout_s': 15.0, 'escape_server_wait_s': 0.8})
-    assert wait_for(lambda: peer.t_failed is not None, timeout=10.0)   # far before the 15 s timeout
-    # measured from the stuck event, so startup jitter cannot matter; an immediate failure (the original bug) would
-    # give ~0 s here
-    assert 0.8 - 0.1 <= peer.t_failed - peer.t_stuck <= 0.8 + 3.0
+    # failure is reported eventually (condition wait), and far before the 15 s escape timeout
+    assert wait_for(lambda: peer.t_failed is not None, timeout=0.8 + SCHEDULING_SLACK_S)
+    # requirement: not before the configured wait, measured from the stuck event (an immediate failure, the original
+    # bug, would give ~0 s). No upper bound on elapsed time: the condition wait above covers it.
+    assert peer.t_failed - peer.t_stuck >= 0.8 - 0.1
     assert wait_for(lambda: peer.lock is True)
     assert wait_for(lambda: any(n.code == 'ESCAPE_FAILED' and n.severity == Notification.ERROR
                                 for n in peer.notifications))
@@ -144,8 +152,8 @@ def test_001_R09_escape_server_never_discovered_fails_after_escape_server_wait_s
 def test_001_R09_escape_timeout_clock_is_not_extended_by_the_server_wait(system):
     """escape_timeout_s < escape_server_wait_s and the server never appears: exactly one failure, no stale goal."""
     sup, peer = system({'escape_timeout_s': 0.6, 'escape_server_wait_s': 30.0})
-    assert wait_for(lambda: peer.t_failed is not None, timeout=10.0)   # far before the 30 s wait
-    assert 0.6 - 0.1 <= peer.t_failed - peer.t_stuck <= 0.6 + 3.0
+    assert wait_for(lambda: peer.t_failed is not None, timeout=0.6 + SCHEDULING_SLACK_S)   # far before the 30 s wait
+    assert peer.t_failed - peer.t_stuck >= 0.6 - 0.1
     assert sup._pending_escape_deadline is None, 'the wait outlived the escape timeout'
     peer.start_escape_server()
     assert wait_for(lambda: sup._escape_client.server_is_ready())
