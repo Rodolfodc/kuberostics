@@ -42,7 +42,7 @@ class FakeNav(Node):
     """`script(index, x, y)` returns REACH, ABORT or HANG for the index-th goal received (0-based).
     REACH moves the fake robot in 0.05 m steps (about 5 m/s at most) and succeeds; HANG waits for a cancel."""
 
-    def __init__(self, script, start=(1.0, 1.0), name='fake_nav2', serve=True):
+    def __init__(self, script, start=(1.0, 1.0), name='fake_nav2'):
         super().__init__(name)
         self.script = script
         self.pose = list(start)
@@ -52,7 +52,7 @@ class FakeNav(Node):
         self._lock = threading.Lock()
         self._tf = TransformBroadcaster(self)
         self.create_timer(0.01, self._publish_tf)
-        self.server = None if not serve else ActionServer(
+        self.server = ActionServer(
             self, NavigateToPose, '/navigate_to_pose', execute_callback=self._execute,
             goal_callback=lambda _: GoalResponse.ACCEPT, cancel_callback=self._on_cancel,
             callback_group=ReentrantCallbackGroup())

@@ -31,12 +31,12 @@ MUX_INPUTS = ['teleop', 'stop', 'escape', 'nav', 'coverage', 'docking']
 
 
 class System:
-    def __init__(self, script=None, params=(), with_nav=True, with_map=True, serve_nav=True):
+    def __init__(self, script=None, params=(), with_nav=True, with_map=True):
         rclpy.init()
         self.node = CoverageServerNode(parameter_overrides=[Parameter(k, value=v) for k, v in params])
         self.probe = Node('coverage_probe')
         self.nodes = [self.node, self.probe]
-        self.nav = FakeNav(script or (lambda i, x, y: REACH), serve=serve_nav) if with_nav else None
+        self.nav = FakeNav(script or (lambda i, x, y: REACH)) if with_nav else None
         if self.nav:
             self.nodes.append(self.nav)
         if with_map:
@@ -148,11 +148,11 @@ def test_R26_documented_defaults_match_the_contract():
 
 
 def test_R36_goal_rejected_while_navigation_is_not_available(system):
-    s = system(serve_nav=False)             # map and TF exist, only the /navigate_to_pose server is missing
+    # map and TF exist; the node is pointed at a NavigateToPose action nobody serves
+    s = system(params=[('nav_action', '/no_such_navigate_to_pose')])
     s.up()
     assert wait_for(lambda: s.node.has_map and s.node._pose() is not None, 20.0)
-    # an action server of the previous test may linger in the graph for a moment: wait for it to vanish
-    assert wait_for(lambda: not s.node._nav.server_is_ready(), 10.0)
+    assert not s.node._nav.server_is_ready()
     assert not s.send().accepted
 
 
