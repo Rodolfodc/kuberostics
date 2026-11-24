@@ -1,16 +1,18 @@
-%% Deployment view: what runs where, by component. Reflects main d3632da plus open PRs #5-#18 (2026-11-14). Refresh after merges.
-%% Colour: green = merged on main; amber = in an open PR (number); grey = planned only.
+%% Deployment view: what runs where, by component. Reflects main 59fdd2b (merged PRs #5 to #13, #16 to #18, #20 to #23, #25) plus open PRs #14, #15, #26 (2026-11-24). Refresh after merges.
+%% Colour: green = merged on main; light green dashed = partial (pure core merged, ROS node planned); amber = in an open PR (number); grey = planned only.
 %% Shape: rectangle = lifecycle node under a manager; hexagon = plain node (D-26); dashed border = third-party (Art. II).
 flowchart TB
   classDef merged fill:#d4edda,stroke:#2e7d32,color:#000
   classDef pr fill:#fff3cd,stroke:#b58900,color:#000
   classDef planned fill:#eeeeee,stroke:#777,color:#555
+  classDef partial fill:#e8f5c8,stroke:#2e7d32,color:#000,stroke-dasharray: 3 3
   classDef third stroke:#222,stroke-width:2px,stroke-dasharray: 5 3
 
   subgraph LEG["Legend"]
     direction LR
     L1["merged on main"]:::merged
     L2["open PR"]:::pr
+    L7["partial: pure core merged, node planned"]:::partial
     L3["planned only"]:::planned
     L4{{"plain node"}}:::merged
     L5["lifecycle node"]:::merged
@@ -18,7 +20,7 @@ flowchart TB
   end
 
   subgraph HOST["HOST machine (outside Docker)"]
-    SIM["CoppeliaSim 4.10<br/>House scene + myRobot.ttm<br/>ZeroMQ remote API :23000<br/>3.6 steps/s with robot (#14, #15)"]:::third
+    SIM["CoppeliaSim 4.10 (third-party)<br/>House scene + myRobot.ttm<br/>ZeroMQ remote API :23000<br/>3.6 steps/s with robot, measured by the bench (#14, #15, open)"]:::pr
   end
 
   subgraph ROBOT["ROBOT: ROS 2 containers, Jazzy or Lyrical, network_mode host, /myRobot"]
@@ -27,9 +29,9 @@ flowchart TB
     subgraph C_LIFE["Component: lifecycle managers"]
       direction LR
       LMC["lifecycle_manager_core"]:::merged
-      SEQ{{"lifecycle_sequencer<br/>(#12, D-26)"}}:::planned
-      LMN["lifecycle_manager_nav<br/>autostart false (#12)"]:::planned
-      LMO["lifecycle_manager_optional<br/>empty until spec 009b"]:::planned
+      SEQ{{"lifecycle_sequencer<br/>(#25, D-26)<br/>opt-in: with_sequencer, default false"}}:::merged
+      LMN["lifecycle_manager_nav<br/>autostart false, node list empty (#25)"]:::merged
+      LMO["lifecycle_manager_optional<br/>autostart false, node list empty until spec 009b (#25)"]:::merged
       MQB["MQTT bridge<br/>optional, spec 009b"]:::planned
     end
 
@@ -56,18 +58,18 @@ flowchart TB
 
     subgraph C_NAV["Component: mapping and navigation (spec 003, 005)"]
       direction LR
-      MAPN["odom_tf_bridge, room_segmenter,<br/>exploration_server<br/>slam_toolbox"]:::planned
+      MAPN["room_segmenter, room_tracker, MapDiff, room_labeler<br/>pure cores merged (#22)<br/>odom_tf_bridge, room_segmenter node,<br/>exploration_server, slam_toolbox planned"]:::partial
       NAV["planner_server, controller_server,<br/>bt_navigator<br/>controller on mux/nav"]:::planned
     end
 
     subgraph C_PERC["Component: perception offload (spec 009a)"]
       direction LR
-      THR{{"image_throttle<br/>RGB 2 Hz, compressed"}}:::planned
+      THR{{"image_throttle<br/>RGB 2 Hz, compressed (#21)"}}:::merged
       DLOC["detector_local<br/>yolo11n"]:::planned
-      DSEL["detection_selector node<br/>T907, planned"]:::planned
-      SELC["selector_core<br/>pure Python, circuit breaker<br/>tests #11, rulings #13"]:::pr
-      PROJ["projector node<br/>T908, planned"]:::planned
-      PROC["projection_core<br/>pure Python, TF at photo stamp<br/>tests #11"]:::pr
+      DSEL["detection_selector node<br/>(#21)"]:::merged
+      SELC["selector_core<br/>pure Python, circuit breaker<br/>tests #11, rulings #13"]:::merged
+      PROJ["projector node<br/>planned: #24 merged into the #21 branch,<br/>after #21 reached main, so not on main"]:::planned
+      PROC["projection_core<br/>pure Python, TF at photo stamp<br/>tests #11"]:::merged
       SEM["semantic node<br/>2025S2, D-16"]:::third
     end
 
@@ -80,14 +82,14 @@ flowchart TB
 
   subgraph CLOUD["CLOUD side: local K3s, optional (Art. VII)"]
     direction LR
-    TRN["transport robot to K3s<br/>rmw_zenoh or zenoh-bridge-ros2dds<br/>measured (#16), owner decides Q-06 (#18)"]:::pr
+    TRN["transport robot to K3s<br/>rmw_zenoh or zenoh-bridge-ros2dds<br/>measured (#16), owner decides Q-06 (#18)"]:::merged
     DCL["detector_cloud pod<br/>yolo11x"]:::planned
     MQ["Mosquitto, MinIO,<br/>retraining jobs, weights<br/>(spec 009b)"]:::planned
   end
 
   subgraph DEV["OPERATOR and DEV tooling (host)"]
     direction LR
-    DEVT["scripts/test-docker.sh, CI matrix (#5),<br/>tools/sim_bench, tools/sim.sh,<br/>ia368ii-check (#17), transport-bench (#16),<br/>render-diagrams.sh"]:::pr
+    DEVT["scripts/test-docker.sh, CI matrix (#5),<br/>tools/sim_bench base, tools/sim.sh,<br/>ia368ii-check (#17), transport-bench (#16),<br/>render-diagrams.sh<br/>(sim bench extension #14, naming cleanup #26: open)"]:::merged
   end
 
   LMC -.->|"manages"| SUP

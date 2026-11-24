@@ -1,4 +1,4 @@
-%% Sequence 2: mission cycle (CLEANING). Built: supervisor, stubs, twist_mux. Planned: Nav2 on mux/nav and the real coverage_server (D-24, PR #12), room labels (spec 003).
+%% Sequence 2: mission cycle (CLEANING). Built: supervisor, stubs, twist_mux. Planned: Nav2 on mux/nav and the real coverage_server (D-24, spec in PR #12, code not started), room labels (spec 003).
 sequenceDiagram
   autonumber
   participant U as User or schedule
@@ -16,7 +16,7 @@ sequenceDiagram
   S-->>B: /myRobot/behaviour/submode = COVERING (every 0.2 s)
   S->>C: action /myRobot/cover_room goal (room_id, passes)
   loop per room, lane by lane
-    alt today (stub, T010)
+    alt today (stub)
       C->>M: /myRobot/mux/coverage Twist 0.15 m/s at 10 Hz (priority 50)
     else planned (D-24)
       C->>N: NavigateToPose waypoint

@@ -1,4 +1,4 @@
-%% Sequence 4: end of cleaning, docking, sync at the base. Mechanism of the return (Q-12, T520) is a candidate and unverified. Cloud side is spec 009b, planned; sync diagram f5-dock-sync.mmd.
+%% Sequence 4: end of cleaning, docking, sync at the base. Mechanism of the return (Q-12) is a candidate and unverified. Cloud side is spec 009b, planned; sync diagram f5-dock-sync.mmd.
 sequenceDiagram
   autonumber
   participant S as supervisor (built)
@@ -11,7 +11,7 @@ sequenceDiagram
   participant P as escape policy (PLANNED, spec 008)
 
   S-->>S: cover_room result arrives, Notification COVERAGE_DONE or COVERAGE_FAILED, submode NONE (005-R30)
-  S->>B: request docking without extending Mode (Q-12, candidate /myRobot/start_stop stop, unverified T520)
+  S->>B: request docking without extending Mode (Q-12, candidate /myRobot/start_stop stop, unverified)
   B-->>S: /myRobot/behaviour/mode = AUTODOCKING
   Y-->>A: /myRobot/charging_base/strengthSignal and relativeAngle
   A->>M: /myRobot/mux/docking Twist (priority 40)

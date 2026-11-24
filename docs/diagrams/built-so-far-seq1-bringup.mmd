@@ -1,20 +1,20 @@
-%% Sequence 1: bring-up in the ideal scenario. Built: skeleton.launch.py, lifecycle_manager_core. Planned: lifecycle_sequencer, manager_nav, manager_optional (PR #12, 005-R35).
+%% Sequence 1: bring-up in the ideal scenario. Built: skeleton.launch.py, lifecycle_manager_core, lifecycle_sequencer and the nav and optional managers (PR #25, 005-R35; opt-in with_sequencer, default false; node lists of nav and optional are empty). Planned: the nodes of nav (spec 005) and optional (spec 009b).
 sequenceDiagram
   autonumber
   participant L as skeleton.launch.py (built)
   participant IA as IA368II manager and nodes (built, own config)
   participant PL as twist_mux, wheel bridge, teleop (plain, third-party)
-  participant SQ as lifecycle_sequencer (PLANNED, plain, D-26)
+  participant SQ as lifecycle_sequencer (built, plain, D-26, opt-in)
   participant CO as lifecycle_manager_core (built)
-  participant NV as lifecycle_manager_nav (PLANNED)
-  participant OP as lifecycle_manager_optional (PLANNED, empty)
+  participant NV as lifecycle_manager_nav (built, empty list)
+  participant OP as lifecycle_manager_optional (built, empty list)
 
   L->>PL: start twist_mux with twist_mux.yaml (use_stamped false)
   L->>IA: start myrobot, behaviour_server, cleaning and autodocking servers
   Note over IA: IA368II manager configures and activates its own nodes
   IA-->>L: nodes active, mode CHARGED on /myRobot/behaviour/mode
-  L->>SQ: start sequencer (planned)
-  Note over L,CO: today the launch starts lifecycle_manager_core directly (autostart)
+  L->>SQ: start sequencer (with_sequencer:=true)
+  Note over L,CO: with the default with_sequencer:=false the launch starts lifecycle_manager_core directly (autostart true)
   SQ->>CO: bring up core
   CO->>CO: configure and activate stop_guard first
   Note over CO: the safety net exists before anything can move

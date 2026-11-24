@@ -1,10 +1,10 @@
-%% Sequence 5: orderly shutdown in reverse order. Planned (005-R37, PR #12): today the launch just stops processes and stop_guard has SIGINT hardening in PR #10.
+%% Sequence 5: orderly shutdown in reverse order. Built in the lifecycle_sequencer (005-R37, PR #25), used only with with_sequencer:=true; without it the launch just stops processes, and stop_guard has SIGINT hardening (PR #10).
 sequenceDiagram
   autonumber
   participant L as launch (Ctrl-C or SIGINT)
-  participant SQ as lifecycle_sequencer (PLANNED)
-  participant OP as lifecycle_manager_optional (PLANNED)
-  participant NV as lifecycle_manager_nav (PLANNED)
+  participant SQ as lifecycle_sequencer (built, opt-in)
+  participant OP as lifecycle_manager_optional (built, empty list)
+  participant NV as lifecycle_manager_nav (built, empty list)
   participant CO as lifecycle_manager_core (built)
   participant M as twist_mux
 
