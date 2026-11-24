@@ -119,10 +119,14 @@ on `/myRobot/perception/detections/local` (or `/cloud`), or give `detection_sele
 ## Detector and launch (spec 009a, robot side)
 
 ```
-ros2 launch vacuum_detection detection.launch.py offload:=false   # local detector only -> /myRobot/perception/detections
-ros2 launch vacuum_detection detection.launch.py offload:=true    # local (hot standby) + image_throttle + detection_selector
-                                                                  # the cloud detector runs in K3s, outside this launch
+ros2 launch vacuum_detection detection.launch.py offload:=false   # detector_local + detection_selector, nothing leaves the robot
+ros2 launch vacuum_detection detection.launch.py offload:=true    # the same + image_throttle; the cloud detector runs in K3s, outside this launch
 ```
+
+Only `detection_selector` publishes `/myRobot/perception/detections` (contract: `max_publishers: 1`); `detector_local` always
+publishes `/myRobot/perception/detections/local`. With `offload:=false` there is no cloud input, so the selector opens its
+breaker after `open_threshold_s` (1.5 s) and forwards local; until then local responses count as `dropped_inactive`, and a
+`CLOUD_DETECTOR_DOWN` notification is emitted once.
 
 Parameters of `detector`: `backend` (`ultralytics`|`null`), `weights` (`yolo11n.pt` local, `yolo11x.pt` cluster, or a
 path), `device`, `score_threshold`, `iou_threshold`, `image_size`, `max_detections`, `input_type` (`image`|`compressed`),

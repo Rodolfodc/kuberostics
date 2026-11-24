@@ -1,17 +1,22 @@
-"""detection.launch.py (T912, spec 009a-R01): the robot-side perception chain, local only or with the cloud.
+"""detection.launch.py (spec 009a-R01): the robot-side perception chain, local only or with the cloud.
 
     ros2 launch vacuum_detection detection.launch.py [offload:=true|false] [local_weights:=yolo11n.pt]
                                                      [backend:=ultralytics|null] [device:=cpu] [with_manager:=true]
 
-  offload:=false (default)  only the local detector runs, publishing straight to /myRobot/perception/detections.
-                            No image leaves the robot and there is no selector: same behaviour as spec 004 (R01).
-  offload:=true             the local detector stays up as hot standby (R04) and publishes to .../detections/local;
-                            image_throttle sends the compressed RGB to the cloud (R03, R11); a cloud detector
-                            (K3s, T910/T911; not started here) is expected to answer on .../detections/cloud; and
-                            detection_selector forwards cloud while healthy and local otherwise (R05 to R10).
+Only `detection_selector` publishes /myRobot/perception/detections (the contract allows one publisher), so the
+selector runs in both modes and the local detector always publishes to .../detections/local.
+
+  offload:=false (default)  detector_local + detection_selector. No cloud detector exists, no image leaves the
+                            robot (no image_throttle), and the selector passes the local stream through (it
+                            opens its breaker after open_threshold_s without cloud responses, then forwards
+                            local). Same behaviour as spec 004 apart from that start-up delay (R01).
+  offload:=true             the same, plus image_throttle sending the compressed RGB to the cloud (R03, R11).
+                            A cloud detector (K3s; not started here) answers on .../detections/cloud and the
+                            selector forwards it while healthy and local otherwise (R05 to R10). The local
+                            detector is hot standby in both modes (R04).
 
 The nodes are lifecycle nodes (D-26) under `lifecycle_manager_optional` (D-09): a perception failure is reported by
-the manager but never stops the core (Art. VII), and with offload:=false or a dead cloud the robot keeps cleaning.
+the manager but never stops the core (Art. VII).
 `with_manager:=false` leaves the manager out, for a launch that already has one (skeleton.launch.py with the
 sequencer: then these node names go into its lifecycle_optional.yaml). The `projector` is launched by its own
 description when its node lands.
@@ -22,7 +27,6 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 LOCAL_TOPIC = '/myRobot/perception/detections/local'
-OUTPUT_TOPIC = '/myRobot/perception/detections'
 
 
 def detection_actions(offload: bool, local_weights: str, backend: str, device: str, with_manager: bool,
@@ -32,15 +36,15 @@ def detection_actions(offload: bool, local_weights: str, backend: str, device: s
         package='vacuum_detection', executable='detector', name='detector_local', output='screen',
         parameters=[{'backend': backend, 'weights': local_weights, 'device': device, 'input_type': 'image',
                      'input_topic': local_image_topic,
-                     'output_topic': LOCAL_TOPIC if offload else OUTPUT_TOPIC}])
-    names = ['detector_local']
-    actions = [detector]
+                     'output_topic': LOCAL_TOPIC}])
+    selector = Node(package='vacuum_detection', executable='detection_selector', name='detection_selector',
+                    output='screen')
+    names = ['detector_local', 'detection_selector']
+    actions = [detector, selector]
     if offload:
         actions.append(Node(package='vacuum_detection', executable='image_throttle', name='image_throttle',
                             output='screen', parameters=[{'input_topic': local_image_topic}]))
-        actions.append(Node(package='vacuum_detection', executable='detection_selector',
-                            name='detection_selector', output='screen'))
-        names += ['image_throttle', 'detection_selector']
+        names.append('image_throttle')
     if with_manager:
         actions.append(Node(
             package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_optional',
@@ -63,8 +67,8 @@ def _build(context, *args, **kwargs):
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument('offload', default_value='false',
-                              description='true: cloud detector expected, local fallback via detection_selector; '
-                                          'false: local detector only (009a-R01)'),
+                              description='true: also send images to the cloud detector (selector falls back to local); '
+                                          'false: local detector only, no image leaves the robot (009a-R01)'),
         DeclareLaunchArgument('local_weights', default_value='yolo11n.pt',
                               description='weights of the local detector (hot standby)'),
         DeclareLaunchArgument('backend', default_value='ultralytics',
