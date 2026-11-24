@@ -92,41 +92,6 @@ class TestSkeletonContract(unittest.TestCase):
         finally:
             cls.node.destroy_client(client)
 
-    def setUpClass(cls):
-        cls.context = rclpy.Context()
-        rclpy.init(context=cls.context, domain_id=DOMAIN_ID)
-        cls.node = rclpy.create_node('contract_launch_probe', context=cls.context)
-        # staged start: the graph is checked only after the nodes are discoverable and the manager reports active
-        cls.nodes_up = wait_for(
-            lambda: set(SKELETON_NODES) <= {n for n, ns in cls.node.get_node_names_and_namespaces() if ns == '/'},
-            STARTUP_TIMEOUT_S)
-        cls.active = cls.nodes_up and wait_for(cls._manager_active, STARTUP_TIMEOUT_S, 0.5)
-        contract = load_contract(find_contract())
-        cls.expectations = build_expectations(contract, exclude_owners=ABSENT_OWNERS)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.node.destroy_node()
-        cls.context.try_shutdown()
-
-    @classmethod
-    def _manager_active(cls):
-        client = cls.node.create_client(Trigger, '/lifecycle_manager_core/is_active')
-        try:
-            if not client.wait_for_service(timeout_sec=1.0):
-                return False
-            future = client.call_async(Trigger.Request())
-            if not wait_for(future.done, 5.0, 0.02) and not cls._spin_until(future):
-                return False
-            return bool(future.result().success)
-        finally:
-            cls.node.destroy_client(client)
-
-    @classmethod
-    def _spin_until(cls, future):
-        rclpy.spin_until_future_complete(cls.node, future, timeout_sec=5.0)
-        return future.done()
-
     def setUp(self):
         self.assertTrue(self.nodes_up, f'nodes never discovered: {SKELETON_NODES}')
         self.assertTrue(self.active, 'lifecycle_manager_core never reported is_active == true')
