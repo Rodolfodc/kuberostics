@@ -1,6 +1,8 @@
 """Contract tests against the live ROS graph (thin rclpy glue over vacuum_contract_tests.contract).
 
-Not run by default: without a graph they are SKIPPED, with a reason. To run them:
+Opt-in, against a graph YOU started (e.g. with the IA368II nodes and the simulator, which the launch_testing
+test in test_live_launch.py cannot have). Without VACUUM_CONTRACT_LIVE=1 they are SKIPPED, with a reason; the
+checks that need no IA368II run in plain `colcon test` from test_live_launch.py (T022). To run these:
 
     ros2 launch vacuum_bringup skeleton.launch.py with_teleop:=false &     # the skeleton launch
     VACUUM_CONTRACT_LIVE=1 python3 -m pytest src/vacuum_contract_tests/test/test_live_graph.py
@@ -16,8 +18,8 @@ import time
 import pytest
 
 from vacuum_contract_tests.contract import (
-    build_expectations, check_named_type, check_topic, Endpoint, find_contract, load_contract, QosSpec,
-    SIM_OWNERS)
+    build_expectations, check_named_type, check_topic, find_contract, load_contract, SIM_OWNERS)
+from vacuum_contract_tests.graph import endpoints
 
 # A module-level pytest.skip would abort collection of sibling modules under the launch_testing pytest plugin
 # shipped with ROS (seen on Lyrical), so the skip is a per-test marker.
@@ -26,21 +28,6 @@ pytestmark = [
     pytest.mark.skipif(os.environ.get('VACUUM_CONTRACT_LIVE') != '1',
                        reason='live graph tests: set VACUUM_CONTRACT_LIVE=1 with skeleton.launch.py running'),
 ]
-
-
-def _qos(info, expected):
-    """Graph QoS of one endpoint. Jazzy's rmw reports depth 0 for endpoints it does not own (the queue depth is
-    local, not part of DDS compatibility); depth 0 therefore means "not reported" and takes the contract value,
-    while reliability and durability (what decides compatibility) are always compared. Lyrical reports the depth."""
-    q = info.qos_profile
-    depth = int(q.depth)
-    if depth == 0 and expected is not None:
-        depth = expected.depth
-    return QosSpec(q.reliability.name.lower(), q.durability.name.lower(), depth)
-
-
-def _endpoints(infos, exp):
-    return [Endpoint(i.node_name, i.topic_type, _qos(i, exp.qos)) for i in infos]
 
 
 @pytest.fixture(scope='module')
@@ -69,8 +56,8 @@ def _ids(exps):
 @pytest.mark.parametrize('exp', _expectations('topic'), ids=_ids(_expectations('topic')))
 def test_001_R04_topic_exists_with_declared_type_and_qos(node, exp):
     """001-R04 (+ 001-R03 max_publishers/owner of /myRobot/cmd_vel, 001-R12 sink and docking remaps)."""
-    problems = check_topic(exp, _endpoints(node.get_publishers_info_by_topic(exp.name), exp),
-                           _endpoints(node.get_subscriptions_info_by_topic(exp.name), exp))
+    problems = check_topic(exp, endpoints(node.get_publishers_info_by_topic(exp.name), exp),
+                           endpoints(node.get_subscriptions_info_by_topic(exp.name), exp))
     assert not problems, '; '.join(problems)
 
 
