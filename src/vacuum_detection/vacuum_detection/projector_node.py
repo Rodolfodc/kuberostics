@@ -1,4 +1,4 @@
-"""`projector` LifecycleNode (T908, spec 009a-R12, R13, D-16): thin glue over the pure projector classes.
+"""`projector` LifecycleNode (spec 009a-R12, R13, D-16): thin glue over the pure projector classes.
 
 Detections (2D, from the selector) + depth cache + TF at the photo stamp -> persistent set -> the WHOLE set
 republished on `/detections_markers` every `republish_period_s` for the unchanged 2025S2 semantic node.

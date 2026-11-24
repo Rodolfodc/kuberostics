@@ -1,4 +1,4 @@
-"""T908: smoke test of the projector node glue (decisions: test_projector_markers.py, test_projector_core.py).
+"""smoke test of the projector node glue (decisions: test_projector_markers.py, test_projector_core.py).
 
 Needs rclpy, numpy, tf2_ros (skipped otherwise). In-process, no launch. The TF buffer of the node is filled
 directly, so no broadcaster is needed.
