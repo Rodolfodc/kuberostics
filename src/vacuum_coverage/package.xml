@@ -3,7 +3,7 @@
 <package format="3">
   <name>vacuum_coverage</name>
   <version>0.1.0</version>
-  <description>Real coverage (spec 005): pure-Python cores (RegionBuilder, CoveragePlanner, CoverageTracker, CoverageSession). The coverage_server LifecycleNode is pending the contract change of plan 005.</description>
+  <description>Coverage and escape (spec 005): pure-Python cores (StuckCore, EscapeScript, RegionBuilder, CoveragePlanner, CoverageTracker, CoverageSession, ResumeStore). The real nodes follow once their parameters are in the contract.</description>
   <maintainer email="rodolfo.dalla.costa@hotmail.com">Rodolfo Dalla Costa</maintainer>
   <license>Apache-2.0</license>
 

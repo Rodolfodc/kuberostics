@@ -16,7 +16,7 @@ setup(
     zip_safe=True,
     maintainer='Rodolfo Dalla Costa',
     maintainer_email='rodolfo.dalla.costa@hotmail.com',
-    description='Real coverage (spec 005): pure-Python RegionBuilder, CoveragePlanner, CoverageTracker, CoverageSession',
+    description='Coverage and escape (spec 005): pure-Python cores (stuck, escape, region, planner, tracker, session)',
     license='Apache-2.0',
     entry_points={'console_scripts': []},
 )
