@@ -10,6 +10,7 @@ import yaml
 pytest.importorskip('launch_ros')
 from launch import LaunchContext                                   # noqa: E402
 from launch.actions import SetLaunchConfiguration                  # noqa: E402
+from launch.substitution import Substitution                    # noqa: E402
 from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions   # noqa: E402
 from launch_ros.actions import Node                                # noqa: E402
 
@@ -32,10 +33,10 @@ def by_name(actions):
 
 
 def plain(value):
-    """Resolves the substitutions launch_ros leaves in a parameter value (tuples of substitutions, nested)."""
-    if isinstance(value, tuple) and value and not isinstance(value[0], (str, int, float, bool, list, tuple)):
-        return yaml.safe_load(resolve(value))   # launch_ros encodes each value as a YAML document
+    """Resolves the substitutions launch_ros leaves in a parameter value (sequences of substitutions, nested)."""
     if isinstance(value, (list, tuple)):
+        if value and all(isinstance(v, Substitution) for v in value):
+            return yaml.safe_load(resolve(value))   # launch_ros encodes each value as a YAML document
         return [plain(v) for v in value]
     return value
 
