@@ -45,6 +45,18 @@ string code        # stable identifier, e.g. ESCAPE_FAILED
 string text        # message for the user
 ```
 
+Codes in use (checked against the code on `main`; the registry is documentation, `code` stays a free string, so adding a row changes no type; contract change per Art. I, same commit as the 005-R36 wording):
+
+| `code` | Severity | `source` | Meaning | Defined in |
+|---|---|---|---|---|
+| `ESCAPE_FAILED` | ERROR | `supervisor` | the escape failed or timed out; stop lock on (001-R09) | `vacuum_supervisor/submode_machine.py` |
+| `CLOUD_DETECTOR_DOWN` | WARN | `detection_selector` | breaker opened, local detector in use (009a-R08) | `vacuum_detection/selector_core.py` |
+| `CLOUD_DETECTOR_RECOVERED` | INFO | `detection_selector` | breaker closed after the stability window (009a-R10) | `vacuum_detection/selector_core.py` |
+| `CORE_START_FAILED` | ERROR | `lifecycle_sequencer` | `lifecycle_manager_core` did not become active; nothing else is started (005-R36) | `vacuum_bringup/manager_sequencer.py` |
+| `NAV_UNAVAILABLE` | WARN | `lifecycle_sequencer` | `lifecycle_manager_nav` did not become active; no automatic motion (005-R36) | `vacuum_bringup/manager_sequencer.py` |
+| `OPTIONAL_UNAVAILABLE` | WARN | `lifecycle_sequencer` | `lifecycle_manager_optional` did not become active; running without it, Art. VII (005-R36) | `vacuum_bringup/manager_sequencer.py` |
+| `STOP_GUARD_LOST` | ERROR | `lifecycle_sequencer` | `stop_guard` left `active` while running; nav deactivated (005-R36) | `vacuum_bringup/manager_sequencer.py` |
+
 ## msg/OffloadStatus.msg (spec 009a)
 
 ```
