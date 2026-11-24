@@ -2,9 +2,9 @@
 
 ## Phase 0: preparation
 
-- [ ] **T901** Add `OffloadStatus` to `vacuum_interfaces`. (009a-R14)
+- [x] **T901** (PR #21) Add `OffloadStatus` to `vacuum_interfaces`. (009a-R14)
 - [x] **T902** [P] (done on Lyrical, same host; `deploy/measurements/robot-cloud-transport-benchmark.md`; Q-06 recommendation: bridge, awaiting the project owner) Measure the robot ↔ K3s transport with `rmw_zenoh` and with `zenoh-bridge-ros2dds`: latency and rate with a compressed RGB image at 2 Hz. Decide Q-06. (009a-R03)
-- [ ] **T903** [P] Read the 2025S2 semantic node and record the exact format of `/detections_markers` it expects. (009a-R13)
+- [x] **T903** [P] (PR #23, `specs/009a-offload/markers-format.md`) Read the 2025S2 semantic node and record the exact format of `/detections_markers` it expects. (009a-R13)
 
 ## Phase 1: tests first
 
@@ -14,9 +14,9 @@
 ## Phase 2: implementation
 
 - [ ] **T906** `detector`: YOLO configurable by parameter, `header` copied, empty array when nothing is detected. (009a-R02, R04)
-- [ ] **T907** Node only; core done in T904/T905 (PR #11). `detection_selector` node, until T904 passes. Publish the status and the notifications. (009a-R05 to R11, R14)
-- [ ] **T908** Node only; core done in T904/T905 (PR #11). `projector` with depth cache by timestamp, until T905 passes. (009a-R12, R13)
-- [ ] **T909** `image_throttle`: compression and configurable rate. (009a-R03, R11)
+- [x] **T907** (PR #21) Node only; core done in T904/T905 (PR #11). `detection_selector` node, until T904 passes. Publish the status and the notifications. (009a-R05 to R11, R14)
+- [ ] **T908** (the node was merged by PR #24 into the branch of PR #21 after #21 had landed, so it is NOT on `main`: `src/vacuum_detection` has no projector node and no `projector` entry point; tick it when it reaches `main`) Node only; core done in T904/T905 (PR #11). `projector` with depth cache by timestamp, until T905 passes. (009a-R12, R13)
+- [x] **T909** (PR #21) `image_throttle`: compression and configurable rate. (009a-R03, R11)
 - [ ] **T910** Detector Dockerfile with `ARG ROS_DISTRO`, built on the CI matrix. (009a-R17, R18)
 - [ ] **T911** Terraform (`infra/modules/workloads`) with Deployment, `livenessProbe` and the transport chosen in Q-06 (proposal: `zenoh-bridge-ros2dds` with the R19 allow-list; blocked on the owner's confirmation; depends on T902, T910; the bridge runs on the robot outside `lifecycle_manager_core`, cleaning continues if it dies, allow-list without `mux`/`cmd_vel`). (009a-R17, R19)
 - [ ] **T912** Launch with `offload:=true|false`. (009a-R01)
