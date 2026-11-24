@@ -9,6 +9,7 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name + '/config', ['config/room_rules.yaml']),
     ],
     install_requires=['setuptools'],
     tests_require=['pytest'],
@@ -16,7 +17,7 @@ setup(
     zip_safe=True,
     maintainer='Rodolfo Dalla Costa',
     maintainer_email='rodolfo.dalla.costa@hotmail.com',
-    description='Mapping: pure-Python cores and map file I/O',
+    description='Mapping: pure-Python cores, frontier finder, map file I/O and room rules',
     license='Apache-2.0',
     entry_points={
         'console_scripts': [
