@@ -12,6 +12,9 @@ DISTRO="${1:-}"; PKG="${2:-}"; K="${3:-.}"; N="${4:-10}"; CPUS="${5:-1}"
 case "$DISTRO" in jazzy) IMAGE="${ROS_IMAGE:-osrf/ros:jazzy-desktop-full}";; lyrical) IMAGE="${ROS_IMAGE:-ros:lyrical-ros-base}";;
   *) echo "usage: $0 <jazzy|lyrical> <package> [<pytest -k expr>] [N] [cpus]" >&2; exit 2;; esac
 [ -n "$PKG" ] || { echo "package required" >&2; exit 2; }
+case "$PKG" in *[!A-Za-z0-9_]*) echo "package must match [A-Za-z0-9_]+" >&2; exit 2;; esac
+case "$K" in *[!A-Za-z0-9_\ \(\).\[\]-]*) echo "-k expression has unsupported characters" >&2; exit 2;; esac
+[ "${N:-0}" -ge 1 ] 2>/dev/null || { echo "N must be >= 1" >&2; exit 2; }
 case "$N" in ''|*[!0-9]*) echo "N must be a number" >&2; exit 2;; esac
 
 OUT="$REPO/local-logs/repeat/$(date -u +%Y%m%dT%H%M%SZ)-$DISTRO-$PKG"
@@ -20,6 +23,6 @@ echo ">> $DISTRO/$PKG -k '$K' x$N at --cpus=$CPUS; logs: $OUT"
 set +e
 docker run --rm --cpus="$CPUS" -e DISTRO="$DISTRO" -e MODE=repeat -e REPEAT="$N" -e TEST_PKG="$PKG" -e TEST_K="$K" \
   -v "$REPO":/repo:ro -v "$OUT":/out "$IMAGE" bash /repo/scripts/container-test.sh 2>&1 \
-  | sed -e "s|$HOME|<HOME>|g" -e "s|$(hostname)|<HOST>|g" | tee "$OUT/console.log"
+  | sed -e "s|/home/$(id -un)|/home/<USER>|g" ${HOME:+-e "s|$HOME|<HOME>|g"} -e "s|$(hostname)|<HOST>|g" | tee "$OUT/console.log"
 rc=${PIPESTATUS[0]}
 exit "$rc"
