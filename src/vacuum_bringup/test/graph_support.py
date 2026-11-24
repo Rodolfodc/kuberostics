@@ -102,7 +102,8 @@ class Probe:
         rclpy.init(context=self.context, domain_id=domain_for(module_index))
         self.node = rclpy.create_node('vacuum_launch_probe', context=self.context)
         self._lock = threading.Lock()
-        self._active_polls = {}
+        self._active_clients = {}
+        self.active_poll_log = {}
         self._submodes: List[Tuple[float, str]] = []
         self._notifications: List[Tuple[float, Notification]] = []
         self._locks: List[Tuple[float, bool]] = []
@@ -222,23 +223,26 @@ class Probe:
         assert result.results[0].successful, f'{node_name}.{name} = {value!r}: {result.results[0].reason}'
 
     # ------------------------------------------------------------ graph
-    def manager_is_active(self, manager: str, discovery_timeout_s: float = 2.0) -> bool:
-        """One poll of `/<manager>/is_active`. The client is created once per manager and reused: a new client
-        per poll (the former code) leaks one client per call and restarts DDS service discovery every time,
-        which on a loaded runner can take longer than the per-call wait. A call that gets no answer is kept
-        pending and awaited on the next poll instead of being abandoned and re-sent."""
-        state = self._active_polls.get(manager)
-        if state is None:
-            state = self._active_polls[manager] = {
-                'client': self.node.create_client(Trigger, f'/{manager}/is_active'), 'future': None}
-        client, future = state['client'], state['future']
-        if future is None:
-            if not client.wait_for_service(timeout_sec=discovery_timeout_s):
-                return False
-            future = state['future'] = client.call_async(Trigger.Request())
-        if not self.wait_for(future.done, 5.0):
-            return False                    # still pending (manager busy bringing nodes up): keep it
-        state['future'] = None
+    def manager_is_active(self, manager: str, discovery_timeout_s: float = 2.0,
+                          answer_timeout_s: float = 3.0) -> bool:
+        """One poll of `/<manager>/is_active`. The client is reused between polls; when a request gets no
+        answer within `answer_timeout_s` the client is destroyed (not leaked) and the next poll sends on a new
+        one. A pending request must never be waited on indefinitely: seen on Jazzy with 1 CPU, every core node
+        `active` and the manager's is_active still unanswered after 127 s (lost service request/response)."""
+        client = self._active_clients.get(manager)
+        if client is None:
+            client = self._active_clients[manager] = self.node.create_client(Trigger, f'/{manager}/is_active')
+        if not client.wait_for_service(timeout_sec=discovery_timeout_s):
+            self.active_poll_log[manager] = 'service not discovered'
+            return False
+        future = client.call_async(Trigger.Request())
+        if not self.wait_for(future.done, answer_timeout_s):
+            # also drop the client: if its response path never matched, a re-send on it would be lost too
+            self.node.destroy_client(client)
+            del self._active_clients[manager]
+            self.active_poll_log[manager] = 'no answer'
+            return False
+        self.active_poll_log[manager] = f'answered success={future.result().success}'
         return bool(future.result().success)
 
     def lifecycle_label(self, node_name: str, discovery_timeout_s: float = 15.0) -> str:
@@ -274,8 +278,9 @@ class Probe:
         if not active:
             # evidence for the next flake: which node is stuck, and was the manager reachable at all
             states = {name: self.lifecycle_label(name, discovery_timeout_s=1.0) for name in core_config_nodes()}
-            print(f'core node states at timeout: {states}; nodes seen: {sorted(n for n, _ in self.node_names())}',
-                  flush=True)
+            seen = sorted(n for n, _ in self.node_names())
+            print(f'core node states at timeout: {states}; last is_active poll: {self.active_poll_log}; '
+                  f'nodes seen: {seen}', flush=True)
         return active
 
 
