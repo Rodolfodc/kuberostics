@@ -13,6 +13,10 @@ Python core with no ROS imports, tested with pytest and a simulated clock; every
 | `throttle_core.py` | pure | `ThrottleCore`: rate limit by photo stamp (009a-R03, R11), clock injected only for unstamped frames. |
 | `image_codec.py` | pure | `encode_jpeg`: raw image buffer to JPEG bytes (numpy + OpenCV, no `cv_bridge`). |
 | `image_throttle_node.py` | node | RGB `Image` in, JPEG `CompressedImage` out at `image_rate_hz`, header copied (timestamp echo), telemetry. |
+| `detector_core.py` | pure | `DetectorCore`: runs an injected `DetectorModel`, filters by score, bounds the count, times the inference (009a-R02). `None` = inference failed (nothing is published), `[]` = saw nothing. |
+| `yolo_model.py` | adapter | Ultralytics YOLO behind `DetectorModel`. `ultralytics`/torch are optional imports; missing ones raise `DetectorDependencyError` with instructions. |
+| `detector_node.py` | node | `detector`: image (raw or compressed) in, `Detection2DArray` out with the image header copied; an empty array when nothing is detected; telemetry with inference time on `/myRobot/telemetry/<node name>`. Same executable is `detector_local` and (in K3s) `detector_cloud`. |
+| `launch/detection.launch.py` | launch | `offload:=true\|false` (009a-R01), see below. |
 | `ros_common.py` | helpers | QoS profiles, `stamp_to_sec`, `build_diagnostics`. No decisions. |
 | `projection_core.py` | pure | Pixel + depth + TF at the photo stamp to a 3D point (009a-R12). Its node (`projector`, T908) is not written yet: blocked on the `/detections_markers` format (T903). |
 
@@ -67,3 +71,24 @@ A detector is any node that subscribes to an RGB image and publishes `vision_msg
 `header` copied from the image and an empty array when nothing is detected (009a-R02, R04). To plug it in: publish
 on `/myRobot/perception/detections/local` (or `/cloud`), or give `detection_selector` another topic through its
 `local_topic` / `cloud_topic` parameters. Nothing else changes: the selector only looks at the source and the stamp.
+
+## Detector and launch (spec 009a, robot side)
+
+```
+ros2 launch vacuum_detection detection.launch.py offload:=false   # local detector only -> /myRobot/perception/detections
+ros2 launch vacuum_detection detection.launch.py offload:=true    # local (hot standby) + image_throttle + detection_selector
+                                                                  # the cloud detector runs in K3s, outside this launch
+```
+
+Parameters of `detector`: `backend` (`ultralytics`|`null`), `weights` (`yolo11n.pt` local, `yolo11x.pt` cluster, or a
+path), `device`, `score_threshold`, `iou_threshold`, `image_size`, `max_detections`, `input_type` (`image`|`compressed`),
+`input_topic`, `output_topic`, `telemetry_rate_hz`. Cloud: `input_type:=compressed`, `input_topic:=/myRobot/perception/
+rgb_throttled/compressed`, `output_topic:=/myRobot/perception/detections/cloud`, `weights:=yolo11x.pt`.
+
+Lifecycle (D-26, D-09): the chain is under `lifecycle_manager_optional` (a perception failure never stops the core,
+Art. VII). The launch starts its own instance (`with_manager:=true`); with the skeleton sequencer use
+`with_manager:=false` and add the node names to `vacuum_bringup/config/lifecycle_optional.yaml`.
+
+Optional Python dependencies (`requirements-detector.txt`): `ultralytics` (+ torch). They are not rosdep keys and no test
+needs them (fake model, `backend:=null`). Tests and the launch pass without them on both distros. torch wheels for
+Python 3.14 (Lyrical) were not verified: if absent, run the detector from its container image (T910).
