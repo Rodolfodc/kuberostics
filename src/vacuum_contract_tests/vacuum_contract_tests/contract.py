@@ -7,7 +7,7 @@ the caller decides what to do with them.
 from dataclasses import dataclass
 import os
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Iterable, List, Optional, Sequence, Tuple, Union
 
 import yaml
 
@@ -38,11 +38,25 @@ class Expectation:
     name: str
     type: str
     qos: Optional[QosSpec]
-    owner: str
+    owner: Union[str, Tuple[str, ...]]     # a list in topics.yaml (alternatives, one runs) becomes a tuple
     frozen: bool
     since: str
     max_publishers: Optional[int]
     sink: bool
+
+    @property
+    def owners(self) -> Tuple[str, ...]:
+        """Owner node names as a tuple, whether the contract gave one name or a list of alternatives."""
+        return owner_names(self.owner)
+
+
+def owner_names(owner) -> Tuple[str, ...]:
+    """`owner` from topics.yaml (str, list/tuple of str, or None) as a tuple of names."""
+    if owner is None:
+        return ()
+    if isinstance(owner, str):
+        return (owner,)
+    return tuple(owner)
 
 
 def find_contract(start: Optional[Path] = None) -> Path:
@@ -92,11 +106,14 @@ def build_expectations(contract: dict, exclude_owners: Iterable[str] = ()) -> Li
     out: List[Expectation] = []
     for section, kind in (('topics', 'topic'), ('services', 'service'), ('actions', 'action')):
         for entry in contract.get(section) or []:
-            if not applies(entry) or entry.get('owner') in excluded:
+            if not applies(entry):
+                continue
+            owners = owner_names(entry.get('owner'))
+            if owners and all(name in excluded for name in owners):
                 continue
             out.append(Expectation(
                 kind=kind, name=entry['name'], type=entry['type'], qos=_qos(contract, entry),
-                owner=entry.get('owner', ''), frozen=bool(entry.get('frozen')),
+                owner=owners[0] if len(owners) == 1 else (owners or ''), frozen=bool(entry.get('frozen')),
                 since=str(entry.get('since', '')), max_publishers=entry.get('max_publishers'),
                 sink=bool(entry.get('sink'))))
     return out
@@ -148,8 +165,10 @@ def check_topic(exp: Expectation, publishers: Sequence[Endpoint],
         problems.append(f'{exp.name}: {len(publishers)} publishers, max_publishers is {exp.max_publishers}')
     if exp.max_publishers == 1 or exp.sink:
         for ep in publishers:
-            if exp.owner not in ('', '*') and ep.node != exp.owner:
-                problems.append(f'{exp.name}: published by {ep.node}, only {exp.owner} may publish')
+            owners = exp.owners
+            if owners and not set(owners) & {'', '*'} and ep.node not in owners:
+                allowed = ' or '.join(owners)
+                problems.append(f'{exp.name}: published by {ep.node}, only {allowed} may publish')
     if exp.sink:
         if subscribers:
             problems.append(f'{exp.name}: sink topic has subscribers '
