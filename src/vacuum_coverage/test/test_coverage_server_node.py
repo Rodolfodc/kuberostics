@@ -14,6 +14,7 @@ from nav_msgs.msg import OccupancyGrid, Path  # noqa: E402
 from rclpy.action import ActionClient  # noqa: E402
 from rclpy.action.client import GoalStatus  # noqa: E402
 from rclpy.executors import MultiThreadedExecutor  # noqa: E402
+from rclpy.lifecycle import TransitionCallbackReturn  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 from rclpy.parameter import Parameter  # noqa: E402
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy  # noqa: E402
@@ -58,8 +59,8 @@ class System:
         self.feedback = []
 
     def up(self):
-        assert self.node.trigger_configure().id == 2
-        assert self.node.trigger_activate().id == 3
+        assert self.node.trigger_configure() == TransitionCallbackReturn.SUCCESS
+        assert self.node.trigger_activate() == TransitionCallbackReturn.SUCCESS
         assert self.client.wait_for_server(timeout_sec=10.0)
 
     def send(self, room_id='', passes=1):
@@ -114,7 +115,7 @@ def test_R21_configure_fails_when_lanes_leave_gaps():
     rclpy.init()
     try:
         node = CoverageServerNode(parameter_overrides=[Parameter('lane_spacing_m', value=0.5)])
-        assert node.trigger_configure().id == 1      # still unconfigured
+        assert node.trigger_configure() == TransitionCallbackReturn.FAILURE
         node.destroy_node()
     finally:
         rclpy.try_shutdown()
