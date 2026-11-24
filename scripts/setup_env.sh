@@ -25,7 +25,8 @@ IMG_LYRICAL="ros:lyrical-ros-base"
 IMG_JAZZY_BASE="ros:jazzy-ros-base"   # same flavour as Lyrical: scripts/ia368ii-check-docker.sh --jazzy-base
 IMG_MERMAID="minlag/mermaid-cli:12.0.1"
 IMG_ZENOH_BRIDGE="eclipse/zenoh-bridge-ros2dds:1.10.2"   # transport benchmark (scripts/transport-bench.sh)
-IMAGES_ALL=("$IMG_JAZZY" "$IMG_LYRICAL" "$IMG_JAZZY_BASE" "$IMG_MERMAID" "$IMG_ZENOH_BRIDGE")
+IMG_SHELLCHECK="koalaman/shellcheck:v0.10.0"   # lint of scripts/*.sh: docker run --rm -v "$PWD/scripts":/mnt:ro $IMG_SHELLCHECK -x /mnt/<file>
+IMAGES_ALL=("$IMG_JAZZY" "$IMG_LYRICAL" "$IMG_JAZZY_BASE" "$IMG_MERMAID" "$IMG_ZENOH_BRIDGE" "$IMG_SHELLCHECK")
 # docker/jazzy and docker/lyrical build FROM the first two (T003); CI builds them, nothing extra to pull.
 
 COPPELIA_VER="V4_10_0_rev0"
