@@ -151,7 +151,8 @@ def test_R36_goal_rejected_while_navigation_is_not_available(system):
     s = system(serve_nav=False)             # map and TF exist, only the /navigate_to_pose server is missing
     s.up()
     assert wait_for(lambda: s.node.has_map and s.node._pose() is not None, 20.0)
-    assert not s.node._nav.server_is_ready()
+    # an action server of the previous test may linger in the graph for a moment: wait for it to vanish
+    assert wait_for(lambda: not s.node._nav.server_is_ready(), 10.0)
     assert not s.send().accepted
 
 
