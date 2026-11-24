@@ -5,7 +5,7 @@ Every test name cites the requirement it verifies (Art. VIII).
 import pytest
 
 from vacuum_bringup.manager_sequencer import (
-    Action, ManagerSequencer, ManagerSpec, Outcome, Role, Severity, State, default_specs)
+    Action, GuardWatch, ManagerSequencer, ManagerSpec, Outcome, Role, Severity, State, default_specs)
 
 CORE, NAV, OPT = 'lifecycle_manager_core', 'lifecycle_manager_nav', 'lifecycle_manager_optional'
 
@@ -325,3 +325,20 @@ def test_005_R35_specs_reject_unknown_names_and_a_first_manager_that_is_not_core
         default_specs([])
     assert default_specs([CORE, NAV, OPT]) == [
         ManagerSpec(CORE, Role.CORE), ManagerSpec(NAV, Role.NAV), ManagerSpec(OPT, Role.OPTIONAL)]
+
+
+def test_005_R36_guard_watch_a_stop_guard_that_is_not_active_is_lost_at_once():
+    assert GuardWatch().feed('not_active') is True
+
+
+def test_005_R36_guard_watch_one_unreachable_sample_is_not_a_loss_two_in_a_row_are():
+    watch = GuardWatch()
+    assert watch.feed('unreachable') is False
+    assert watch.feed('active') is False          # an answer resets the count
+    assert watch.feed('unreachable') is False
+    assert watch.feed('unreachable') is True
+
+
+def test_005_R36_guard_watch_does_not_depend_on_having_seen_the_activation_event():
+    # the first sample ever is already 'not_active': it is a loss (a missed event must not hide it)
+    assert GuardWatch().feed('not_active') is True

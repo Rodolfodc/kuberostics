@@ -104,6 +104,28 @@ def default_specs(names: Sequence[str]) -> List[ManagerSpec]:
     return specs
 
 
+class GuardWatch:
+    """Decides from samples of the stop_guard lifecycle state whether it was lost (005-R36).
+
+    Samples are 'active', 'not_active' or 'unreachable' (no answer from its get_state service). A node that is
+    not active is a loss at once; an unreachable one only after `unreachable_limit` samples in a row, so one lost
+    request does not trigger it. Pure: the caller takes the samples and decides what to do with the answer.
+    """
+
+    def __init__(self, unreachable_limit: int = 2):
+        self._limit = unreachable_limit
+        self._unreachable = 0
+
+    def feed(self, sample: str) -> bool:
+        if sample == 'active':
+            self._unreachable = 0
+            return False
+        if sample == 'unreachable':
+            self._unreachable += 1
+            return self._unreachable >= self._limit
+        return True
+
+
 def _noop_log(level: str, message: str) -> None:
     pass
 
