@@ -62,4 +62,4 @@ docker stop -t 10 "$REC" >/dev/null
 docker logs "$REC" >"$OUT/recorder.log" 2>&1 || true
 echo ">> analysis"
 docker run --rm --network none --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$OUT":/out -v "$REPO/tools/chaos":/chaos:ro \
-  --entrypoint /opt/detector/entrypoint.sh "$IMG" python3 -I /chaos/analyze_offload_bag.py /out/bag /out/kills.csv
+  --entrypoint /opt/detector/entrypoint.sh "$IMG" python3 /chaos/analyze_offload_bag.py /out/bag /out/kills.csv

@@ -35,6 +35,12 @@ RUN . /opt/ros/${ROS_DISTRO}/setup.sh \
       --packages-select vacuum_interfaces vacuum_detection \
  && rm -rf /tmp/build /tmp/log /ws
 
+# rosbag2 tooling: the chaos run (tools/chaos/kill_detector.sh) records and analyses bags inside this image.
+RUN apt-get update -qq \
+ && apt-get install -y --no-install-recommends \
+      ros-${ROS_DISTRO}-ros2bag ros-${ROS_DISTRO}-rosbag2-py ros-${ROS_DISTRO}-rosbag2-storage-default-plugins \
+ && rm -rf /var/lib/apt/lists/*
+
 COPY docker/detector/entrypoint.sh docker/detector/liveness.sh /opt/detector/
 RUN chmod 0755 /opt/detector/entrypoint.sh /opt/detector/liveness.sh \
  && useradd --system --uid 10001 --create-home detector \
