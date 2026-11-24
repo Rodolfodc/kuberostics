@@ -1,4 +1,4 @@
-"""pure tests of the projector pieces (DetectionSet, DetectionFilter, marker_spec, pipeline, caches).
+"""Pure tests of the projector pieces (DetectionSet, DetectionFilter, marker_spec, pipeline, caches).
 
 Each test cites the requirement it verifies (Art. VIII). No ROS. The consumer replica follows
 specs/009a-offload/markers-format.md (read from the 2025S2 `_detections_cb`, not executed: unverified).
