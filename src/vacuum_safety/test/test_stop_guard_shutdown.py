@@ -33,17 +33,26 @@ def _spin_until(node, done, timeout):
     return done()
 
 
-def _warm_up(node, name):
+def _fail_with_child_output(proc, message):
+    """Reports why the child never came up: its exit status and everything it printed."""
+    status = proc.poll()
+    proc.kill()
+    err = proc.communicate()[1]
+    pytest.fail(f'{message} (child exit status {status}):\n{err}')
+
+
+def _warm_up(node, name, proc):
     """Calls the idempotent get_state until a reply arrives: a reply sent before the client's reader is matched
     is lost, which would make the first ChangeState call hang."""
     client = node.create_client(GetState, f'{name}/get_state')
-    assert client.wait_for_service(timeout_sec=60.0), f'{name} never came up'
+    if not client.wait_for_service(timeout_sec=60.0):
+        _fail_with_child_output(proc, f'{name} never came up')
     end = time.monotonic() + 60.0
     while time.monotonic() < end:
         fut = client.call_async(GetState.Request())
         if _spin_until(node, fut.done, 1.0):
             return
-    pytest.fail(f'{name} never answered get_state')
+    _fail_with_child_output(proc, f'{name} never answered get_state')
 
 
 def _change(node, client, transition_id):
@@ -60,8 +69,9 @@ def test_001_R19_stop_guard_exits_on_sigint_without_rcl_errors(rounds, locked):
     node = rclpy.create_node('shutdown_probe')
     try:
         client = node.create_client(ChangeState, '/stop_guard/change_state')
-        _warm_up(node, '/stop_guard')
-        assert client.wait_for_service(timeout_sec=60.0)
+        _warm_up(node, '/stop_guard', proc)
+        if not client.wait_for_service(timeout_sec=60.0):
+            _fail_with_child_output(proc, 'change_state never came up')
         _change(node, client, Transition.TRANSITION_CONFIGURE)
         _change(node, client, Transition.TRANSITION_ACTIVATE)
         if locked:                            # the 10 Hz timer is publishing zeros when SIGINT arrives
