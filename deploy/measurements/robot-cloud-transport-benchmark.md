@@ -1,12 +1,12 @@
-# T902: robot <-> K3s transport, `rmw_zenoh` vs `zenoh-bridge-ros2dds` (009a-R03, input to Q-06)
+# Robot <-> K3s transport benchmark, `rmw_zenoh` vs `zenoh-bridge-ros2dds` (Task T902; 009a-R03, input to Q-06)
 
-Measured 2026-11-13 on ROS 2 **Lyrical** only (Jazzy not measured). Raw data: `t902/*.csv` (one row per image sent),
-`t902/summary.txt` (the SUMMARY lines), `t902/stats.md`. The raw container logs are kept locally and are not versioned
+Measured 2026-11-13 on ROS 2 **Lyrical** only (Jazzy not measured). Raw data: `transport-benchmark/*.csv` (one row per image sent),
+`transport-benchmark/summary.txt` (the SUMMARY lines), `transport-benchmark/stats.md`. The raw container logs are kept locally and are not versioned
 (they may hold host details); every number here comes from those three. Reproduce with `scripts/transport-bench.sh`.
 
 ## Method
 
-- Cloud side: Pod in namespace `t902` of the local k3d cluster `kuberostics` (k3s v1.35.5), reached through a NodePort.
+- Cloud side: Pod in namespace `transport-bench` of the local k3d cluster `kuberostics` (k3s v1.35.5), reached through a NodePort.
   Robot side: Docker container on the `k3d-kuberostics` network (same host, so these are lower bounds, see caveats).
 - The robot publishes a 640x480 JPEG (80 187 bytes, synthetic scene with noise) as `sensor_msgs/CompressedImage` at 2 Hz
   on `/myRobot/perception/rgb_throttled/compressed` (QoS `sensor`: best_effort, depth 5), stamped with the send time.
@@ -16,8 +16,8 @@ Measured 2026-11-13 on ROS 2 **Lyrical** only (Jazzy not measured). Raw data: `t
 - Each run sends 608 images (about 300 s at 2 Hz from the first reply); the CSV has 608 rows per run, 607 with a reply and
   1 trailing row without a reply (still in flight at the end). One run per cell.
 - **One stated method for every figure in this file:** all 607 numeric rows of the committed CSVs, percentiles by linear
-  interpolation (numpy default), recomputed by `python3 -I scripts/t902_stats.py` (output committed as
-  `t902/stats.md`). The `SUMMARY` lines in `t902/summary.txt` come from the bench itself, which used a
+  interpolation (numpy default), recomputed by `python3 -I scripts/transport_bench_stats.py` (output committed as
+  `transport-benchmark/stats.md`). The `SUMMARY` lines in `transport-benchmark/summary.txt` come from the bench itself, which used a
   different subset (the first 600 steady-state rows after dropping the last 4 s) and the index method `int(p/100*n)`;
   they differ slightly (for example bridge wan p99 579.88 there vs 565.93 here) and are kept only for reference.
 - **rmw_zenoh** (`ros-lyrical-rmw-zenoh-cpp` 0.10.6): `rmw_zenohd` router in the Pod (NodePort 30447), a local
@@ -38,10 +38,10 @@ Measured 2026-11-13 on ROS 2 **Lyrical** only (Jazzy not measured). Raw data: `t
 
 No reordering in any run. Both transports sustain 2 Hz with no loss; the images were always delivered (TCP).
 A first bridge run (without `ROS_DISTRO` set in the bridge containers, a WARN in the bridge log) gave the same numbers
-(bench lines: lan p50 5.16, wan p50 395.19, p99 544.08; `t902/first-run-summary.txt`): `summary.txt` holds the second run.
+(bench lines: lan p50 5.16, wan p50 395.19, p99 544.08; `transport-benchmark/first-run-summary.txt`): `summary.txt` holds the second run.
 
 > **WARNING: the bridge result on the impaired link conflicts with the 009a thresholds.** Computed from
-> `t902/lyrical-bridge-wan.csv` (all 607 replies; linear-interpolation percentiles, `scripts/t902_stats.py`):
+> `transport-benchmark/lyrical-bridge-wan.csv` (all 607 replies; linear-interpolation percentiles, `scripts/transport_bench_stats.py`):
 > - 42 of 607 replies (6.9 %) took more than 500 ms, and p95 is 511 ms. For rmw_zenoh the maximum is 430 ms, so no reply
 >   exceeds 500 ms.
 > - 009a-R10 needs every response in the 3 s stable window (6 replies at 2 Hz) to have `age <= close_threshold_s`
@@ -65,7 +65,7 @@ does not explain why the bridge suffers more than rmw_zenoh.
 - Same host, containers on one Docker bridge: the lan numbers are a **lower bound**, not Wi-Fi. The wan scenario is a
   synthetic netem model, uplink only, one TCP transport.
 - One run per cell (a second bridge run, with `ROS_DISTRO` set, gave the same figures; both summaries are committed:
-  `t902/first-run-summary.txt` and `t902/summary.txt`). Run order and host load were not controlled. p95/p99 over 600
+  `transport-benchmark/first-run-summary.txt` and `transport-benchmark/summary.txt`). Run order and host load were not controlled. p95/p99 over 600
   samples are indicative only.
 - The bridge was measured with CycloneDDS and `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`, unlike the real robot graph.
 - Image payload is synthetic, not from the House scene. CPU load of each transport was not measured.
@@ -98,4 +98,4 @@ Recommendation, conditional: **`zenoh-bridge-ros2dds` if the architect accepts r
 `close_threshold_s`, `stable_window_s` and `max_age_s` for it, or if the real link is cleaner than this netem scenario**;
 otherwise the measured impaired-link behaviour is a risk against it and `rmw_zenoh` (with ACLs for R03 and the Art. VI
 isolation cost) is the alternative. Re-run `scripts/transport-bench.sh` on the real link before deciding, and add Jazzy
-once an image for it exists (the manifest pins `t902-bench:lyrical`; the script rewrites the tag).
+once an image for it exists (the manifest pins `transport-bench:lyrical`; the script rewrites the tag).

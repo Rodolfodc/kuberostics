@@ -1,5 +1,5 @@
-# T902 measurement image: ROS 2 + rmw_zenoh + CycloneDDS (for zenoh-bridge-ros2dds) + the bench node.
-# Build: docker build --build-arg ROS_DISTRO=lyrical -t t902-bench:lyrical deploy/transport-bench   (009a-R17: ARG ROS_DISTRO)
+# Transport benchmark image: ROS 2 + rmw_zenoh + CycloneDDS (for zenoh-bridge-ros2dds) + the bench node.
+# Build: docker build --build-arg ROS_DISTRO=lyrical -t transport-bench:lyrical deploy/transport-bench   (009a-R17: ARG ROS_DISTRO)
 ARG ROS_DISTRO=lyrical
 FROM ros:${ROS_DISTRO}-ros-base
 ARG ROS_DISTRO

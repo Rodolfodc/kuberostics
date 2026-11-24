@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Recompute the T902 figures from the committed CSVs (deploy/measurements/t902/*.csv) with ONE stated method.
+"""Recompute the transport benchmark figures from the committed CSVs (deploy/measurements/transport-benchmark/*.csv) with ONE stated method.
 
 Rows used: every row with a numeric rtt_ms (607 per run). The CSV also holds 1 trailing row without a reply (sent in
 the last seconds, still in flight when the run ended); it is excluded from the percentiles and from the windows.
 Percentiles: linear interpolation between order statistics (numpy default, `np.percentile(x, p)`).
 Windows: sliding windows of 6 consecutive replies (3 s at 2 Hz, 009a-R10 stable window); a window is bad if any reply
 exceeds the threshold (default 500 ms = close_threshold_s).
-Usage: python3 -I scripts/t902_stats.py [csv_dir] [threshold_ms]     (prints a markdown table)
+Usage: python3 -I scripts/transport_bench_stats.py [csv_dir] [threshold_ms]     (prints a markdown table)
 """
 import csv
 import glob
@@ -22,7 +22,7 @@ def pct(sorted_x, p):
 
 
 def main():
-    d = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', 'deploy', 'measurements', 't902')
+    d = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', 'deploy', 'measurements', 'transport-benchmark')
     thr = float(sys.argv[2]) if len(sys.argv) > 2 else 500.0
     print(f'| run | rows | numeric | p50 | p95 | p99 | max | mean | >{thr:g} ms | bad 6-windows |')
     print('|---|---|---|---|---|---|---|---|---|---|')

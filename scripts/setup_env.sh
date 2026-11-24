@@ -23,7 +23,7 @@ for a in "$@"; do case "$a" in
 IMG_JAZZY="osrf/ros:jazzy-desktop-full"
 IMG_LYRICAL="ros:lyrical-ros-base"
 IMG_MERMAID="minlag/mermaid-cli:12.0.1"
-IMG_ZENOH_BRIDGE="eclipse/zenoh-bridge-ros2dds:1.10.2"   # T902 transport measurement (scripts/transport-bench.sh)
+IMG_ZENOH_BRIDGE="eclipse/zenoh-bridge-ros2dds:1.10.2"   # transport benchmark (scripts/transport-bench.sh)
 IMAGES_ALL=("$IMG_JAZZY" "$IMG_LYRICAL" "$IMG_MERMAID" "$IMG_ZENOH_BRIDGE")
 # docker/jazzy and docker/lyrical build FROM the first two (T003); CI builds them, nothing extra to pull.
 

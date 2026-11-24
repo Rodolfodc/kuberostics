@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# T902 (009a-R03, Q-06): robot <-> K3s transport measurement, rmw_zenoh vs zenoh-bridge-ros2dds.
-# The robot side is a Docker container on the k3d network; the cloud side is a Pod in namespace t902 of the local
+# (009a-R03, Q-06) robot <-> K3s transport benchmark, rmw_zenoh vs zenoh-bridge-ros2dds.
+# The robot side is a Docker container on the k3d network; the cloud side is a Pod in namespace transport-bench of the local
 # cluster "kuberostics" (tools/k3s.sh, own kubeconfig). Round trip = timestamp echo of a 80 KB JPEG (80 187 bytes) at 2 Hz.
 # Usage: scripts/transport-bench.sh [--duration S] [--distro lyrical] [--scenarios "lan wan"] [--transports "rmw bridge"]
-# Needs: docker, k3d, kubectl. `tools/k3s.sh up` is run if the cluster is absent. Results: deploy/measurements/t902/.
-# Cleanup: scripts/transport-bench.sh --cleanup   (removes only namespace t902 and the t902-* containers)
-# Raw docker and k3d image import are used on purpose (no wrapper covers them); every container is named t902-* and
-# cleanup (--cleanup, or the per-run docker rm) only touches that prefix and namespace t902.
+# Needs: docker, k3d, kubectl. `tools/k3s.sh up` is run if the cluster is absent. Results: deploy/measurements/transport-benchmark/.
+# Cleanup: scripts/transport-bench.sh --cleanup   (removes only namespace transport-bench and the transport-bench-* containers)
+# Raw docker and k3d image import are used on purpose (no wrapper covers them); every container is named transport-bench-* and
+# cleanup (--cleanup, or the per-run docker rm) only touches that prefix and namespace transport-bench.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K="$REPO/tools/k3s.sh"
-OUT="$REPO/deploy/measurements/t902"
+OUT="$REPO/deploy/measurements/transport-benchmark"
 DISTRO=lyrical DURATION=300 SCENARIOS="lan wan" TRANSPORTS="rmw bridge"
 # Pinned by digest (supply chain); the tag is tracked in scripts/setup_env.sh. apt packages and ros:lyrical-ros-base float.
 BRIDGE_IMG="eclipse/zenoh-bridge-ros2dds:1.10.2@sha256:0183b7e83790a8c57a069743776c2d913041760eb19e64d8cc4fbf7374269034"
@@ -23,12 +23,12 @@ while [[ $# -gt 0 ]]; do
     --distro) DISTRO="$2"; shift 2;;
     --scenarios) SCENARIOS="$2"; shift 2;;
     --transports) TRANSPORTS="$2"; shift 2;;
-    --cleanup) "$K" delete namespace t902 --ignore-not-found
-               docker ps -a --filter name='^t902-' -q | xargs -r docker rm -f; exit 0;;
+    --cleanup) "$K" delete namespace transport-bench --ignore-not-found
+               docker ps -a --filter name='^transport-bench-' -q | xargs -r docker rm -f; exit 0;;
     *) echo "unknown arg $1" >&2; exit 2;;
   esac
 done
-IMG="t902-bench:$DISTRO"
+IMG="transport-bench:$DISTRO"
 mkdir -p "$OUT"
 
 echo ">> image $IMG"
@@ -40,15 +40,15 @@ k3d cluster list kuberostics >/dev/null 2>&1 || "$K" up
 [[ -f "$REPO/.k3s/kubeconfig" ]] || "$K" up
 # Only the bench image is imported: importing the multi-arch bridge image fails in ctr; the Pod pulls it instead.
 k3d image import -c kuberostics "$IMG" >/dev/null
-sed "s#t902-bench:lyrical#$IMG#" "$REPO/deploy/transport-bench/k8s/transport-bench.yaml" | "$K" apply -f - >/dev/null
+sed "s#transport-bench:lyrical#$IMG#" "$REPO/deploy/transport-bench/k8s/transport-bench.yaml" | "$K" apply -f - >/dev/null
 NODE_IP="$(docker inspect -f '{{(index .NetworkSettings.Networks "k3d-kuberostics").IPAddress}}' k3d-kuberostics-server-0)"
 echo "   node IP $NODE_IP"
 
-cloud_up()   { "$K" -n t902 scale deploy "$1" --replicas=1 >/dev/null; "$K" -n t902 rollout status deploy "$1" --timeout=180s >/dev/null; }
-cloud_down() { "$K" -n t902 scale deploy "$1" --replicas=0 >/dev/null; "$K" -n t902 wait --for=delete pod -l app="$1" --timeout=120s >/dev/null 2>&1 || true; }
+cloud_up()   { "$K" -n transport-bench scale deploy "$1" --replicas=1 >/dev/null; "$K" -n transport-bench rollout status deploy "$1" --timeout=180s >/dev/null; }
+cloud_down() { "$K" -n transport-bench scale deploy "$1" --replicas=0 >/dev/null; "$K" -n transport-bench wait --for=delete pod -l app="$1" --timeout=120s >/dev/null 2>&1 || true; }
 
 run_one() {   # $1 transport (rmw|bridge) $2 scenario
-  local t="$1" s="$2" name="t902-robot-$1-$2" dep tmode port
+  local t="$1" s="$2" name="transport-bench-robot-$1-$2" dep tmode port
   local label="$DISTRO-$t-$s"
   if [[ $t == rmw ]]; then dep=cloud-rmw; tmode=rmw; port=30447; else dep=cloud-bridge; tmode=dds; port=30448; fi
   echo ">> $label (netem: '${NETEM[$s]:-none}')"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""T902 transport bench (009a-R03, Q-06). Two roles:
+"""Transport benchmark (009a-R03, Q-06). Two roles:
 
   pub  (robot): publishes a compressed RGB image at --rate Hz on the contract topic, stamped with now, and
                 subscribes to the cloud detections. RTT = now - header.stamp of the echoed Detection2DArray
@@ -40,7 +40,7 @@ def make_jpeg(w=640, h=480, quality=80):
 
 class Echo(Node):
     def __init__(self):
-        super().__init__('t902_echo')
+        super().__init__('transport_bench_echo')
         self.pub = self.create_publisher(Detection2DArray, DET, QOS_DEFAULT)
         self.create_subscription(CompressedImage, IMG, self.on_img, QOS_SENSOR)
         self.n = 0
@@ -64,7 +64,7 @@ class Echo(Node):
 
 class Pub(Node):
     def __init__(self, rate, duration, csv_path, warmup):
-        super().__init__('t902_pub')
+        super().__init__('transport_bench_pub')
         self.jpeg = make_jpeg()
         self.pub = self.create_publisher(CompressedImage, IMG, QOS_SENSOR)
         self.create_subscription(Detection2DArray, DET, self.on_det, QOS_DEFAULT)

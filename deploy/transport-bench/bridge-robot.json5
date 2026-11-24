@@ -1,4 +1,4 @@
-// Robot side of the T902 bridge test: only the compressed RGB leaves, only the detections come back (009a-R03).
+// Robot side of the bridge test: only the compressed RGB leaves, only the detections come back (009a-R03).
 {
   plugins: { ros2dds: { allow: {
     publishers:  ["/myRobot/perception/rgb_throttled/compressed"],
