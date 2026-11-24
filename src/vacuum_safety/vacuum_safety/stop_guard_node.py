@@ -3,6 +3,9 @@
 It is an actuator in the sense of Art. III: it publishes only to its own twist_mux input. All logic is in
 `StopGuard` (pure Python); this node wires it to the topics (D-18) and publishes telemetry (D-20).
 """
+import signal
+import threading
+
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Twist
@@ -11,6 +14,7 @@ from rclpy._rclpy_pybind11 import RCLError
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.signals import SignalHandlerOptions
 from std_msgs.msg import Bool
 
 from vacuum_safety.stop_guard_core import StopGuard
@@ -88,13 +92,20 @@ class StopGuardNode(LifecycleNode):
 
 
 def main(args=None) -> None:
-    rclpy.init(args=args)
+    # SIGINT/SIGTERM only set a flag: rclpy's default handler invalidates the context and Python raises
+    # KeyboardInterrupt at an arbitrary point (even inside a deallocator), which printed tracebacks under load
+    # (flaky under load). The shutdown order is then ours: stop spinning, destroy the node, shut the context down.
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = StopGuardNode()
     executor = SingleThreadedExecutor()
     executor.add_node(node)
+    stop = threading.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: stop.set())
     try:
-        executor.spin()
-    except (KeyboardInterrupt, ExternalShutdownException):
+        while not stop.is_set() and rclpy.ok():
+            executor.spin_once(timeout_sec=0.1)
+    except ExternalShutdownException:
         pass
     finally:
         executor.shutdown()

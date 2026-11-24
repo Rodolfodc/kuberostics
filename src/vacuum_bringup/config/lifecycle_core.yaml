@@ -8,6 +8,11 @@ lifecycle_manager_core:
     autostart: true
     # Our nodes do not create bonds; the Nav2 default (4.0 s) would make the manager wait for them.
     bond_timeout: 0.0
+    # The Nav2 default (5 s) is how long the manager waits for a node's lifecycle service to appear. Our nodes
+    # are Python processes that start at the same time as the manager; on a loaded 1-CPU runner (Lyrical,
+    # Python 3.14) one is not up after 5 s, the manager then gives up on the whole bring-up and nothing is
+    # configured (supervisor never subscribes). Set explicitly, Art. X / D-13 style.
+    service_timeout: 60.0
     node_names:
       - stop_guard
       - coverage_server

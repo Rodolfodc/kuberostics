@@ -76,6 +76,7 @@ class TestWithIa368ii(unittest.TestCase):
 
     def test_02_ia368ii_node_names(self):
         """001-R02: every node in the IA368II lifecycle_manager.yaml node_names is running with that name."""
+        self.probe.wait_for_nodes([*self.managed, self.manager])      # discovery lag on a loaded runner
         live = {name for name, namespace in self.probe.node_names()}
         self.assertTrue(self.managed)
         for name in self.managed:
@@ -84,6 +85,8 @@ class TestWithIa368ii(unittest.TestCase):
 
     def test_03_twist_mux_still_the_only_publisher_of_cmd_vel(self):
         """001-R03, 001-R12: cleaning_server and autodocking_server are remapped away from /myRobot/cmd_vel."""
+        self.probe.wait_for_publishers(gs.CMD_VEL)
+        self.probe.wait_for_publishers('/myRobot/legacy/cleaning_cmd_vel')
         self.assertEqual([p.node_name for p in self.probe.publishers_of(gs.CMD_VEL)], ['twist_mux'])
         sink = self.probe.publishers_of('/myRobot/legacy/cleaning_cmd_vel')
         self.assertEqual([p.node_name for p in sink], ['cleaning_server'])

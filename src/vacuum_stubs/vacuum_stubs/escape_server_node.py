@@ -3,6 +3,8 @@
 Runs a scripted escape (reverse, then turn) on /myRobot/mux/escape (its own mux input only) and returns the
 result chosen by the `outcome` parameter (succeed, fail, hang). Logic in `EscapeScript` (pure Python, D-18).
 """
+import signal
+import threading
 import time
 
 import rclpy
@@ -14,6 +16,7 @@ from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
+from rclpy.signals import SignalHandlerOptions
 from vacuum_interfaces.action import Escape
 
 from vacuum_stubs.escape_core import EscapeScript
@@ -37,6 +40,13 @@ class EscapeServerNode(LifecycleNode):
         self._running = 0
         self._last_result = 'none'
         self._timer = None
+        self._stopping = False    # process shutdown requested: a running goal aborts while the context is valid
+
+    def begin_shutdown(self) -> None:
+        self._stopping = True
+
+    def goals_running(self) -> int:
+        return self._running
 
     def _new_script(self) -> EscapeScript:
         p = self.get_parameter
@@ -117,7 +127,7 @@ class EscapeServerNode(LifecycleNode):
                     self._last_result = 'cancelled'
                     self.get_logger().info('Escape goal cancelled')
                     return result
-                if not self._active or generation != self._generation:
+                if self._stopping or not self._active or generation != self._generation:
                     goal_handle.abort()
                     self._last_result = 'aborted'
                     return result
@@ -153,17 +163,26 @@ class EscapeServerNode(LifecycleNode):
 
 
 def main(args=None) -> None:
-    rclpy.init(args=args)
+    # rclpy's own SIGINT handler invalidates the context at once, while a goal may still be publishing: rcl then
+    # prints "context is invalid" errors from inside rclpy (flaky under load). The signals are handled here
+    # instead: flag the goal to abort (context still valid), wait for it, then shut everything down in order.
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = EscapeServerNode()
     executor = MultiThreadedExecutor()
     executor.add_node(node)
+    stop = threading.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(sig, lambda *_: stop.set())       # no KeyboardInterrupt at an arbitrary point
     try:
-        executor.spin()
-    except (KeyboardInterrupt, ExternalShutdownException):
+        while not stop.is_set() and rclpy.ok():
+            executor.spin_once(timeout_sec=0.1)
+        node.begin_shutdown()
+        deadline = time.monotonic() + 3.0
+        while node.goals_running() and time.monotonic() < deadline:
+            time.sleep(0.05)
+    except ExternalShutdownException:
         pass
     finally:
-        # SIGINT already invalidated the context: stop the executor threads first (a running goal sees
-        # rclpy.ok() == False and returns), then tear down tolerating an already-invalid context.
         executor.shutdown()
         try:
             node.destroy_node()
