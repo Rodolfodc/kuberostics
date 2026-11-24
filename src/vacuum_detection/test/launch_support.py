@@ -1,7 +1,7 @@
 """Support of the live-graph launch tests of detection.launch.py (not a test module).
 
 `launch_description(offload)` is the real detection.launch.py with backend:=null (no weights, no GPU) on a private
-ROS domain in 160-189 (the range of this package); `check_final_topic` applies the contract helpers of
+ROS domain in 175-189 (of the 160-189 range of this package); `check_final_topic` applies the contract helpers of
 vacuum_contract_tests to what the graph really has on /myRobot/perception/detections.
 """
 import os
@@ -27,7 +27,7 @@ from vacuum_contract_tests.contract import (
 FINAL_TOPIC = '/myRobot/perception/detections'
 LOCAL_TOPIC = '/myRobot/perception/detections/local'
 STARTUP_TIMEOUT_S = 60.0
-DOMAIN = random.SystemRandom().randrange(160, 190)      # one graph per test module (own process)
+DOMAIN = random.SystemRandom().randrange(175, 190)      # 160-174 is for the per-test domains of conftest.py
 
 
 def isolate_environment() -> None:
