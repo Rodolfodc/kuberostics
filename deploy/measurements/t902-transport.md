@@ -1,7 +1,8 @@
 # T902: robot <-> K3s transport, `rmw_zenoh` vs `zenoh-bridge-ros2dds` (009a-R03, input to Q-06)
 
 Measured 2026-11-13 on ROS 2 **Lyrical** only (Jazzy not measured). Raw data: `t902/*.csv` (one row per image sent),
-`t902/*.log` (the SUMMARY line), `t902/summary.txt`. Reproduce with `scripts/transport-bench.sh`.
+`t902/summary.txt` (the SUMMARY lines), `t902/stats.md`. The raw container logs are kept locally and are not versioned
+(they may hold host details); every number here comes from those three. Reproduce with `scripts/transport-bench.sh`.
 
 ## Method
 
@@ -16,9 +17,9 @@ Measured 2026-11-13 on ROS 2 **Lyrical** only (Jazzy not measured). Raw data: `t
   1 trailing row without a reply (still in flight at the end). One run per cell.
 - **One stated method for every figure in this file:** all 607 numeric rows of the committed CSVs, percentiles by linear
   interpolation (numpy default), recomputed by `python3 -I scripts/t902_stats.py` (output committed as
-  `t902/stats.md`). The `SUMMARY` lines in `t902/*.log` and `t902/summary.txt` come from the bench itself, which used a
+  `t902/stats.md`). The `SUMMARY` lines in `t902/summary.txt` come from the bench itself, which used a
   different subset (the first 600 steady-state rows after dropping the last 4 s) and the index method `int(p/100*n)`;
-  they differ slightly (for example bridge wan p99 579.88 there vs 565.93 here) and are kept only as raw logs.
+  they differ slightly (for example bridge wan p99 579.88 there vs 565.93 here) and are kept only for reference.
 - **rmw_zenoh** (`ros-lyrical-rmw-zenoh-cpp` 0.10.6): `rmw_zenohd` router in the Pod (NodePort 30447), a local
   `rmw_zenohd` on the robot connecting to it, nodes with `RMW_IMPLEMENTATION=rmw_zenoh_cpp`.
 - **zenoh-bridge-ros2dds** (`eclipse/zenoh-bridge-ros2dds:1.10.2` (digest-pinned)): nodes on CycloneDDS with localhost discovery, one bridge

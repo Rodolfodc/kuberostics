@@ -17,3 +17,7 @@ rl/runs/
 *.egg-info/
 .archify/
 docs/diagrams/archify/*.json
+
+# T902: raw transport-bench logs may hold host details (IPs, container ids); keep them local only
+deploy/measurements/**/*.log
+deploy/measurements/**/local-logs/
