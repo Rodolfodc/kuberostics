@@ -3,6 +3,12 @@ teleoperation (scenario 4, "the stop lock still takes precedence over teleoperat
 
 `outcome` is set on the running escape_server through its parameter service before the first goal (the
 launch file does not expose it, and the stub reads it per goal).
+
+Latency (001-R06, 001-R07): the tests do not time the probe's own wait loop. The delay is the supervisor's
+`Submode.stamp` (taken in its tick) minus the StuckEvent stamp (R07) or the probe's clock just before it published
+the mode (R06). The tolerance is 0.5 s plus 0.25 s (one 5 Hz tick and DDS delivery) plus twice the scheduling
+jitter the probe saw in that window (capped at 0.5 s: ceiling 1.75 s), so it follows the
+load of the run and is 0.75 s on an idle machine (measured ~0.2 s). See `graph_support.assert_latency`.
 """
 import os
 import sys
