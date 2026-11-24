@@ -104,6 +104,40 @@ def default_specs(names: Sequence[str]) -> List[ManagerSpec]:
     return specs
 
 
+class GuardWatch:
+    """Decides from samples of the stop_guard lifecycle state whether it was lost (005-R36).
+
+    Samples are 'active', 'not_active' or 'unreachable' (no answer from its get_state service). A node that is
+    not active is a loss at once. An unreachable one is a loss only after `unreachable_limit` unreachable samples
+    in a row that are at least `min_spacing_s` apart: samples closer than that (for example triggered by a burst
+    of transition events during a hiccup) are not counted, so one hiccup cannot look like two. Pure: the caller
+    takes the samples, passes the time and decides what to do with the answer.
+    """
+
+    def __init__(self, unreachable_limit: int = 2, min_spacing_s: float = 0.0):
+        self._limit = unreachable_limit
+        self._spacing = min_spacing_s
+        self._unreachable = 0
+        self._last_counted = None
+
+    @property
+    def unreachable_count(self) -> int:
+        return self._unreachable
+
+    def feed(self, sample: str, now: float = 0.0) -> bool:
+        if sample == 'active':
+            self._unreachable = 0
+            self._last_counted = None
+            return False
+        if sample == 'unreachable':
+            if self._last_counted is not None and now - self._last_counted < self._spacing:
+                return self._unreachable >= self._limit          # too close to the last one: not counted
+            self._last_counted = now
+            self._unreachable += 1
+            return self._unreachable >= self._limit
+        return True
+
+
 def _noop_log(level: str, message: str) -> None:
     pass
 
@@ -189,6 +223,8 @@ class ManagerSequencer:
             failed = min(failed, state, key=_SEVERITY_ORDER.index)
         if not self._abort:
             self._set_state(failed)
+            # Safe guard: the node's worker handles guard events only after startup, so this branch is not
+            # reached from it today; it keeps the core safe for any caller that reports a loss from another thread.
             if self._guard_lost_pending:
                 self._guard_lost_pending = False
                 self.on_stop_guard_lost()

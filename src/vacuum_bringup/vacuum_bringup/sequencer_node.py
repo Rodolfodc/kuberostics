@@ -29,7 +29,7 @@ from std_srvs.srv import Trigger
 from vacuum_interfaces.msg import Notification
 
 from vacuum_bringup.manager_sequencer import (
-    Action, ManagerSequencer, Outcome, Severity, State, default_specs)
+    Action, GuardWatch, ManagerSequencer, Outcome, Severity, State, default_specs)
 
 COMMANDS = {
     Action.STARTUP: ManageLifecycleNodes.Request.STARTUP,
@@ -50,15 +50,19 @@ class SequencerNode(Node):
         self.declare_parameter('manager_shutdown_timeout_s', 15.0)
         self.declare_parameter('telemetry_rate_hz', 1.0)
         self.declare_parameter('stop_guard_node', 'stop_guard')
+        self.declare_parameter('stop_guard_poll_period_s', 1.0)
         names = list(self.get_parameter('managers').value)
         self._pub_notify = self.create_publisher(Notification, '/myRobot/notifications', 10)
         self._pub_telemetry = self.create_publisher(DiagnosticArray, '/myRobot/telemetry/lifecycle_sequencer', 10)
         self._manage = {n: self.create_client(ManageLifecycleNodes, f'/{n}/manage_nodes') for n in names}
         self._active = {n: self.create_client(Trigger, f'/{n}/is_active') for n in names}
         self._events: 'queue.Queue[str]' = queue.Queue()
-        self._stop_guard_seen_active = False
         guard = self.get_parameter('stop_guard_node').value
         self.create_subscription(TransitionEvent, f'/{guard}/transition_event', self._on_guard_event, 10)
+        self._guard = guard
+        self._poll_period_s = max(0.1, float(self.get_parameter('stop_guard_poll_period_s').value))
+        # unreachable samples count only when almost a poll period apart (events can come in bursts)
+        self._watch = GuardWatch(min_spacing_s=0.9 * self._poll_period_s)
         self.sequencer = ManagerSequencer(
             default_specs(names), self._call, self._wait_active, time.monotonic, self._log, self._notify,
             startup_timeout_s=float(self.get_parameter('manager_startup_timeout_s').value),
@@ -151,11 +155,28 @@ class SequencerNode(Node):
 
     # ------------------------------------------------------------ events and telemetry
     def _on_guard_event(self, msg: TransitionEvent) -> None:
-        if msg.goal_state.id == LifecycleState.PRIMARY_STATE_ACTIVE:
-            self._stop_guard_seen_active = True
-        elif self._stop_guard_seen_active:
-            self._stop_guard_seen_active = False
-            self._events.put('stop_guard_lost')      # handled by the worker: it makes blocking calls
+        """Only a wake-up: a transition event is volatile and can be missed, so the worker always confirms
+        with get_state (and polls every stop_guard_poll_period_s) instead of trusting the event."""
+        self._events.put('stop_guard_event')
+
+    def _guard_sample(self) -> str:
+        outcome, state = self._call_once(GetState, f'/{self._guard}/get_state', GetState.Request(), 2.0)
+        if outcome is not Outcome.OK:
+            return 'unreachable'
+        return 'active' if state.current_state.id == LifecycleState.PRIMARY_STATE_ACTIVE else 'not_active'
+
+    def _check_stop_guard(self) -> None:
+        if self.sequencer.state not in (State.ALL_ACTIVE, State.DEGRADED_NAV, State.DEGRADED_OPTIONAL):
+            return
+        sample = self._guard_sample()
+        lost = self._watch.feed(sample, time.monotonic())
+        if sample == 'unreachable':
+            self.get_logger().warning(
+                f'stop_guard sample: unreachable ({self._watch.unreachable_count} counted in a row)')
+        elif sample == 'not_active':
+            self.get_logger().warning('stop_guard sample: not active')
+        if lost:
+            self.sequencer.on_stop_guard_lost()
 
     def _publish_telemetry(self) -> None:
         metrics = self.sequencer.metrics()
@@ -180,12 +201,15 @@ class SequencerNode(Node):
             self.sequencer.run_startup()
         except Exception as error:      # keep the process alive: the ordered shutdown must still run
             self.get_logger().error(f'startup sequence crashed: {error!r}')
+        self._check_stop_guard()          # a loss during startup is seen at once
         while True:
-            event = self._events.get()
+            try:
+                event = self._events.get(timeout=self._poll_period_s)
+            except queue.Empty:
+                event = 'poll'
             if event == 'shutdown':
                 break
-            if event == 'stop_guard_lost':
-                self.sequencer.on_stop_guard_lost()
+            self._check_stop_guard()
         self.sequencer.run_shutdown()
         self._publish_telemetry()
 
