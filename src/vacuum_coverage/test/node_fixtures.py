@@ -49,6 +49,7 @@ class FakeNav(Node):
         self.goals = []              # (x, y) of every goal received
         self.cancel_times = []       # time.monotonic() of every cancel request
         self.active = False
+        self.stopped = False
         self._lock = threading.Lock()
         self._tf = TransformBroadcaster(self)
         self.create_timer(0.01, self._publish_tf)
@@ -56,6 +57,10 @@ class FakeNav(Node):
             self, NavigateToPose, '/navigate_to_pose', execute_callback=self._execute,
             goal_callback=lambda _: GoalResponse.ACCEPT, cancel_callback=self._on_cancel,
             callback_group=ReentrantCallbackGroup())
+
+    def destroy_node(self):
+        self.stopped = True          # a HANG goal must not keep an executor thread alive after the test
+        return super().destroy_node()
 
     def _publish_tf(self):
         tf = TransformStamped()
@@ -78,9 +83,12 @@ class FakeNav(Node):
         self.active = True
         try:
             if outcome == HANG:
-                while not goal_handle.is_cancel_requested:
+                while not goal_handle.is_cancel_requested and not self.stopped:
                     time.sleep(0.005)
-                goal_handle.canceled()
+                if goal_handle.is_cancel_requested:
+                    goal_handle.canceled()
+                else:
+                    goal_handle.abort()
                 return NavigateToPose.Result()
             if outcome == ABORT:
                 goal_handle.abort()

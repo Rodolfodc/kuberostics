@@ -298,4 +298,6 @@ def test_R16_two_simultaneous_goals_accept_exactly_one(system):
     s.wait_ready()
     futures = [s.client.send_goal_async(CoverRoom.Goal(room_id='', passes=1)) for _ in range(4)]
     assert wait_for(lambda: all(f.done() for f in futures), 10.0)
-    assert sum(1 for f in futures if f.result().accepted) == 1
+    accepted = [f.result() for f in futures if f.result().accepted]
+    assert len(accepted) == 1
+    assert wait_for(accepted[0].cancel_goal_async().done, 5.0)       # do not leave the goal hanging
