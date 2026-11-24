@@ -7,11 +7,13 @@
 #        ROS_IMAGE=<image> scripts/test-docker.sh lyrical    overrides the image
 #        TEST_OUT=<dir> scripts/test-docker.sh lyrical       also copies diagnostics to <dir>/<distro>/:
 #          summary.txt, console.log, environment.txt, xml/, colcon_log/, ros_log/ (all redacted: no home, host or user names)
+#        REPO_DIR=<dir> tests that tree instead of this checkout; CONTAINER_NAME=<name> names the container
+#          (used by scripts/ci-local.sh; the distro is appended: <name>-<distro>)
 #        scripts/test-docker.sh lyrical --cpus=1             CPU-starved run (reproduces CI-like flakiness)
 # CI uploads TEST_OUT as an artifact on failure. Exit code 0 only if every selected distro passes.
 set -euo pipefail
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="$(cd "${REPO_DIR:-$(dirname "${BASH_SOURCE[0]}")/..}" && pwd)"
 WHICH="${1:-both}"
 case "$WHICH" in jazzy|lyrical|both) ;; *) echo "usage: $0 [jazzy|lyrical|both] [--cpus=N]" >&2; exit 2;; esac
 CPUS="${2:-}"   # optional docker flag, e.g. --cpus=1
@@ -43,7 +45,7 @@ run() {
   t0=$(date -u +%FT%TZ)
   set +e
   # shellcheck disable=SC2086
-  docker run --rm ${CPUS:+$CPUS} -e DISTRO="$distro" -v "$REPO":/repo:ro ${outargs[@]+"${outargs[@]}"} "$image" \
+  docker run --rm ${CONTAINER_NAME:+--name "${CONTAINER_NAME}-$distro"} ${CPUS:+$CPUS} -e DISTRO="$distro" -v "$REPO":/repo:ro ${outargs[@]+"${outargs[@]}"} "$image" \
     bash /repo/scripts/container-test.sh 2>&1 | redact_host | { if [ -n "$out" ]; then tee "$out/console.log"; else cat; fi; }
   rc=${PIPESTATUS[0]}
   set -e

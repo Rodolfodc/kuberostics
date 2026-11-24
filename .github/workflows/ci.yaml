@@ -1,7 +1,7 @@
 name: ci
+# Manual fallback only: the automatic check is the local CI (scripts/ci-local.sh, status context ci/local).
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
