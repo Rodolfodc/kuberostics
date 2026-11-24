@@ -63,6 +63,8 @@ class Graph:
                         ROS_LOCALHOST_ONLY='0')
         self.tmp = tempfile.TemporaryDirectory()
         self.procs = {}
+        self.commands = {}
+        self.respawns = []          # helper processes that died before their service appeared
         self.failing = failing
         self.startup_timeout_s = startup_timeout_s
         os.environ.update(ROS_DOMAIN_ID=str(self.domain), ROS_AUTOMATIC_DISCOVERY_RANGE='LOCALHOST')
@@ -128,7 +130,8 @@ class Graph:
 
     # ---- processes
     def _spawn(self, name, command):
-        log = open(os.path.join(self.tmp.name, f'{name}.log'), 'w')
+        self.commands[name] = command
+        log = open(os.path.join(self.tmp.name, f'{name}.log'), 'a')
         self.procs[name] = subprocess.Popen(command, env=self.env, start_new_session=True,
                                             stdout=log, stderr=subprocess.STDOUT)
 
@@ -150,7 +153,7 @@ class Graph:
         # response", the manager never returned from "Configuring nav_a"). Starting the managers only after
         # the nodes are discoverable, and the sequencer only after the managers' services are, narrows the
         # window; every step is a condition wait.
-        self._wait_services([(GetState, f'/{n}/get_state') for n in ALL_NODES])
+        self._wait_services([(GetState, f'/{n}/get_state', n) for n in ALL_NODES])
         for manager, names in GRAPH.items():
             path = os.path.join(self.tmp.name, f'{manager}.yaml')
             with open(path, 'w') as f:
@@ -158,17 +161,27 @@ class Graph:
                     'autostart': False, 'bond_timeout': 0.0, 'node_names': names}}}, f)
             self._spawn(manager, ['ros2', 'run', 'nav2_lifecycle_manager', 'lifecycle_manager', *ros,
                                   '-r', f'__node:={manager}', '--params-file', path])
-        self._wait_services([(Trigger, f'/{m}/is_active') for m in GRAPH]
-                            + [(ManageLifecycleNodes, f'/{m}/manage_nodes') for m in GRAPH])
+        self._wait_services([(Trigger, f'/{m}/is_active', m) for m in GRAPH]
+                            + [(ManageLifecycleNodes, f'/{m}/manage_nodes', m) for m in GRAPH])
         self._spawn('lifecycle_sequencer', [
             'ros2', 'run', 'vacuum_bringup', 'lifecycle_sequencer', *ros,
             '-p', f'manager_startup_timeout_s:={self.startup_timeout_s}', '-p', 'manager_shutdown_timeout_s:=15.0'])
 
-    def _wait_services(self, services, timeout_s=TIMEOUT_S):
-        for srv_type, name in services:
+    def _wait_services(self, services, timeout_s=TIMEOUT_S, max_respawns=3):
+        """Waits for each service. `owner` is the helper process that provides it: if that process dies before
+        the service appears (seen once in ~80 starts: `ros2 run` of a dummy node segfaulted in rclpy start-up
+        on Python 3.14), it is started again, at most `max_respawns` times per process. The unit under test, the
+        sequencer, is never restarted by the test."""
+        for srv_type, name, owner in services:
             client = self.node.create_client(srv_type, name)
             try:
-                assert client.wait_for_service(timeout_sec=timeout_s), f'{name} never appeared\n{self.diagnostics()}'
+                end = time.monotonic() + timeout_s
+                while not client.wait_for_service(timeout_sec=1.0):
+                    proc = self.procs[owner]
+                    if proc.poll() is not None and self.respawns.count(owner) < max_respawns:
+                        self.respawns.append(owner)
+                        self._spawn(owner, self.commands[owner])
+                    assert time.monotonic() < end, f'{name} never appeared\n{self.diagnostics()}'
             finally:
                 self.node.destroy_client(client)
 
