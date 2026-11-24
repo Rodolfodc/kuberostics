@@ -31,7 +31,7 @@ from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 from rclpy.action import ActionClient
 from vacuum_interfaces.action import CoverRoom, Escape
-from vacuum_interfaces.msg import Notification, Submode
+from vacuum_interfaces.msg import Notification, StuckEvent, Submode
 
 CMD_VEL = '/myRobot/cmd_vel'
 QOS_IA368II = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -39,9 +39,15 @@ QOS_IA368II = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
 QOS_LOG = QoSProfile(depth=200, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.VOLATILE)
 QOS_BEST_EFFORT = QoSProfile(depth=200, reliability=ReliabilityPolicy.BEST_EFFORT)
 STARTUP_TIMEOUT_S = 120.0
-# 001-R06/R07 say 0.5 s; the stub-based graph shares CPU with parallel colcon jobs, so the check allows scheduling
-# jitter on top (measured delay is ~0.2 s, one supervisor tick).
-LOAD_MARGIN_S = 0.5
+# 001-R06/R07 say 0.5 s. Latency is measured on the supervisor's own Submode.stamp (taken in its tick), not on the
+# time this probe happens to receive the message, so probe-side scheduling and discovery waits are not counted.
+# What is left is allowed a documented margin (the supervisor publishes at 5 Hz, so one 0.2 s tick plus DDS
+# delivery, rounded up to 0.25 s) and twice the scheduling jitter this probe itself saw while waiting, which scales
+# the tolerance with the load of the machine in the same run. On an idle machine the jitter is a few ms and the
+# check is 0.5 + 0.25 s against a measured ~0.2 s.
+TICK_MARGIN_S = 0.25
+JITTER_FACTOR = 2.0
+JITTER_CAP_S = 0.5          # a longer stall than this must not be able to hide a real regression
 
 
 # Isolation from every other ROS graph (Art. X, same approach as the conftest.py of PR #7 / T020).
@@ -103,14 +109,19 @@ class Probe:
         self.node = rclpy.create_node('vacuum_launch_probe', context=self.context)
         self._lock = threading.Lock()
         self._active_clients = {}
+        self.core_startup_s = None
         self.active_poll_log = {}
         self._submodes: List[Tuple[float, str]] = []
+        self._submode_stamps: List[Tuple[float, str]] = []     # (supervisor stamp, system clock), submode
+        self._stuck_stamps: List[float] = []
+        self._jitter: List[Tuple[float, float]] = []           # (monotonic time, sleep overshoot in s)
         self._notifications: List[Tuple[float, Notification]] = []
         self._locks: List[Tuple[float, bool]] = []
         self._cmd_vel: List[Tuple[float, Tuple[float, ...]]] = []
         self._mode = 'IDLE'
         n = self.node
         n.create_subscription(Submode, '/myRobot/behaviour/submode', self._on_submode, QOS_LOG)
+        n.create_subscription(StuckEvent, '/myRobot/stuck', self._on_stuck, QOS_LOG)
         n.create_subscription(Notification, '/myRobot/notifications', self._on_notification, QOS_LOG)
         n.create_subscription(Bool, '/myRobot/mux/lock_stop', self._on_lock, QOS_LOG)
         n.create_subscription(Twist, CMD_VEL, self._on_cmd_vel, QOS_BEST_EFFORT)
@@ -132,6 +143,11 @@ class Probe:
     def _on_submode(self, msg):
         with self._lock:
             self._submodes.append((time.monotonic(), msg.submode))
+            self._submode_stamps.append((msg.stamp.sec + msg.stamp.nanosec * 1e-9, msg.submode))
+
+    def _on_stuck(self, msg):
+        with self._lock:
+            self._stuck_stamps.append(msg.stamp.sec + msg.stamp.nanosec * 1e-9)
 
     def _on_notification(self, msg):
         with self._lock:
@@ -159,6 +175,26 @@ class Probe:
     def first_submode_time(self, submode: str, since: float):
         with self._lock:
             return next((t for t, s in self._submodes if t >= since and s == submode), None)
+
+    def first_submode_stamp(self, submode: str, since_monotonic: float):
+        """Supervisor stamp (converted to the monotonic clock) of the first `submode` message stamped after
+        `since_monotonic`, or None. Independent of when this probe got to read the message."""
+        offset = time.time() - time.monotonic()           # system clock -> monotonic (stamps use the system clock)
+        with self._lock:
+            return next((t - offset for t, s in self._submode_stamps
+                         if s == submode and t - offset >= since_monotonic), None)
+
+    def first_stuck_stamp(self, since_monotonic: float):
+        """Stamp of the first StuckEvent (taken by the stuck_detector when it publishes it), on the monotonic
+        clock, or None."""
+        offset = time.time() - time.monotonic()
+        with self._lock:
+            return next((t - offset for t in self._stuck_stamps if t - offset >= since_monotonic - 0.05), None)
+
+    def jitter_since(self, since_monotonic: float) -> float:
+        """Largest sleep overshoot seen by wait_for after `since_monotonic`: a proxy for the machine's load."""
+        with self._lock:
+            return max((j for t, j in self._jitter if t >= since_monotonic), default=0.0)
 
     def lock_value(self):
         with self._lock:
@@ -196,7 +232,11 @@ class Probe:
         while time.monotonic() < end:
             if predicate():
                 return True
+            before = time.monotonic()
             time.sleep(period_s)
+            now = time.monotonic()
+            with self._lock:
+                self._jitter.append((now, max(0.0, now - before - period_s)))
         return predicate()
 
     def wait_for_discovery(self, timeout_s: float = STARTUP_TIMEOUT_S) -> bool:
@@ -304,11 +344,33 @@ def start_cleaning(tc, probe: Probe) -> None:
     t0 = probe.set_mode('CLEANING')
     tc.assertTrue(probe.wait_for(lambda: probe.last_submode() == 'COVERING', 5.0),
                   f'COVERING never published (submodes: {probe.submodes(t0)})')
-    delay = probe.first_submode_time('COVERING', t0) - t0
-    tc.assertLessEqual(delay, 0.5 + LOAD_MARGIN_S, f'COVERING after {delay:.2f} s (001-R06 asks for 0.5 s)')
+    assert_latency(tc, probe, 'COVERING', t0, '001-R06')
     # the goal reached coverage_server: it drives forward through the mux (linear_x 0.15, T010)
     tc.assertTrue(probe.wait_for(lambda: any(v[0] == 0.15 for v in probe.cmd_vel(t0)), 5.0),
                   'no coverage velocity on /myRobot/cmd_vel: cover_room goal not served')
+
+
+def assert_latency(tc, probe: Probe, submode: str, t0: float, requirement: str, start=None) -> None:
+    """Checks that `submode` was published within 0.5 s (the requirement) plus the documented margin.
+
+    Both ends are the stamps the nodes put on their own messages (`start`, when given, is the StuckEvent stamp;
+    otherwise `t0`, the probe's clock just before it published the mode). The time at which this probe got
+    scheduled to read the message does not count. The tolerance is 0.5 s + TICK_MARGIN_S + JITTER_FACTOR times the
+    sleep overshoot this probe saw since `t0` (capped at JITTER_CAP_S), so it grows with the load of this run and
+    stays at 0.75 s on an idle machine; the ceiling is 0.75 s + 2 x 0.5 s = 1.75 s.
+    Delay, tolerance and jitter are printed on every call."""
+    stamp = probe.first_submode_stamp(submode, t0)
+    tc.assertIsNotNone(stamp, f'no {submode} message stamped after the trigger')
+    delay = stamp - (t0 if start is None else start)
+    jitter = min(probe.jitter_since(t0), JITTER_CAP_S)
+    allowed = 0.5 + TICK_MARGIN_S + JITTER_FACTOR * jitter
+    received = probe.first_submode_time(submode, t0)           # when this probe read it: informational only
+    received_s = float('nan') if received is None else received - t0
+    tc.assertGreaterEqual(delay, 0.0, f'{submode} stamped {-delay:.3f} s before its trigger (stale message?)')
+    print(f'LATENCY {requirement} {submode} delay={delay:.3f} allowed={allowed:.3f} jitter={jitter:.3f} '
+          f'probe_received_after={received_s:.3f}', flush=True)
+    tc.assertLessEqual(delay, allowed, f'{submode} after {delay:.2f} s (allowed {allowed:.2f} s = 0.5 s of '
+                       f'{requirement} + {TICK_MARGIN_S} s tick + {JITTER_FACTOR} x {jitter:.2f} s jitter)')
 
 
 def provoke_stuck(tc, probe: Probe) -> float:
@@ -328,7 +390,7 @@ def provoke_stuck(tc, probe: Probe) -> float:
         response = probe.trigger('/myRobot/stuck_detector/trigger')
         tc.assertTrue(response.success, response.message)
         if probe.wait_for(lambda: probe.first_submode_time('ESCAPING', t0) is not None,
-                          0.5 + LOAD_MARGIN_S + 0.5):
+                          0.5 + TICK_MARGIN_S + 0.75):
             return t0
     return t0
 
@@ -337,8 +399,9 @@ def assert_escaping_within(tc, probe: Probe, t0: float) -> None:
     """001-R07: ESCAPING within 0.5 s of the stuck event."""
     tc.assertTrue(probe.wait_for(lambda: probe.first_submode_time('ESCAPING', t0) is not None, 5.0),
                   f'ESCAPING never published (submodes: {probe.submodes(t0)})')
-    delay = probe.first_submode_time('ESCAPING', t0) - t0
-    tc.assertLessEqual(delay, 0.5 + LOAD_MARGIN_S, f'ESCAPING after {delay:.2f} s (001-R07 asks for 0.5 s)')
+    started = probe.first_stuck_stamp(t0)
+    tc.assertIsNotNone(started, 'the probe never saw the StuckEvent that triggered the escape')
+    assert_latency(tc, probe, 'ESCAPING', t0, '001-R07', start=started)
 
 
 def assert_escape_failed(tc, probe: Probe, t0: float, within_s: float) -> None:
