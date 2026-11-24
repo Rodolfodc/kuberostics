@@ -5,9 +5,26 @@ variable "ros_distro" {
 }
 
 variable "transport" {
-  description = "Robot-cloud transport (Q-06). ASSUMPTION: the project owner has NOT confirmed Q-06; 'bridge' (zenoh-bridge-ros2dds, R19 allow-list) is the recommendation of the T902 measurement. Switch with -var transport=rmw_zenoh."
+  description = "Robot-cloud transport (Q-06). ASSUMPTION: the project owner has NOT confirmed Q-06; 'bridge' (zenoh-bridge-ros2dds, R19 allow-list) is the recommendation of the transport benchmark. Switch with -var transport=rmw_zenoh."
   type        = string
   default     = "bridge"
+}
+
+variable "allow_unfiltered_rmw_zenoh" {
+  description = "rmw_zenoh has no ACL in this module (it does not meet 009a-R19). Refused unless this is true; for measurements only."
+  type        = bool
+  default     = false
+
+  validation {
+    condition     = var.transport == "bridge" || var.allow_unfiltered_rmw_zenoh
+    error_message = "transport = rmw_zenoh has no ACL here and violates 009a-R19 (only the two perception topics cross). Set allow_unfiltered_rmw_zenoh = true only for a measurement."
+  }
+}
+
+variable "node_port" {
+  description = "NodePort of the transport Service. Null: 30448 for bridge, 30447 for rmw_zenoh."
+  type        = number
+  default     = null
 }
 
 variable "weights_url" {

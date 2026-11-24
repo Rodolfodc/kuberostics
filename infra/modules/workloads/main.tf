@@ -25,6 +25,7 @@ locals {
     weights_volume_size     = var.weights_volume_size
     node_port               = local.node_port
     detector_cpu_request    = var.detector_cpu_request
+    detector_cpu_limit      = var.detector_cpu_limit
     detector_memory_request = var.detector_memory_request
     detector_memory_limit   = var.detector_memory_limit
   })

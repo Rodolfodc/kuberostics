@@ -19,7 +19,7 @@ OUT="$REPO/.tf-render"
 VARIANTS=(
   "bridge-jazzy|-var=ros_distro=jazzy -var=transport=bridge -var=enable_cloud_sync=true"
   "bridge-lyrical|-var=ros_distro=lyrical -var=transport=bridge -var=weights_url=https://example.invalid/yolo11x.pt"
-  "rmw-zenoh-jazzy|-var=ros_distro=jazzy -var=transport=rmw_zenoh"
+  "rmw-zenoh-jazzy|-var=ros_distro=jazzy -var=transport=rmw_zenoh -var=allow_unfiltered_rmw_zenoh=true"
 )
 
 if [[ "${1:-}" == "--update-lock" ]]; then
@@ -43,6 +43,15 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -v "$REPO":/repo:ro -v "
     name="${spec%%|*}"; flags="${spec#*|}"
     echo "jsonencode(module.workloads.manifests)" | terraform console $flags > "/out/$name.raw"
   done
+
+  # The rmw_zenoh gate is a variable validation: console evaluates it, so it must refuse without the flag and accept with it.
+  if echo "local.x" | terraform console -var=transport=rmw_zenoh >/tmp/gate.out 2>&1; then
+    echo "FAIL: transport=rmw_zenoh was accepted without allow_unfiltered_rmw_zenoh"; exit 1
+  fi
+  grep -q "violates 009a-R19" /tmp/gate.out || { echo "FAIL: gate refused for another reason"; cat /tmp/gate.out; exit 1; }
+  echo "1+1" | terraform console -var=transport=rmw_zenoh -var=allow_unfiltered_rmw_zenoh=true >/dev/null
+  echo "1+1" | terraform console -var=transport=bridge >/dev/null
+  echo "rmw_zenoh gate: refused without the flag, accepted with it"
 ' sh "${VARIANTS[@]}"
 
 echo ">> policy checks and object split ($PY_IMG)"

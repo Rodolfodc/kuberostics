@@ -67,10 +67,10 @@ tools/k3s.sh -n vacuum-cloud create secret generic mosquitto-passwd --from-file=
 
 ## Detector Pod assumptions (to confirm with the detector owner)
 
-- Executable `ros2 run vacuum_detection detector` (T906, not yet in the repo), node name `detector_cloud`, parameter `model`
+- Executable `ros2 run vacuum_detection detector` (the detector node, not yet in the repo), node name `detector_cloud`, parameter `model`
   (a weights path under `/weights`). `model` is not in `contracts/topics.yaml` yet; the owner of the contract should add it.
 - `livenessProbe` is `docker/detector/liveness.sh`: the node is in the ROS graph. A heartbeat from the detector would be a better probe.
-- Until T906 lands the image builds and the Pod would crash-loop: that is expected, not a deployment defect.
+- Until the detector node lands the image builds and the Pod would crash-loop: that is expected, not a deployment defect.
 
 ## Not built (blocked)
 

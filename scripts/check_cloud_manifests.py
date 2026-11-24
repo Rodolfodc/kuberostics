@@ -7,7 +7,7 @@ Splits every <variant>.raw (terraform console output) in OUT_DIR into OUT_DIR/ob
   - Secrets are never rendered (credentials are supplied out of band) and no env value looks like a credential;
   - the bridge allow-lists (rendered ConfigMap and deploy/bridge/*.json5) contain exactly the two R19 topics of topics.yaml,
     in the right direction, and nothing containing mux or cmd_vel (Art. VI).
-This is a deploy-time check, not the T923 contract test.
+This is a deploy-time check, not the allow-list contract test of the contract-tests package.
 """
 import json
 import pathlib
@@ -48,8 +48,18 @@ def check_object(variant: str, obj: dict, errors: list) -> None:
         if bad in blob:
             errors.append(f"{where}: forbidden {bad}")
     for spec in pod_specs(obj):
-        for c in spec.get("containers", []):
-            if "livenessProbe" not in c:
+        init_names = {c["name"] for c in spec.get("initContainers", [])}
+        for c in spec.get("initContainers", []) + spec.get("containers", []):
+            res = c.get("resources", {})
+            if not res.get("requests", {}).get("memory") or not res.get("requests", {}).get("cpu"):
+                errors.append(f"{where}: container {c['name']} needs cpu and memory requests")
+            if not res.get("limits", {}).get("memory"):
+                errors.append(f"{where}: container {c['name']} needs a memory limit")
+            if c["name"] == "detector" and not res.get("limits", {}).get("cpu"):
+                errors.append(f"{where}: the detector container needs a cpu limit")
+            if c.get("securityContext", {}).get("readOnlyRootFilesystem") is not True:
+                errors.append(f"{where}: container {c['name']} must set readOnlyRootFilesystem: true")
+            if c["name"] not in init_names and "livenessProbe" not in c:
                 errors.append(f"{where}: container {c['name']} has no livenessProbe")
             sc = c.get("securityContext", {})
             if sc.get("allowPrivilegeEscalation") is not False:

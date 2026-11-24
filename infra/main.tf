@@ -1,7 +1,7 @@
 # Root module for the local K3s cluster (k3d "kuberostics"). Run only through tools/tf.sh (fixed directory, fixed kubeconfig).
 # apply/destroy need the user's confirmation. State is local and gitignored (*.tfstate*); never put secrets in variables files.
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.9"
   required_providers {
     kubernetes = {
       source  = "hashicorp/kubernetes"
@@ -17,8 +17,11 @@ provider "kubernetes" {}
 module "workloads" {
   source = "./modules/workloads"
 
-  ros_distro        = var.ros_distro
-  transport         = var.transport
-  weights_url       = var.weights_url
-  enable_cloud_sync = var.enable_cloud_sync
+  ros_distro  = var.ros_distro
+  transport   = var.transport
+  weights_url = var.weights_url
+  node_port   = var.node_port
+
+  allow_unfiltered_rmw_zenoh = var.allow_unfiltered_rmw_zenoh
+  enable_cloud_sync          = var.enable_cloud_sync
 }

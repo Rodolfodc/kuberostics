@@ -76,6 +76,11 @@ variable "detector_cpu_request" {
   default = "1"
 }
 
+variable "detector_cpu_limit" {
+  type    = string
+  default = "4"
+}
+
 variable "detector_memory_request" {
   type    = string
   default = "2Gi"

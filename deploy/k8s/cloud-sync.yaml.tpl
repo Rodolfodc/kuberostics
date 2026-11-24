@@ -35,7 +35,10 @@ spec:
         - name: mosquitto
           image: ${mosquitto_image}
           ports: [{containerPort: 1883}]
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources:
+            requests: {cpu: 50m, memory: 32Mi}
+            limits: {cpu: 500m, memory: 128Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           livenessProbe:
             tcpSocket: {port: 1883}
             initialDelaySeconds: 5
@@ -89,21 +92,27 @@ spec:
       containers:
         - name: minio   # versioned bucket with ETag: the robot downloads with If-None-Match (200 or 304)
           image: ${minio_image}
-          args: ["server", "/data", "--console-address", ":9001"]
+          args: ["server", "/data", "--console-address", ":9001", "--config-dir", "/tmp/minio-config"]
           env:
             - name: MINIO_ROOT_USER
               valueFrom: {secretKeyRef: {name: ${minio_secret_name}, key: root-user}}
             - name: MINIO_ROOT_PASSWORD
               valueFrom: {secretKeyRef: {name: ${minio_secret_name}, key: root-password}}
           ports: [{containerPort: 9000}]
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          resources:
+            requests: {cpu: 100m, memory: 256Mi}
+            limits: {cpu: "1", memory: 1Gi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           livenessProbe:
             httpGet: {path: /minio/health/live, port: 9000}
             initialDelaySeconds: 10
             periodSeconds: 15
-          volumeMounts: [{name: data, mountPath: /data}]
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: tmp, mountPath: /tmp}
       volumes:
         - {name: data, persistentVolumeClaim: {claimName: policy-weights}}
+        - {name: tmp, emptyDir: {}}
 ---
 apiVersion: v1
 kind: Service

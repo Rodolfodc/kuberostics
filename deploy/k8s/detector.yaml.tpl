@@ -59,8 +59,14 @@ spec:
       initContainers:
         - name: fetch-weights   # downloads only when the file is absent; the URL is a variable, weights are never in git or in the image
           image: ${curl_image}
-          command: ["sh", "-c", "[ -s /weights/${model_file} ] || curl -fsSL -o /weights/${model_file} '${weights_url}'"]
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          command: ["sh", "-c", "[ -s \"/weights/$MODEL_FILE\" ] || curl -fsSL -o \"/weights/$MODEL_FILE\" \"$WEIGHTS_URL\""]
+          env:
+            - {name: MODEL_FILE, value: "${model_file}"}
+            - {name: WEIGHTS_URL, value: "${weights_url}"}
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {cpu: 500m, memory: 256Mi}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts: [{name: weights, mountPath: /weights}]
 %{ endif ~}
       containers:
@@ -71,11 +77,17 @@ spec:
 %{ if transport == "rmw_zenoh" ~}
           env:
             - {name: RMW_IMPLEMENTATION, value: rmw_zenoh_cpp}
+            - {name: HOME, value: /tmp}
+            - {name: ROS_LOG_DIR, value: /tmp/ros-log}
+%{ else ~}
+          env:
+            - {name: HOME, value: /tmp}
+            - {name: ROS_LOG_DIR, value: /tmp/ros-log}
 %{ endif ~}
           resources:
             requests: {cpu: "${detector_cpu_request}", memory: ${detector_memory_request}}
-            limits: {memory: ${detector_memory_limit}}
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+            limits: {cpu: "${detector_cpu_limit}", memory: ${detector_memory_limit}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           livenessProbe:   # node present in the ROS graph (docker/detector/liveness.sh)
             exec: {command: ["/opt/detector/liveness.sh"]}
             initialDelaySeconds: 60
@@ -94,24 +106,35 @@ spec:
             - {name: ROS_DISTRO, value: ${ros_distro}}
           args: ["-l", "tcp/0.0.0.0:7447", "--no-multicast-scouting", "--rest-http-port", "8000", "-c", "/cfg/bridge.json5"]
           ports: [{containerPort: 7447}]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
           livenessProbe:
             tcpSocket: {port: 7447}
             initialDelaySeconds: 10
             periodSeconds: 15
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
-          volumeMounts: [{name: bridge-config, mountPath: /cfg, readOnly: true}]
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: bridge-config, mountPath: /cfg, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
 %{ endif ~}
 %{ if transport == "rmw_zenoh" ~}
         - name: router   # rmw_zenohd; R19 ACL NOT configured (see infra/README.md), module refuses it unless explicitly allowed
           image: ${detector_image}
           imagePullPolicy: ${image_pull_policy}
           args: ["ros2", "run", "rmw_zenoh_cpp", "rmw_zenohd"]
+          env:
+            - {name: HOME, value: /tmp}
+            - {name: ROS_LOG_DIR, value: /tmp/ros-log}
           ports: [{containerPort: 7447}]
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
           livenessProbe:
             tcpSocket: {port: 7447}
             initialDelaySeconds: 15
             periodSeconds: 15
-          securityContext: {allowPrivilegeEscalation: false, capabilities: {drop: [ALL]}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           volumeMounts: [{name: tmp, mountPath: /tmp}]
 %{ endif ~}
       volumes:
