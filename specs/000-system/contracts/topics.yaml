@@ -137,6 +137,7 @@ topics:
   - {name: /myRobot/perception/offload_status, type: vacuum_interfaces/msg/OffloadStatus, qos: ia368ii, owner: detection_selector, since: "009a", note: "R14: published at 1 Hz (parameter status_rate_hz)"}
   - {name: /myRobot/telemetry/detection_selector, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detection_selector, since: "009a", note: "D-20: breaker state, counters and watermark at status_rate_hz"}
   - {name: /myRobot/telemetry/image_throttle, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: image_throttle, since: "009a", note: "D-20: passed, dropped_rate, restarts, encode_errors at telemetry_rate_hz"}
+  - {name: /myRobot/telemetry/projector, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: projector, since: "009a", note: "D-20: projected, dropped_tf, dropped_depth, dropped_label/confidence/area/nan, accepted, merged, detections at telemetry_rate_hz"}
   - {name: /detections_markers, type: visualization_msgs/msg/MarkerArray, qos: default, owner: projector, frozen: true, since: "009a", note: "format consumed by the 2025S2 semantic node"}
 
 services:
@@ -222,3 +223,25 @@ parameters:
     telemetry_rate_hz: {type: double, default: 1.0}
     input_topic: {type: string, default: /camera, note: "RGB only; depth never leaves the robot"}
     output_topic: {type: string, default: /myRobot/perception/rgb_throttled/compressed}
+  projector:
+    detections_topic: {type: string, default: /myRobot/perception/detections, note: "selector output"}
+    depth_topic: {type: string, default: /camera_depth, note: "depth stays on the robot"}
+    map_topic: {type: string, default: /topologic_map, note: "input of the mapped-area check; same grid the semantic node reads"}
+    output_topic: {type: string, default: /detections_markers}
+    target_frame: {type: string, default: map, requirement: 009a-R13}
+    camera_frame: {type: string, default: "", note: "empty: frame_id of the detection header"}
+    fx: {type: double, default: 525.0, note: "pinhole intrinsics of the RGB camera; confirm against the scene sensor"}
+    fy: {type: double, default: 525.0}
+    cx: {type: double, default: 319.5}
+    cy: {type: double, default: 239.5}
+    tf_timeout_s: {type: double, default: 0.1, requirement: 009a-R12}
+    republish_period_s: {type: double, default: 2.0, requirement: 009a-R13, note: "whole set republished; must be > 0"}
+    min_confidence: {type: double, default: 0.7, requirement: 009a-R13}
+    allowed_labels: {type: string_array, default: [""], note: "no non-empty entry: every label"}
+    check_mapped_area: {type: bool, default: true, requirement: 009a-R13, note: "drop detections outside a mapped room of map_topic; no map yet means drop"}
+    merge_distance_m: {type: double, default: 0.5, requirement: 009a-R13, note: "same label closer than this is one object"}
+    depth_cache_size: {type: int, default: 8}
+    depth_cache_max_age_s: {type: double, default: 2.0}
+    depth_tolerance_s: {type: double, default: 0.05, note: "max stamp difference between a detection and its depth image"}
+    depth_window_px: {type: int, default: 2, note: "median over a (2n+1)^2 window around the box centre"}
+    telemetry_rate_hz: {type: double, default: 1.0, note: "must be > 0"}
