@@ -3,9 +3,12 @@
 <package format="3">
   <name>vacuum_coverage</name>
   <version>0.1.0</version>
-  <description>Coverage and escape (spec 005): pure-Python cores (StuckCore, EscapeScript); the real stuck_detector and escape_server nodes follow once their parameters are in the contract.</description>
+  <description>Coverage and escape (spec 005): pure-Python cores (StuckCore, EscapeScript, RegionBuilder, CoveragePlanner, CoverageTracker, CoverageSession, ResumeStore). The real nodes follow once their parameters are in the contract.</description>
   <maintainer email="rodolfo.dalla.costa@hotmail.com">Rodolfo Dalla Costa</maintainer>
   <license>Apache-2.0</license>
+
+  <exec_depend>vacuum_mapping</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
 

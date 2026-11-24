@@ -28,7 +28,7 @@ def contract():
 
 def mux_inputs(contract):
     return {t['name']: t for t in contract['topics']
-            if t['name'].startswith('/myRobot/mux/') and 'priority' in t and t.get('since') == '001'}
+            if t['name'].startswith('/myRobot/mux/') and 'priority' in t and t.get('since') in ('001', '005')}
 
 
 def test_001_R18_use_stamped_is_explicitly_false(params):
@@ -70,3 +70,20 @@ def test_001_R10_stop_lock_uses_the_contract_topic(params, contract):
 
 def test_001_R10_stop_lock_has_no_timeout(params):
     assert params['locks']['stop']['timeout'] == 0.0
+
+
+def test_005_R23_nav_input_has_the_contract_topic_timeout_and_priority(params, contract):
+    nav = params['topics']['nav']
+    assert nav['topic'] == '/myRobot/mux/nav'
+    assert nav['timeout'] == 0.5
+    assert nav['priority'] == 60
+    assert any(t['name'] == nav['topic'] and t.get('priority') == 60 for t in contract['topics'])
+
+
+def test_005_R23_priority_order_stop_lock_teleop_escape_nav_coverage_docking(params):
+    """stop 250 > lock 200 > teleop 100 > escape 80 > nav 60 > coverage 50 > docking 40 (strictly)."""
+    t = params['topics']
+    order = [t['stop']['priority'], params['locks']['stop']['priority'], t['teleop']['priority'],
+             t['escape']['priority'], t['nav']['priority'], t['coverage']['priority'], t['docking']['priority']]
+    assert order == [250, 200, 100, 80, 60, 50, 40]
+    assert all(a > b for a, b in zip(order, order[1:]))
