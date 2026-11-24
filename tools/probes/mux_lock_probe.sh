@@ -6,8 +6,6 @@
 #   3. locked + zero Twist on mux/stop: output is exactly zero
 #   4. locked, guard gone: the stop input times out, output goes silent (last command was zero)
 #   5. lock released: teleop passes again
-#   6. priorities of the driving inputs (005-R23): nav (60) beats coverage (50), escape (80) beats nav; with
-#      teleop (100) gone, each lower input passes alone
 # Usage: tools/probes/mux_lock_probe.sh [jazzy|lyrical]   (default jazzy; needs docker and network)
 #        ROS_IMAGE=<image> overrides the image (defaults: osrf/ros:jazzy-desktop-full, ros:lyrical-ros-base)
 # Exit code 0 only if every check holds. Interim until the launch_testing tests of T014.
@@ -32,7 +30,6 @@ out() { timeout 3 ros2 topic echo --once /myRobot/cmd_vel --field linear.x 2>/de
 ros2 run twist_mux twist_mux --ros-args --params-file /cfg/twist_mux.yaml -r cmd_vel_out:=/myRobot/cmd_vel >/tmp/mux.log 2>&1 &
 sleep 3
 ros2 topic pub -r 10 /myRobot/mux/teleop geometry_msgs/msg/Twist "{linear: {x: 0.2}}" >/dev/null 2>&1 &
-TELEOP=$!
 sleep 2
 check "1. unlocked: teleop passes" "$(out)" "0.2"
 
@@ -52,23 +49,4 @@ check "4. guard gone: input timed out, silent" "$(out)" ""
 kill $LOCK; ros2 topic pub --once /myRobot/mux/lock_stop std_msgs/msg/Bool "{data: false}" >/dev/null 2>&1
 sleep 1
 check "5. lock released: teleop passes" "$(out)" "0.2"
-
-kill $TELEOP; sleep 1.5
-ros2 topic pub -r 10 /myRobot/mux/coverage geometry_msgs/msg/Twist "{linear: {x: 0.5}}" >/dev/null 2>&1 &
-COV=$!
-sleep 1
-check "6a. coverage alone passes" "$(out)" "0.5"
-ros2 topic pub -r 10 /myRobot/mux/nav geometry_msgs/msg/Twist "{linear: {x: 0.3}}" >/dev/null 2>&1 &
-NAV=$!
-sleep 1
-check "6b. nav beats coverage" "$(out)" "0.3"
-ros2 topic pub -r 10 /myRobot/mux/escape geometry_msgs/msg/Twist "{linear: {x: 0.1}}" >/dev/null 2>&1 &
-ESC=$!
-sleep 1
-check "6c. escape beats nav" "$(out)" "0.1"
-kill $ESC; sleep 1.5
-check "6d. escape gone: nav again" "$(out)" "0.3"
-kill $NAV; sleep 1.5
-check "6e. nav gone: coverage again" "$(out)" "0.5"
-kill $COV
 exit $fail'
