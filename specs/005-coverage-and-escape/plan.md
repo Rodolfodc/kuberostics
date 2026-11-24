@@ -71,7 +71,7 @@ shutdown: optional -> nav -> core   (reverse; stop_guard last)
 
 - `ManagerSequencer` (pure Python, injected clock and a `call_manager(name, command)` callback) holds the state machine: `STARTING_CORE`, `STARTING_NAV`, `STARTING_OPTIONAL`, `ALL_ACTIVE`, `FAILED_CORE`, `DEGRADED_NAV`, `DEGRADED_OPTIONAL`, `SHUTTING_DOWN`. It only decides; the thin node `lifecycle_sequencer` calls the Nav2 manager services (`~/manage_nodes` and `~/is_active`, names to confirm in T521) with `autostart: false` on the nav and optional managers and publishes the state in `/myRobot/telemetry/lifecycle_sequencer` and `Notification`s. The sequencer is a plain node outside any manager (it manages the managers and has no state for a manager to control; D-26, Q-17 closed). Diagram, node classification and reasons: `docs/diagrams/lifecycle-managers.mmd` and `docs/lifecycle-managers.md`. If the sequencer dies after start-up the robot keeps running, but the ordered shutdown and `stop_guard` last are no longer guaranteed (accepted residual).
 - Failure rules are in 005-R36. In every state teleoperation (`mux/teleop`) and the stop lock keep working because they depend only on `twist_mux`, `stop_guard` and `teleop`.
-- Proposed contract entries (not applied): node `lifecycle_sequencer` and `/myRobot/telemetry/lifecycle_sequencer` (`diagnostic_msgs/DiagnosticArray`, `default`); parameters `manager_startup_timeout_s` 30.0, `manager_shutdown_timeout_s` 15.0, `managers` (ordered list: `[lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional]`).
+- Contract entries (applied with T521 and PR #27): node `lifecycle_sequencer` and `/myRobot/telemetry/lifecycle_sequencer` (`diagnostic_msgs/DiagnosticArray`, `default`); parameters `manager_startup_timeout_s` 30.0, `manager_shutdown_timeout_s` 15.0, `managers` (ordered list: `[lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional]`).
 - The D-09 amendment (three managers, the order above) is applied by the architect to spec 000 later; until then this spec is the proposal.
 
 ## Escape: timeout and fallback (Art. VI.3)
@@ -107,7 +107,18 @@ The 001 row "NONE, mode CLEANING: sends `cover_room`" is suppressed while `cover
 
 005 needs from 003: `/map`, TF `map -> odom -> base_link` and `/scan` frame, and later the room topics. Until then the module runs on a saved map from `map_server` with a static `map -> odom` identity (valid for the simulator ground-truth odometry, see spec 003) so that 005 is not blocked. `room_id` resolution (005-R16) depends on `Room`/`RoomArray` from T303: `Room.index` is the value in `room_labels`, `Room.id` is `room_NN` with `NN = index`. Shared grid code lives in the tiny package `vacuum_grid` (no ROS, created in T309), so `vacuum_coverage` and `vacuum_mapping` do not depend on each other (Art. III.1); fallback if that is rejected: two copies pinned by identical unit tests.
 
-## Proposed contract changes (NOT applied; the architect applies them in one serialized change, after PRs #9 and #10)
+## Contract changes (APPLIED in contract batch 1; the block below is the proposal as written, kept for the record)
+
+`topics.yaml` and `interfaces.md` now hold these entries. Deltas from the block below, decided when applying it:
+
+- `coverage_server`: `target_ratio` 0.95 (was 0.90) and new `min_acceptable_ratio` 0.70 (degraded success, 005-R21 rewritten); `nav_goal_timeout_s` is not a node parameter (BT config) and is not declared; the stub-only parameters (`linear_x`, `angular_z`, `publish_rate_hz`) stay, marked "stub only".
+- `escape_server`: parameters of `EscapeConfig` not in the block: `front_stop_m` 0.15, `angle_tolerance_rad` 0.05, `distance_tolerance_m` 0.01, `range_cap_m` 5.0, `max_linear_speed_m_s` 0.30 and `max_angular_speed_rad_s` 1.0 (placeholders until T503); plus `front_sector_half_width_rad` and `rear_sector_half_width_rad` 0.35 (about 20 degrees, the value of the `scan_utils` tests; unverified, tuned in T503/T514).
+- `stuck_detector`: `cmd_timeout_s` 0.5, `max_sample_gap_s` 0.5 (from `StuckCore`), `scan_max_age_s` 0.5 (005-R04), `map_frame` `map`, `base_frame` `base_link`; `bumper_topic` is `std_msgs/msg/Bool`, rising edge (Q-11 decided).
+- `supervisor`: also `start_stop_service` (`/myRobot/start_stop`) and `dock_command` (`stop`), both pending T520.
+- Not in this batch: the L1/L2 parameters and `MANAGER_UNRESPONSIVE` of `proposal-stuck-manager-recovery.md` (005-R40/R42 exist only in that proposal); they ship with the sequencer work.
+- Notifications `COVERAGE_DONE`, `COVERAGE_FAILED`, `DOCK_REQUEST_FAILED` added to the notification registry of `interfaces.md`.
+- The diagram update below is still pending (separate change).
+
 
 `topics.yaml`:
 
@@ -171,7 +182,7 @@ parameters:
     margin_m: {type: double, default: 0.05}
     min_segment_m: {type: double, default: 0.30}
     tool_radius_m: {type: double, default: 0.15}
-    target_ratio: {type: double, default: 0.90, requirement: 005-R21}
+    target_ratio: {type: double, default: 0.90, requirement: 005-R21}   # applied as 0.95, plus min_acceptable_ratio 0.70
     max_skip_ratio: {type: double, default: 0.3, requirement: 005-R20}
     coverage_timeout_s: {type: double, default: 1800.0, requirement: 005-R20}
     waypoint_timeout_s: {type: double, default: 120.0, requirement: 005-R20}
