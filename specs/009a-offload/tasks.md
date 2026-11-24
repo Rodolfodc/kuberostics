@@ -8,14 +8,14 @@
 
 ## Phase 1: tests first
 
-- [ ] **T904** pytest tests of `selector_core`: age and watermark filters, every transition of the table and the hysteresis, with a simulated clock. (009a-R05 to R10)
-- [ ] **T905** [P] `projector` test with synthetic TF: transform at the photo timestamp, drop when there is no TF. (009a-R12)
+- [x] **T904** (PR #11, includes the rulings of the plan) pytest tests of `selector_core`: age and watermark filters, every transition of the table and the hysteresis, with a simulated clock. (009a-R05 to R10)
+- [x] **T905** [P] (PR #11) `projector` test with synthetic TF: transform at the photo timestamp, drop when there is no TF. (009a-R12)
 
 ## Phase 2: implementation
 
 - [ ] **T906** `detector`: YOLO configurable by parameter, `header` copied, empty array when nothing is detected. (009a-R02, R04)
-- [ ] **T907** `selector_core` and the `detection_selector` node, until T904 passes. Publish the status and the notifications. (009a-R05 to R11, R14)
-- [ ] **T908** `projector` with depth cache by timestamp, until T905 passes. (009a-R12, R13)
+- [ ] **T907** Node only; core done in T904/T905 (PR #11). `detection_selector` node, until T904 passes. Publish the status and the notifications. (009a-R05 to R11, R14)
+- [ ] **T908** Node only; core done in T904/T905 (PR #11). `projector` with depth cache by timestamp, until T905 passes. (009a-R12, R13)
 - [ ] **T909** `image_throttle`: compression and configurable rate. (009a-R03, R11)
 - [ ] **T910** Detector Dockerfile with `ARG ROS_DISTRO`, built on the CI matrix. (009a-R17, R18)
 - [ ] **T911** Terraform (`infra/modules/workloads`) with Deployment, `livenessProbe` and the transport chosen in Q-06. (009a-R17)
