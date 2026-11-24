@@ -22,6 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
             'map_diff = vacuum_mapping.map_diff_cli:main',
+            'room_segmenter = vacuum_mapping.room_segmenter_node:main',
         ],
     },
 )
