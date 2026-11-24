@@ -14,7 +14,7 @@ Python core with no ROS imports, tested with pytest and a simulated clock; every
 | `image_codec.py` | pure | `encode_jpeg`: raw image buffer to JPEG bytes (numpy + OpenCV, no `cv_bridge`). |
 | `image_throttle_node.py` | node | RGB `Image` in, JPEG `CompressedImage` out at `image_rate_hz`, header copied (timestamp echo), telemetry. |
 | `ros_common.py` | helpers | QoS profiles, `stamp_to_sec`, `build_diagnostics`. No decisions. |
-| `projection_core.py` | pure | Pixel + depth + TF at the photo stamp to a 3D point (009a-R12). Its node (`projector`, T908) is not written yet: blocked on the `/detections_markers` format (T903). |
+| `projection_core.py` | pure | Pixel + depth + TF at the photo stamp to a 3D point (009a-R12). Its node (`projector`) is not written yet; the `/detections_markers` format it must publish is now recorded. |
 
 ## Data flow (image throttle)
 

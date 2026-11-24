@@ -1,4 +1,4 @@
-# lifecycle_manager_core (T013, spec 001): manages OUR core nodes; the IA368II nodes have their own manager
+# lifecycle_manager_core (spec 001): manages OUR core nodes; the IA368II nodes have their own manager
 # (config/lifecycle_manager.yaml of myrobot_bringup). Cloud/MQTT nodes will get lifecycle_manager_optional (D-09).
 #
 # Order matters: stop_guard first (the safety net is up before anything can move), the actuators next, the

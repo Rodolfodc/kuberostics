@@ -1,7 +1,7 @@
-"""T007: twist_mux configuration tests, checked against the contract (topics.yaml).
+"""twist_mux configuration tests, checked against the contract (topics.yaml).
 
 No ROS and no twist_mux needed: they validate the YAML file. The behaviour of the running mux
-(001-R10, 001-R11) is verified by launch_testing in T014.
+(001-R10, 001-R11) is verified by the live-graph launch_testing tests (test_graph_*.py).
 """
 import pathlib
 

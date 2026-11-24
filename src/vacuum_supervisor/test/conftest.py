@@ -1,4 +1,4 @@
-"""Isolates the in-process rclpy tests from every other ROS graph (T020, Art. X).
+"""Isolates the in-process rclpy tests from every other ROS graph (Art. X).
 
 Fixed domain IDs plus the default SUBNET discovery let two containers on the same Docker bridge (parallel CI
 jobs, several developers) discover each other and run these tests against each other's nodes. Discovery is

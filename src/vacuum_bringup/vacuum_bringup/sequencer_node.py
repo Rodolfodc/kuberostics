@@ -1,4 +1,4 @@
-"""`lifecycle_sequencer` (T521, spec 005, D-26): a PLAIN node on purpose (it only orchestrates managers and has
+"""`lifecycle_sequencer` (spec 005, D-26): a PLAIN node on purpose (it only orchestrates managers and has
 nothing for a manager to configure or clean up). Thin glue between ROS and `ManagerSequencer` (D-18).
 
 It wires the sequencer's `call` and `wait_active` callables to the Nav2 lifecycle manager services

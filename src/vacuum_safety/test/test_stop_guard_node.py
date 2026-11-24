@@ -1,4 +1,4 @@
-"""T018: stop_guard LifecycleNode wiring (001-R19). In-process rclpy, no launch file. Skipped without rclpy."""
+"""stop_guard LifecycleNode wiring (001-R19). In-process rclpy, no launch file. Skipped without rclpy."""
 import threading
 import time
 

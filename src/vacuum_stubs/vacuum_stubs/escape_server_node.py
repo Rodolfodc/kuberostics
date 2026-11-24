@@ -1,4 +1,4 @@
-"""`escape_server` stub LifecycleNode (T011, 001-R07, 001-R16): Escape action server on /myRobot/escape.
+"""`escape_server` stub LifecycleNode (001-R07, 001-R16): Escape action server on /myRobot/escape.
 
 Runs a scripted escape (reverse, then turn) on /myRobot/mux/escape (its own mux input only) and returns the
 result chosen by the `outcome` parameter (succeed, fail, hang). Logic in `EscapeScript` (pure Python, D-18).
@@ -8,7 +8,7 @@ import time
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import Twist
-# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical (T021).
+# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical.
 from rclpy._rclpy_pybind11 import RCLError
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -138,7 +138,7 @@ class EscapeServerNode(LifecycleNode):
             if rclpy.ok():
                 raise
             # SIGINT/shutdown invalidated the context while the goal was publishing: not an error, just the
-            # end of the process. Nothing can be published or logged any more (T021).
+            # end of the process. Nothing can be published or logged any more.
             self._last_result = 'aborted'
             return result
         finally:
@@ -163,7 +163,7 @@ def main(args=None) -> None:
         pass
     finally:
         # SIGINT already invalidated the context: stop the executor threads first (a running goal sees
-        # rclpy.ok() == False and returns), then tear down tolerating an already-invalid context (T021).
+        # rclpy.ok() == False and returns), then tear down tolerating an already-invalid context.
         executor.shutdown()
         try:
             node.destroy_node()

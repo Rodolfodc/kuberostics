@@ -1,4 +1,4 @@
-"""`image_throttle` LifecycleNode (T909, spec 009a-R03, R11): thin glue over `ThrottleCore` and `encode_jpeg`.
+"""`image_throttle` LifecycleNode (spec 009a-R03, R11): thin glue over `ThrottleCore` and `encode_jpeg`.
 
 RGB image in, JPEG `CompressedImage` out at `image_rate_hz`, header copied (it is the timestamp echo the selector
 and the projector rely on). Depth never goes through here. The rate does not depend on the breaker state (R11).

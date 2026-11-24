@@ -1,5 +1,5 @@
-# twist_mux configuration (T007, spec 001). Inputs and priorities mirror
-# specs/000-system/contracts/topics.yaml; the contract test of T005 and
+# twist_mux configuration (spec 001). Inputs and priorities mirror
+# specs/000-system/contracts/topics.yaml; the contract test (vacuum_contract_tests) and
 # test/test_twist_mux_config.py keep them in sync.
 #
 # The output (cmd_vel_out) is remapped to /myRobot/cmd_vel in the launch file (D-03): twist_mux is the

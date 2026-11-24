@@ -1,4 +1,4 @@
-"""Dummy lifecycle node for tests and for an empty optional manager (T521, 005-R38).
+"""Dummy lifecycle node for tests and for an empty optional manager (005-R38).
 
 Does nothing, except print the monotonic time of its deactivate and shutdown transitions. Its only behaviour
 is the test-only parameter `fail_on_activate` (bool, default false): when true, the transition to active
