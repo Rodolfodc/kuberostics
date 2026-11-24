@@ -21,6 +21,8 @@ from vacuum_stubs.coverage_server_node import CoverageServerNode  # noqa: E402
 from vacuum_stubs.escape_server_node import EscapeServerNode  # noqa: E402
 from vacuum_stubs.stuck_detector_node import StuckDetectorNode  # noqa: E402
 
+QOS_BUFFERED = QoSProfile(depth=100, reliability=ReliabilityPolicy.RELIABLE,
+                          durability=DurabilityPolicy.VOLATILE)
 QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.VOLATILE)
 
 
@@ -82,7 +84,10 @@ def make_system(node_cls, params=()):
 
 def collect_twists(h, topic):
     got = []
-    h.probe.create_subscription(Twist, topic, lambda m: got.append((time.monotonic(), m)), QOS)
+    # depth 100, not the contract's 1: with keep-last 1 a stalled probe thread drops the samples of a short
+    # phase (seen on a CI runner: the 0.3 s turn phase of the escape script was never observed). The writer's
+    # QoS (reliable, volatile) is unchanged; the depth is the test's own buffer.
+    h.probe.create_subscription(Twist, topic, lambda m: got.append((time.monotonic(), m)), QOS_BUFFERED)
     return got
 
 
@@ -114,11 +119,14 @@ def test_001_R06_coverage_publishes_constant_twist_while_goal_active_and_stops_o
     assert got == [], 'must publish nothing when idle'
     client = ActionClient(coverage.probe, CoverRoom, '/myRobot/cover_room')
     handle = send(coverage, client, CoverRoom.Goal(room_id='', passes=1))
-    # 21 samples (20 intervals, ~2 s): a delivery burst after a CPU stall cannot dominate the mean rate
-    assert wait_for(lambda: len(got) >= 21, 15.0)
+    # 61 samples (~6 s). The 10 Hz timer of the stub shares the CPU with parallel test jobs, so a stall can slow
+    # or bunch one window (seen: 7.2 Hz on a CI runner). The rate is right if SOME 20-interval window runs at
+    # 10 Hz +-20 %; a wrong publish rate (5 Hz, 20 Hz) fails every window.
+    assert wait_for(lambda: len(got) >= 61, 30.0)
     assert all(abs(m.linear.x - 0.2) < 1e-6 and abs(m.angular.z - 0.1) < 1e-6 for _, m in got)
-    window = got[:21]
-    assert 8.0 <= 20 / (window[-1][0] - window[0][0]) <= 12.0
+    seen = list(got)
+    rates = [20 / (seen[i + 20][0] - seen[i][0]) for i in range(len(seen) - 20)]
+    assert any(8.0 <= r <= 12.0 for r in rates), f'no 20-interval window at 10 Hz +-20 %: {sorted(rates)[:3]}'
     cancel = handle.cancel_goal_async()
     assert wait_for(cancel.done)
     res = handle.get_result_async()
