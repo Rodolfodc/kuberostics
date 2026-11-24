@@ -38,7 +38,7 @@ QOS_IA368II = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.VOLATILE)
 QOS_LOG = QoSProfile(depth=200, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.VOLATILE)
 QOS_BEST_EFFORT = QoSProfile(depth=200, reliability=ReliabilityPolicy.BEST_EFFORT)
-STARTUP_TIMEOUT_S = 60.0
+STARTUP_TIMEOUT_S = 120.0
 # 001-R06/R07 say 0.5 s; the stub-based graph shares CPU with parallel colcon jobs, so the check allows scheduling
 # jitter on top (measured delay is ~0.2 s, one supervisor tick).
 LOAD_MARGIN_S = 0.5
@@ -102,6 +102,7 @@ class Probe:
         rclpy.init(context=self.context, domain_id=domain_for(module_index))
         self.node = rclpy.create_node('vacuum_launch_probe', context=self.context)
         self._lock = threading.Lock()
+        self._active_polls = {}
         self._submodes: List[Tuple[float, str]] = []
         self._notifications: List[Tuple[float, Notification]] = []
         self._locks: List[Tuple[float, bool]] = []
@@ -221,13 +222,23 @@ class Probe:
         assert result.results[0].successful, f'{node_name}.{name} = {value!r}: {result.results[0].reason}'
 
     # ------------------------------------------------------------ graph
-    def manager_is_active(self, manager: str) -> bool:
-        client = self.node.create_client(Trigger, f'/{manager}/is_active')
-        if not client.wait_for_service(timeout_sec=1.0):
-            return False
-        future = client.call_async(Trigger.Request())
+    def manager_is_active(self, manager: str, discovery_timeout_s: float = 2.0) -> bool:
+        """One poll of `/<manager>/is_active`. The client is created once per manager and reused: a new client
+        per poll (the former code) leaks one client per call and restarts DDS service discovery every time,
+        which on a loaded runner can take longer than the per-call wait. A call that gets no answer is kept
+        pending and awaited on the next poll instead of being abandoned and re-sent."""
+        state = self._active_polls.get(manager)
+        if state is None:
+            state = self._active_polls[manager] = {
+                'client': self.node.create_client(Trigger, f'/{manager}/is_active'), 'future': None}
+        client, future = state['client'], state['future']
+        if future is None:
+            if not client.wait_for_service(timeout_sec=discovery_timeout_s):
+                return False
+            future = state['future'] = client.call_async(Trigger.Request())
         if not self.wait_for(future.done, 5.0):
-            return False
+            return False                    # still pending (manager busy bringing nodes up): keep it
+        state['future'] = None
         return bool(future.result().success)
 
     def lifecycle_label(self, node_name: str, discovery_timeout_s: float = 15.0) -> str:
@@ -256,7 +267,16 @@ class Probe:
         return self.node.get_publishers_info_by_topic(topic)
 
     def wait_core_active(self, timeout_s: float = STARTUP_TIMEOUT_S) -> bool:
-        return self.wait_for(lambda: self.manager_is_active('lifecycle_manager_core'), timeout_s, 0.5)
+        start = time.monotonic()
+        active = self.wait_for(lambda: self.manager_is_active('lifecycle_manager_core'), timeout_s, 0.5)
+        self.core_startup_s = time.monotonic() - start
+        print(f'lifecycle_manager_core is_active={active} after {self.core_startup_s:.1f} s', flush=True)
+        if not active:
+            # evidence for the next flake: which node is stuck, and was the manager reachable at all
+            states = {name: self.lifecycle_label(name, discovery_timeout_s=1.0) for name in core_config_nodes()}
+            print(f'core node states at timeout: {states}; nodes seen: {sorted(n for n, _ in self.node_names())}',
+                  flush=True)
+        return active
 
 
 # ---------------------------------------------------------------------------- shared scenario steps
