@@ -125,6 +125,9 @@ class DetectorNode(LifecycleNode):
         return TransitionCallbackReturn.SUCCESS
 
     def on_cleanup(self, state) -> TransitionCallbackReturn:
+        if self._timer is not None:               # normally gone since deactivate; cleanup must not leak it
+            self.destroy_timer(self._timer)
+            self._timer = None
         self.destroy_subscription(self._sub)
         self.destroy_publisher(self._pub)
         self.destroy_publisher(self._pub_telemetry)

@@ -141,3 +141,13 @@ def test_009a_R02_telemetry_carries_the_inference_time(ros):
     assert spin_until(executor, lambda: any(
         {kv.key for kv in d.status[0].values} >= {'last_inference_ms', 'processed'} and
         dict((kv.key, kv.value) for kv in d.status[0].values)['processed'] == '1' for d in diag))
+
+
+def test_009a_R02_full_lifecycle_cycle_leaves_nothing_behind(ros):
+    node = DetectorNode(model=FakeModel([]))
+    assert node.trigger_configure().label == 'inactive'
+    assert node.trigger_activate().label == 'active'
+    assert node.trigger_deactivate().label == 'inactive'
+    assert node.trigger_cleanup().label == 'unconfigured'
+    assert node._timer is None and node._core is None
+    assert node.trigger_configure().label == 'inactive'          # and it can be configured again
