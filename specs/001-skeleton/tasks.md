@@ -13,7 +13,7 @@ A task is only done when the test that verifies the requirement passes.
 
 ## Phase 1: tests first
 
-- [ ] **T005** Write `vacuum_contract_tests`: a library that reads `topics.yaml` (including the `since` semantics of the contract header), unit tests of that library, and opt-in live tests (`VACUUM_CONTRACT_LIVE=1`, needing a running graph). Under default `colcon test` only the library and unit tests run; the live tests are skipped, so T005 alone does NOT check 001-R03, 001-R04 or 001-R12 against a graph. That is done by T022. (001-R03, 001-R04, 001-R12)
+- [x] **T005** Write `vacuum_contract_tests`: a library that reads `topics.yaml` (including the `since` semantics of the contract header), unit tests of that library, and opt-in live tests (`VACUUM_CONTRACT_LIVE=1`, needing a running graph). Under default `colcon test` only the library and unit tests run; the live tests are skipped, so T005 alone does NOT check 001-R03, 001-R04 or 001-R12 against a graph. That is done by T022. (001-R03, 001-R04, 001-R12)
 - [x] **T006** [P] Write the pytest tests of `SubmodeMachine`, one row of the transition table per case. (001-R05 to 001-R09)
 
 ## Phase 2: implementation

@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>vacuum_contract_tests</name>
+  <version>0.1.0</version>
+  <description>Contract tests (spec 001, T005): read topics.yaml and check the live graph for existence, type, QoS, max_publishers and sink topics. The live part runs only with VACUUM_CONTRACT_LIVE=1.</description>
+  <maintainer email="rodolfo.dalla.costa@hotmail.com">Rodolfo Dalla Costa</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+  <test_depend>vacuum_interfaces</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
