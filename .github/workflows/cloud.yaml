@@ -5,12 +5,10 @@ name: cloud
 on:
   push:
     paths: ['docker/detector/**', 'deploy/**', 'infra/**', 'scripts/check-cloud.sh', 'scripts/check_cloud_manifests.py',
-
-            'src/vacuum_interfaces/**', '.github/workflows/cloud.yaml']
+            'scripts/test-chaos-tools.sh', 'tools/chaos/**', 'tools/tf.sh', 'compose.yaml', '.github/workflows/cloud.yaml']
   pull_request:
     paths: ['docker/detector/**', 'deploy/**', 'infra/**', 'scripts/check-cloud.sh', 'scripts/check_cloud_manifests.py',
-
-            'src/vacuum_interfaces/**', '.github/workflows/cloud.yaml']
+            'scripts/test-chaos-tools.sh', 'tools/chaos/**', 'tools/tf.sh', 'compose.yaml', '.github/workflows/cloud.yaml']
 permissions:
   contents: read
 jobs:
