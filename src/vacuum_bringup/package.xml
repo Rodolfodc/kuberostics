@@ -7,11 +7,17 @@
   <maintainer email="rodolfo.dalla.costa@hotmail.com">Rodolfo Dalla Costa</maintainer>
   <license>Apache-2.0</license>
 
+  <exec_depend>diagnostic_msgs</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
+  <exec_depend>lifecycle_msgs</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
   <exec_depend>teleop_twist_keyboard</exec_depend>
   <exec_depend>twist_mux</exec_depend>
+  <exec_depend>vacuum_interfaces</exec_depend>
   <exec_depend>vacuum_safety</exec_depend>
   <exec_depend>vacuum_stubs</exec_depend>
   <exec_depend>vacuum_supervisor</exec_depend>
@@ -19,13 +25,9 @@
   <test_depend>ament_index_python</test_depend>
   <test_depend>geometry_msgs</test_depend>
   <test_depend>launch_testing</test_depend>
-  <test_depend>lifecycle_msgs</test_depend>
   <test_depend>python3-pytest</test_depend>
   <test_depend>rcl_interfaces</test_depend>
-  <test_depend>rclpy</test_depend>
   <test_depend>std_msgs</test_depend>
-  <test_depend>std_srvs</test_depend>
-  <test_depend>vacuum_interfaces</test_depend>
   <test_depend>python3-yaml</test_depend>
 
   <export>

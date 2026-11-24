@@ -54,11 +54,18 @@ uint8 HALF_OPEN=2   # using the local one while the cloud proves stability
 
 builtin_interfaces/Time stamp
 uint8 state
-float32 last_cloud_age_s       # age of the last cloud response, on the robot clock
-uint32 dropped_stale           # responses dropped for age
-uint32 dropped_watermark       # dropped for a timestamp already covered (duplicate or out of order)
-uint32 dropped_tf              # dropped by the projector for lack of TF at the timestamp
+float32 last_cloud_age_s       # age of the last cloud response, on the robot clock; NaN before the first one
+uint32 forwarded               # responses forwarded to /myRobot/perception/detections
+uint32 dropped_inactive        # responses from the source that is not active in this state (R07)
+uint32 dropped_stale           # responses dropped for age (R05)
+uint32 dropped_watermark       # dropped for a timestamp already covered: duplicate or out of order (R06)
+uint32 transitions             # breaker state changes since startup
 ```
+
+`dropped_tf` of the first draft was removed: the selector cannot know it. The projector reports it (and `projected`,
+`dropped_depth`) in its own `/myRobot/telemetry/projector` DiagnosticArray. `forwarded`, `dropped_inactive` and
+`transitions` were added so that `forwarded + dropped_inactive + dropped_stale + dropped_watermark` equals the number of
+responses received (spec 009a, counters) and the R15/R16 report can be computed from the rosbag.
 
 ## action/Escape.action
 

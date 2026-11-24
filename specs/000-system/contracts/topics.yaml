@@ -3,9 +3,14 @@
 #
 # Fields:
 #   owner: who publishes (the server, for services and actions)
-#   frozen: true = inherited from IA368II, cannot change (Constitution, Art. II)
+#   frozen: true = inherited from IA368II or from the 2025S2 code, cannot change (Constitution, Art. II).
+#     It is a compatibility promise (name, type, QoS), not a delivery requirement: it says nothing
+#     about WHEN the interface must exist. That is decided by `since`.
 #   qos: reliability / durability / depth
-#   since: spec that introduces the interface
+#   since: spec from which the interface must exist and be checked by the contract tests.
+#     A missing `since` means "001" (inherited and present from the skeleton on). A frozen
+#     entry with a later `since` (e.g. /detections_markers, "009a") is required only from that
+#     spec onward; before that, the contract tests must skip it. Frozen and `since` are independent.
 #
 # IA368II QoS: QoSProfile(depth=1) => reliable, volatile, keep_last 1.
 
@@ -80,6 +85,13 @@ topics:
     since: "001"
     note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz"
 
+  - name: /myRobot/telemetry/lifecycle_sequencer
+    type: diagnostic_msgs/msg/DiagnosticArray
+    qos: default
+    owner: lifecycle_sequencer
+    since: "005"
+    note: "T521: sequencer state (ALL_ACTIVE, DEGRADED_NAV, ...) and step durations, 1 Hz; the supervisor will log when it stops (005-R37, not implemented yet)"
+
   - name: /myRobot/telemetry/stop_guard
     type: diagnostic_msgs/msg/DiagnosticArray
     qos: default
@@ -122,7 +134,9 @@ topics:
   - {name: /myRobot/perception/detections/cloud, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detector_cloud, since: "009a", note: "header = image header (timestamp echo); publishes an empty array when nothing is detected"}
   - {name: /myRobot/perception/detections/local, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detector_local, since: "009a"}
   - {name: /myRobot/perception/detections, type: vision_msgs/msg/Detection2DArray, qos: default, owner: detection_selector, max_publishers: 1, since: "009a"}
-  - {name: /myRobot/perception/offload_status, type: vacuum_interfaces/msg/OffloadStatus, qos: ia368ii, owner: detection_selector, since: "009a"}
+  - {name: /myRobot/perception/offload_status, type: vacuum_interfaces/msg/OffloadStatus, qos: ia368ii, owner: detection_selector, since: "009a", note: "R14: published at 1 Hz (parameter status_rate_hz)"}
+  - {name: /myRobot/telemetry/detection_selector, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detection_selector, since: "009a", note: "D-20: breaker state, counters and watermark at status_rate_hz"}
+  - {name: /myRobot/telemetry/image_throttle, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: image_throttle, since: "009a", note: "D-20: passed, dropped_rate, restarts, encode_errors at telemetry_rate_hz"}
   - {name: /detections_markers, type: visualization_msgs/msg/MarkerArray, qos: default, owner: projector, frozen: true, since: "009a", note: "format consumed by the 2025S2 semantic node"}
 
 services:
@@ -160,6 +174,12 @@ lifecycle:
 
 # Public parameters (Art. I.1). Values are the defaults; the launch file may override them.
 parameters:
+  lifecycle_sequencer:
+    manager_startup_timeout_s: {type: double, default: 30.0, requirement: 005-R35}
+    manager_shutdown_timeout_s: {type: double, default: 15.0, requirement: 005-R37}
+    managers: {type: string_array, default: [lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional], requirement: 005-R35}
+    stop_guard_node: {type: string, default: stop_guard, requirement: 005-R36}
+    telemetry_rate_hz: {type: double, default: 1.0}
   supervisor:
     escape_timeout_s: {type: double, default: 20.0, requirement: 001-R09}
     escape_server_wait_s: {type: double, default: 2.0, requirement: 001-R09, note: "bounded wait for an undiscovered escape server before the stuck event counts as a failed escape; the escape_timeout_s clock is not extended, so a wait longer than escape_timeout_s is cut short by the timeout"}
@@ -186,3 +206,19 @@ parameters:
     publish_rate_hz: {type: double, default: 10.0}
   stuck_detector:
     telemetry_rate_hz: {type: double, default: 1.0}
+  detection_selector:
+    max_age_s: {type: double, default: 0.67, requirement: 009a-R05, note: "= position_tolerance_m / v_max_m_s (0.20 / 0.30)"}
+    open_threshold_s: {type: double, default: 1.5, requirement: 009a-R08, note: "never below max_age_s"}
+    close_threshold_s: {type: double, default: 0.5, requirement: 009a-R09, note: "invariant close_threshold_s < max_age_s <= open_threshold_s; configure fails otherwise"}
+    stable_window_s: {type: double, default: 3.0, requirement: 009a-R10}
+    status_rate_hz: {type: double, default: 1.0, requirement: 009a-R14, note: "OffloadStatus and telemetry"}
+    tick_rate_hz: {type: double, default: 10.0, requirement: 009a-R08, note: "silence check of the cloud; bounds the time to OPEN"}
+    cloud_topic: {type: string, default: /myRobot/perception/detections/cloud}
+    local_topic: {type: string, default: /myRobot/perception/detections/local}
+    output_topic: {type: string, default: /myRobot/perception/detections}
+  image_throttle:
+    image_rate_hz: {type: double, default: 2.0, requirement: 009a-R03, note: "same rate in CLOSED, OPEN and HALF_OPEN (009a-R11); must be > 0"}
+    jpeg_quality: {type: int, default: 80, note: "1..100"}
+    telemetry_rate_hz: {type: double, default: 1.0}
+    input_topic: {type: string, default: /camera, note: "RGB only; depth never leaves the robot"}
+    output_topic: {type: string, default: /myRobot/perception/rgb_throttled/compressed}
