@@ -21,6 +21,7 @@ from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_testing.actions import ReadyToTest
 from rclpy.action import get_action_names_and_types
+from rclpy.executors import SingleThreadedExecutor
 from std_srvs.srv import Trigger
 
 from vacuum_contract_tests.contract import (
@@ -67,6 +68,8 @@ class TestSkeletonContract(unittest.TestCase):
         cls.context = rclpy.Context()
         rclpy.init(context=cls.context, domain_id=DOMAIN_ID)
         cls.node = rclpy.create_node('contract_launch_probe', context=cls.context)
+        cls.executor = SingleThreadedExecutor(context=cls.context)
+        cls.executor.add_node(cls.node)
         # staged start: the graph is checked only after the nodes are discoverable and the manager reports active
         cls.nodes_up = wait_for(
             lambda: set(SKELETON_NODES) <= {n for n, ns in cls.node.get_node_names_and_namespaces() if ns == '/'},
@@ -77,6 +80,7 @@ class TestSkeletonContract(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.executor.shutdown()
         cls.node.destroy_node()
         cls.context.try_shutdown()
 
@@ -87,7 +91,7 @@ class TestSkeletonContract(unittest.TestCase):
             if not client.wait_for_service(timeout_sec=1.0):
                 return False
             future = client.call_async(Trigger.Request())
-            rclpy.spin_until_future_complete(cls.node, future, timeout_sec=5.0)
+            rclpy.spin_until_future_complete(cls.node, future, executor=cls.executor, timeout_sec=5.0)
             return future.done() and bool(future.result().success)
         finally:
             cls.node.destroy_client(client)
