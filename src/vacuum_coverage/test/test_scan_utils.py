@@ -6,7 +6,7 @@ import math
 
 import pytest
 
-from vacuum_coverage.core.scan_utils import side_means, sector_min
+from vacuum_coverage.core.scan_utils import sector_min, side_means
 
 INC = math.radians(1.0)
 
