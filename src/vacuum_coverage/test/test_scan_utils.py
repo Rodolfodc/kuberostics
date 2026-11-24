@@ -1,4 +1,4 @@
-"""Scan helpers used by EscapeScript and the escape node (spec 005, T505): sector minimum and left/right means.
+"""Scan helpers used by EscapeScript and the escape node (spec 005): sector minimum and left/right means.
 
 Convention (documented in scan_utils): angles are in the laser frame, 0 = straight ahead, positive = left
 (counter-clockwise); a sample is at `angle_min + i * angle_increment`. No ROS."""

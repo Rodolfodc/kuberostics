@@ -63,7 +63,7 @@ class EscapeConfig:
     angle_tolerance_rad: float = 0.05     # a turn ends when it is within this of the target (about one control tick)
     distance_tolerance_m: float = 0.01
     range_cap_m: float = 5.0              # readings above this are capped when comparing the sides of the scan
-    # Wheel-bridge limits: PLACEHOLDERS until the measurement of T503. The linear one is the 0.30 m/s limit of
+    # Wheel-bridge limits: PLACEHOLDERS until the wheel-bridge measurement in the simulator. The linear one is the 0.30 m/s limit of
     # spec 009a; the angular one equals the default turn speed. Replace with the measured values.
     max_linear_speed_m_s: float = 0.30
     max_angular_speed_rad_s: float = 1.0

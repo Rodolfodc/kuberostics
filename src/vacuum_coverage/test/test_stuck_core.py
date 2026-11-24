@@ -1,4 +1,4 @@
-"""StuckCore (spec 005, T504): sliding-window stuck detection on a simulated clock. No ROS."""
+"""StuckCore (spec 005): sliding-window stuck detection on a simulated clock. No ROS."""
 import math
 
 import pytest
