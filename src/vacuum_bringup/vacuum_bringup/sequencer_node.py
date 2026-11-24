@@ -60,8 +60,10 @@ class SequencerNode(Node):
         guard = self.get_parameter('stop_guard_node').value
         self.create_subscription(TransitionEvent, f'/{guard}/transition_event', self._on_guard_event, 10)
         self._guard = guard
-        self._watch = GuardWatch()
+        self._watch = GuardWatch()          # spacing is set below, once the poll period is known
         self._poll_period_s = max(0.1, float(self.get_parameter('stop_guard_poll_period_s').value))
+        # unreachable samples count only when almost a poll period apart (events can come in bursts)
+        self._watch = GuardWatch(min_spacing_s=0.9 * self._poll_period_s)
         self.sequencer = ManagerSequencer(
             default_specs(names), self._call, self._wait_active, time.monotonic, self._log, self._notify,
             startup_timeout_s=float(self.get_parameter('manager_startup_timeout_s').value),
@@ -167,7 +169,14 @@ class SequencerNode(Node):
     def _check_stop_guard(self) -> None:
         if self.sequencer.state not in (State.ALL_ACTIVE, State.DEGRADED_NAV, State.DEGRADED_OPTIONAL):
             return
-        if self._watch.feed(self._guard_sample()):
+        sample = self._guard_sample()
+        lost = self._watch.feed(sample, time.monotonic())
+        if sample == 'unreachable':
+            self.get_logger().warning(
+                f'stop_guard sample: unreachable ({self._watch.unreachable_count} counted in a row)')
+        elif sample == 'not_active':
+            self.get_logger().warning('stop_guard sample: not active')
+        if lost:
             self.sequencer.on_stop_guard_lost()
 
     def _publish_telemetry(self) -> None:

@@ -339,6 +339,34 @@ def test_005_R36_guard_watch_one_unreachable_sample_is_not_a_loss_two_in_a_row_a
     assert watch.feed('unreachable') is True
 
 
-def test_005_R36_guard_watch_does_not_depend_on_having_seen_the_activation_event():
-    # the first sample ever is already 'not_active': it is a loss (a missed event must not hide it)
-    assert GuardWatch().feed('not_active') is True
+def test_005_R36_guard_watch_active_then_not_active_is_a_loss():
+    watch = GuardWatch()
+    assert watch.feed('active', 0.0) is False
+    assert watch.feed('not_active', 1.0) is True
+
+
+def test_005_R36_guard_watch_unreachable_twice_then_active_is_a_recovery_not_a_loss():
+    watch = GuardWatch(unreachable_limit=3)
+    assert [watch.feed('unreachable', t) for t in (0.0, 1.0)] == [False, False]
+    assert watch.feed('active', 2.0) is False
+    assert watch.unreachable_count == 0
+    assert watch.feed('unreachable', 3.0) is False        # the count restarted
+
+
+def test_005_R36_guard_watch_a_burst_of_close_samples_counts_as_one_hiccup():
+    watch = GuardWatch(unreachable_limit=2, min_spacing_s=0.9)
+    assert watch.feed('unreachable', 10.00) is False
+    assert watch.feed('unreachable', 10.05) is False       # event-triggered, too close: not counted
+    assert watch.feed('unreachable', 10.10) is False
+    assert watch.unreachable_count == 1
+    assert watch.feed('unreachable', 11.00) is True        # a second sample a poll period later is a loss
+
+
+def test_005_R36_stop_guard_lost_reported_from_another_thread_during_startup_is_applied_after_it():
+    # the safe-guard branch (pending flag), also covered by the startup tests above; here with the guard
+    # reported before the first manager is touched
+    seq, managers, rec, _ = build()
+    seq.on_stop_guard_lost()
+    assert managers.calls == []
+    seq.run_startup()
+    assert (NAV, Action.PAUSE) in pairs(managers)
