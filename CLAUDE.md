@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## State of the repo
 
-Spec-driven project (final project of IA368II, FEEC/UNICAMP: autonomous vacuum robot in CoppeliaSim's *House* scene, ROS 2). **Implementation has started** (spec 001): `deps.repos`, `scripts/setup.sh`, `scripts/setup_env.sh`, `src/vacuum_interfaces`, `src/vacuum_supervisor` (`SubmodeMachine` + the `supervisor` LifecycleNode, with tests) and `src/vacuum_bringup` (`twist_mux.yaml`, `lifecycle_core.yaml`, `skeleton.launch.py`) and `src/vacuum_safety` (`stop_guard`, D-22, see `docs/stop-guard.md`) and `src/vacuum_stubs` (`coverage_server`, `escape_server`, `stuck_detector`); T001, T002, T006 to T013 and T017 to T019 are done. Dockerfiles, CI, the contract tests and the launch tests are still *planned* in `specs/001-skeleton/tasks.md`.
+Spec-driven project (final project of IA368II, FEEC/UNICAMP: autonomous vacuum robot in CoppeliaSim's *House* scene, ROS 2). **Implementation has started** (spec 001): `deps.repos`, `scripts/setup.sh`, `scripts/setup_env.sh`, `src/vacuum_interfaces`, `src/vacuum_supervisor` (`SubmodeMachine` + the `supervisor` LifecycleNode, with tests) and `src/vacuum_bringup` (`twist_mux.yaml`, `lifecycle_core.yaml`, `skeleton.launch.py`) and `src/vacuum_safety` (`stop_guard`, D-22, see `docs/stop-guard.md`) and `src/vacuum_stubs` (`coverage_server`, `escape_server`, `stuck_detector`) and `src/vacuum_detection` (pure-Python `SelectorCore` and `ProjectorCore` with tests, from PR #11, spec 009a; the ROS nodes are pending) and `src/vacuum_contract_tests` (pure `contract.py` + live-graph tests, run with `VACUUM_CONTRACT_LIVE=1` against `skeleton.launch.py`); T001 to T003, T005 to T013 and T017 to T019 are done, plus T020 and T021. The launch tests (T014) are still *planned* in `specs/001-skeleton/tasks.md`.
 
 This is its own git repo, nested inside the outer folder `projeto_final_ia386ii/` (not a repo; it only holds symlinks `.claude` and `CLAUDE.md` to this repository's files, see `scripts/link-workspace.sh`). That folder also holds two files outside version control:
 - `scene_house.ttt` (~29 MB): the CoppeliaSim *House* scene; the open question about scene object names (spec 000 §6) is answered by inspecting it.
@@ -98,7 +98,7 @@ Claude Code reads `.claude/` (agents, settings, hooks) and `CLAUDE.md` from the 
 | What | Where it is tracked |
 |---|---|
 | ROS package dependencies (e.g. `twist_mux`, `python3-pytest`, `python3-yaml`) | `exec_depend` / `test_depend` in each `src/vacuum_*/package.xml`; `scripts/test-docker.sh` installs them with rosdep in the containers |
-| Docker images: `osrf/ros:jazzy-desktop-full`, `ros:lyrical-ros-base`, `minlag/mermaid-cli:12.0.1` | `scripts/setup_env.sh` (list `IMAGES_ALL`; `--no-images` skips the pull) |
+| Docker images: `osrf/ros:jazzy-desktop-full`, `ros:lyrical-ros-base`, `ros:jazzy-ros-base`, `minlag/mermaid-cli:12.0.1` | `scripts/setup_env.sh` (list `IMAGES_ALL`; `--no-images` skips the pull) |
 | Host tools: Docker, `kubectl`, `k3d`, `terraform`, firewall for ports 23000-23099 | `scripts/setup_env.sh`, `scripts/setup-tools.sh` (needs sudo) |
 | CoppeliaSim 4.10.0 (runs on the host, not in Docker) | `scripts/setup_env.sh` |
 | Python tools outside ROS (`.venv`: ZMQ client, pyzmq, cbor, numpy, pytest) | `requirements.txt` |
