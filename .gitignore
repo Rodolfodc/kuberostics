@@ -18,6 +18,7 @@ rl/runs/
 .archify/
 docs/diagrams/archify/*.json
 
-# Raw transport-benchmark logs may hold host details (IPs, container ids); keep them local only
+# Generated or run-time artifacts (raw logs, measurement CSVs, temporary outputs) stay on the local machine, never in git
 deploy/measurements/**/*.log
-deploy/measurements/**/local-logs/
+deploy/measurements/**/*.csv
+**/local-logs/

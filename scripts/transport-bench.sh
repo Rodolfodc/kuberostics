@@ -3,7 +3,8 @@
 # The robot side is a Docker container on the k3d network; the cloud side is a Pod in namespace transport-bench of the local
 # cluster "kuberostics" (tools/k3s.sh, own kubeconfig). Round trip = timestamp echo of a 80 KB JPEG (80 187 bytes) at 2 Hz.
 # Usage: scripts/transport-bench.sh [--duration S] [--distro lyrical] [--scenarios "lan wan"] [--transports "rmw bridge"]
-# Needs: docker, k3d, kubectl. `tools/k3s.sh up` is run if the cluster is absent. Results: deploy/measurements/transport-benchmark/.
+# Needs: docker, k3d, kubectl. `tools/k3s.sh up` is run if the cluster is absent. Summary: deploy/measurements/transport-benchmark/summary.txt;
+# raw CSVs and logs: deploy/measurements/transport-benchmark/local-logs/ (gitignored, kept on the local machine only).
 # Cleanup: scripts/transport-bench.sh --cleanup   (removes only namespace transport-bench and the transport-bench-* containers)
 # Raw docker and k3d image import are used on purpose (no wrapper covers them); every container is named transport-bench-* and
 # cleanup (--cleanup, or the per-run docker rm) only touches that prefix and namespace transport-bench.
@@ -12,6 +13,7 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 K="$REPO/tools/k3s.sh"
 OUT="$REPO/deploy/measurements/transport-benchmark"
+RAW="$OUT/local-logs"   # raw CSVs and logs: generated, gitignored, never committed
 DISTRO=lyrical DURATION=300 SCENARIOS="lan wan" TRANSPORTS="rmw bridge"
 # Pinned by digest (supply chain); the tag is tracked in scripts/setup_env.sh. apt packages and ros:lyrical-ros-base float.
 BRIDGE_IMG="eclipse/zenoh-bridge-ros2dds:1.10.2@sha256:0183b7e83790a8c57a069743776c2d913041760eb19e64d8cc4fbf7374269034"
@@ -29,7 +31,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 IMG="transport-bench:$DISTRO"
-mkdir -p "$OUT"
+mkdir -p "$OUT" "$RAW"
 
 echo ">> image $IMG"
 docker build -q --build-arg ROS_DISTRO="$DISTRO" -t "$IMG" "$REPO/deploy/transport-bench" >/dev/null
@@ -64,10 +66,10 @@ run_one() {   # $1 transport (rmw|bridge) $2 scenario
       -e "tcp/$NODE_IP:$port" --no-multicast-scouting -c /cfg/bridge.json5 >/dev/null
   fi
   docker wait "$name" >/dev/null
-  docker cp "$name":/tmp/rtt.csv "$OUT/$label.csv" 2>/dev/null || echo "   (no csv produced)"
-  docker logs "$name" >"$OUT/$label.log" 2>&1 || true
-  [[ $t == bridge ]] && { docker logs "$name-bridge" >"$OUT/$label.bridge.log" 2>&1 || true; }
-  grep '^SUMMARY' "$OUT/$label.log" | tee -a "$OUT/summary.txt" || echo "   no SUMMARY line, see $OUT/$label.log"
+  docker cp "$name":/tmp/rtt.csv "$RAW/$label.csv" 2>/dev/null || echo "   (no csv produced)"
+  docker logs "$name" >"$RAW/$label.log" 2>&1 || true
+  [[ $t == bridge ]] && { docker logs "$name-bridge" >"$RAW/$label.bridge.log" 2>&1 || true; }
+  grep '^SUMMARY' "$RAW/$label.log" | tee -a "$OUT/summary.txt" || echo "   no SUMMARY line, see $RAW/$label.log"
   docker rm -f "$name" "$name-bridge" >/dev/null 2>&1 || true
   cloud_down "$dep"
 }
