@@ -30,6 +30,7 @@ from vacuum_supervisor.submode_machine import Effect, SubmodeMachine
 QOS_IA368II = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.VOLATILE)
 WATCHDOG_PERIOD_S = 0.1     # detection resolution of 005-R34 (inside the 0.5 s margin of the test)
+NAV_CANCEL_RETRY_S = 0.25     # an unanswered cancel request is replaced after this long
 SEVERITY = {'INFO': Notification.INFO, 'WARN': Notification.WARN, 'ERROR': Notification.ERROR}
 
 
@@ -85,7 +86,8 @@ class SupervisorNode(LifecycleNode):
         self._cancel_window = CancelWindow(float(self.get_parameter('nav_cancel_s').value),
                                            logger=self.get_logger())
         self._nav_cancel_client = None
-        self._nav_cancel_inflight = False
+        self._nav_cancel_future = None     # last cancel request; replaced on retry, never a permanent guard
+        self._nav_cancel_sent_at = 0.0
         self._nav_cancels = 0
 
     # ---------------------------------------------------------------- lifecycle
@@ -124,6 +126,7 @@ class SupervisorNode(LifecycleNode):
         self._cancel_actions()
         self._stop_dock_timer()
         self._cancel_window.done()
+        self._drop_nav_cancel_request()
         self._machine.on_mode('')          # back to NONE; the lock is kept
         for t in self._timers:
             self.destroy_timer(t)
@@ -143,8 +146,9 @@ class SupervisorNode(LifecycleNode):
         if self._dock_client is not None:
             self.destroy_client(self._dock_client)
             self._dock_client = None
-        self.destroy_client(self._nav_cancel_client)
-        self._nav_cancel_client = None
+        if self._nav_cancel_client is not None:
+            self.destroy_client(self._nav_cancel_client)
+            self._nav_cancel_client = None
         return TransitionCallbackReturn.SUCCESS
 
     # ---------------------------------------------------------------- inputs
@@ -270,24 +274,43 @@ class SupervisorNode(LifecycleNode):
         handle, self._cover_handle = self._cover_handle, None
         if handle is not None:
             handle.cancel_goal_async()                # best effort: the server may be gone
+        # A new cover goal accepted while this window is pending (<= nav_cancel_s) can have its Nav2 goals hit by
+        # the cancel-all below; accepted, the window is short.
+        self._drop_nav_cancel_request()              # a request left unanswered by an earlier loss must not block
         self._cancel_window.start(now)
         self._try_cancel_nav(now)
         self._apply(self._machine.on_cover_result(success=False))     # treated as a failed action (005-R30 rows)
 
+    def _drop_nav_cancel_request(self) -> None:
+        fut, self._nav_cancel_future = self._nav_cancel_future, None
+        if fut is not None and not fut.done() and self._nav_cancel_client is not None:
+            self._nav_cancel_client.remove_pending_request(fut)
+        self._nav_cancel_sent_at = 0.0
+
     def _try_cancel_nav(self, now: float) -> None:
-        """Cancel request with zero goal id and zero stamp = cancel all goals of the action."""
-        if not self._cancel_window.should_try(now) or self._nav_cancel_inflight:
+        """Cancel request with zero goal id and zero stamp = cancel all goals of the action (idempotent).
+
+        An unanswered request is replaced every NAV_CANCEL_RETRY_S until the window (nav_cancel_s) is over.
+        """
+        if not self._cancel_window.should_try(now):
+            self._drop_nav_cancel_request()          # window over (or never started): nothing stays in flight
+            return
+        if self._nav_cancel_future is not None and now - self._nav_cancel_sent_at < NAV_CANCEL_RETRY_S:
             return
         if not self._nav_cancel_client.service_is_ready():
             self.get_logger().warning('navigate_to_pose cancel service not ready, will retry')
             return
-        self._nav_cancel_inflight = True
+        self._drop_nav_cancel_request()
         self._nav_cancels += 1
+        self._nav_cancel_sent_at = now
         self.get_logger().warning('cancelling all navigate_to_pose goals')
-        self._nav_cancel_client.call_async(CancelGoal.Request()).add_done_callback(self._on_nav_cancel_done)
+        self._nav_cancel_future = self._nav_cancel_client.call_async(CancelGoal.Request())
+        self._nav_cancel_future.add_done_callback(self._on_nav_cancel_done)
 
     def _on_nav_cancel_done(self, future) -> None:
-        self._nav_cancel_inflight = False
+        if future is not self._nav_cancel_future:
+            return                                    # answer of a replaced request
+        self._nav_cancel_future = None
         try:
             code = future.result().return_code
         except Exception as exc:                      # noqa: B902

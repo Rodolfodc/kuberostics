@@ -15,9 +15,17 @@ import time
 
 import pytest
 
-rclpy = pytest.importorskip('rclpy')
-nav2_msgs = pytest.importorskip('nav2_msgs')
+def _need(module):
+    """importorskip locally; under CI or the docker runner (DISTRO is set) a missing module is a failure."""
+    if os.environ.get('CI') or os.environ.get('DISTRO'):
+        return __import__(module)
+    return pytest.importorskip(module)
 
+
+rclpy = _need('rclpy')
+nav2_msgs = _need('nav2_msgs')
+
+from action_msgs.srv import CancelGoal  # noqa: E402
 from geometry_msgs.msg import Twist  # noqa: E402
 from nav2_msgs.action import NavigateToPose  # noqa: E402
 from rclpy.action import ActionClient, ActionServer, CancelResponse  # noqa: E402
@@ -170,11 +178,82 @@ def test_005_R34_lost_cover_server_stops_the_nav_velocity_within_the_budget(syst
 
 
 def test_005_R34_a_live_server_with_feedback_is_never_cancelled(system):
-    sup, fake, proc = system(dock_after_coverage=True, feedback_stale_s=1.0)
+    # default 2.5 s limit against a 2 Hz feeder, watched for 2x the limit: a 1 s scheduling stall is tolerated
+    sup, fake, proc = system(dock_after_coverage=True)
     begin_coverage_with_nav_goal(sup, fake)
-    end = time.monotonic() + 3.0                # 3x the staleness limit: the fake server feeds at 2 Hz
+    end = time.monotonic() + 5.0
     while time.monotonic() < end:
         assert not fake.cancelled and fake.active
         time.sleep(0.05)
     assert sup._watchdog.armed
     assert fake.codes() == []
+
+
+def test_005_R34_server_not_ready_cancels_nav_and_fails_the_action(system):
+    sup, fake, proc = system(dock_after_coverage=True, feedback_stale_s=60.0)    # staleness out of the way
+    begin_coverage_with_nav_goal(sup, fake)
+    proc.send_signal(signal.SIGKILL)
+    proc.wait(timeout=10)
+    # the graph notices the dead process (liveliness) long before the 60 s: the supervisor must not wait for them
+    assert wait_for(lambda: fake.cancelled, timeout=40.0), 'server not ready was not treated as lost'
+    assert wait_for(lambda: (Notification.WARN, 'COVERAGE_FAILED') in fake.codes())
+
+
+def test_005_R34_rows_off_the_loss_cancels_nav_and_the_001_behaviour_holds(system):
+    sup, fake, proc = system(dock_after_coverage=False)
+    begin_coverage_with_nav_goal(sup, fake)
+    proc.send_signal(signal.SIGKILL)
+    t0 = time.monotonic()
+    proc.wait(timeout=10)
+    assert wait_for(lambda: fake.cancelled, timeout=BUDGET_S + 2.0)
+    assert wait_for(lambda: not fake.active)
+    assert wait_for(lambda: time.monotonic() - fake.last_nonzero > 0.3)
+    assert fake.last_nonzero - t0 <= BUDGET_S
+    assert fake.codes() == []                       # rows off: no notification, no docking request
+    assert fake.submode.submode == 'COVERING'
+
+
+class SilentCancelService(Node):
+    """Counts CancelGoal requests on the navigate_to_pose action and never answers."""
+
+    def __init__(self):
+        super().__init__('silent_cancel')
+        self.requests = 0
+        self.release = threading.Event()
+        self.create_service(CancelGoal, '/navigate_to_pose/_action/cancel_goal', self._on_request,
+                            callback_group=ReentrantCallbackGroup())
+
+    def _on_request(self, request, response):
+        self.requests += 1
+        self.release.wait(timeout=30.0)             # the answer is held back until the test ends
+        return response
+
+
+def test_005_R34_unanswered_cancel_does_not_block_the_next_loss():
+    rclpy.init()
+    try:
+        sup = SupervisorNode(parameter_overrides=[Parameter('nav_cancel_s', 0.6)])
+        silent = SilentCancelService()
+        executor = MultiThreadedExecutor(num_threads=4)
+        executor.add_node(sup)
+        executor.add_node(silent)
+        thread = threading.Thread(target=executor.spin, daemon=True)
+        thread.start()
+        sup.trigger_configure()
+        sup.trigger_activate()
+        assert wait_for(lambda: sup._nav_cancel_client.service_is_ready())
+        sup._on_cover_lost('feedback_stale', time.monotonic())
+        assert wait_for(lambda: silent.requests >= 1)
+        assert wait_for(lambda: not sup._cancel_window.pending, timeout=5.0), 'window never expired'
+        before = silent.requests
+        sup._on_cover_lost('feedback_stale', time.monotonic())     # second loss, the first was never answered
+        assert wait_for(lambda: silent.requests > before), 'second loss sent no cancel (stuck in-flight guard)'
+    finally:
+        silent.release.set()
+        sup.trigger_deactivate()
+        sup.trigger_cleanup()
+        executor.shutdown()
+        sup.destroy_node()
+        silent.destroy_node()
+        thread.join(timeout=2)
+        rclpy.try_shutdown()
