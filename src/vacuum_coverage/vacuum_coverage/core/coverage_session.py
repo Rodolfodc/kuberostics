@@ -131,6 +131,14 @@ class CoverageSession:
 
     # ---- state ------------------------------------------------------------------------------------------
     @property
+    def tracker(self) -> CoverageTracker:
+        return self._tracker
+
+    @property
+    def waypoints(self) -> List[Waypoint]:
+        return list(self._wps)
+
+    @property
     def finished(self) -> bool:
         return self._done is not None
 
@@ -206,6 +214,11 @@ class ResumeStore:
     def save(self, room_id: str, session: CoverageSession, t: float) -> None:
         self._room, self._session, self._saved_t = room_id, session, t
         self._log('resume_store: saved room=%r at waypoint %d' % (room_id, session.current_index))
+
+    def matches(self, room_id: str, t: float) -> bool:
+        """True when `take` would return the saved session; consumes nothing."""
+        return (self._session is not None and self._room == room_id
+                and t - self._saved_t <= self._window)
 
     def take(self, room_id: str, t: float) -> Optional[CoverageSession]:
         """The saved session when `room_id` matches and the window has not expired; the store is emptied
