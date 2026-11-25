@@ -16,6 +16,7 @@ import pytest
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.events.process import ProcessExited
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from lifecycle_msgs.msg import State
@@ -86,9 +87,9 @@ class TestCoverageAlone(unittest.TestCase):
         return state
 
     def _process_report(self):
-        """Exit codes of the processes that already ended (launch_testing records processes on exit only) and
+        """Exit codes of the processes that already ended (proc_info also holds the start events) and
         the last lines of everything they printed."""
-        exited = [(e.process_details['name'], e.returncode) for e in self.proc_info]
+        exited = [(e.process_name, e.returncode) for e in self.proc_info if isinstance(e, ProcessExited)]
         lines = []
         for name in self.proc_output.process_names():
             text = b''.join(io.text for io in self.proc_output[name]).decode(errors='replace')
@@ -104,7 +105,7 @@ class TestCoverageAlone(unittest.TestCase):
         died = []
 
         def active():
-            if any(True for _ in self.proc_info):          # recorded on exit only: the node died
+            if any(isinstance(e, ProcessExited) for e in self.proc_info):      # the node died
                 died.append(True)
                 return True
             return self._state() == State.PRIMARY_STATE_ACTIVE
