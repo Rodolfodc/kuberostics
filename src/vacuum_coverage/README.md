@@ -42,7 +42,8 @@ stays reserved for the stub. It publishes `/myRobot/coverage/path`, `/myRobot/co
   samples must stay under 1 m (0.2 m/s real robot: no issue). Telemetry reports `pose_samples`, `max_pose_hop_m`,
   `max_poll_gap_s` and `unbridged_hops` to check it. History: while the poses were read inside the decision loop, a
   launch test on Jazzy measured a loop gap of 1.9 s (3 unbridged hops, ratio 0.74); the separate sampler removed
-  the dependence on that loop. A further node-side step, if ever needed, is sampling on TF callbacks.
+  the dependence on that loop, but on a loaded shared host the whole process still stalled 1 to 1.6 s now and
+  then (the sampler timer itself had that gap), which the launch test reports through `unbridged_hops`. A further node-side step, if ever needed, is sampling on TF callbacks.
 - Run alone: `ros2 launch vacuum_coverage coverage.launch.py` (autostart configure + activate); needs `/map`,
   TF `map -> base_link` and a `NavigateToPose` server (the tests use fakes).
 - Tests: `test_coverage_run.py` (pure), `test_coverage_server_node.py` (in-process rclpy with a fake Nav2) and
