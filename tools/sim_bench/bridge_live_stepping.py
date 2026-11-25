@@ -30,6 +30,6 @@ sel = [i for i, tt in enumerate(t) if tt > 2.0]
 dist = lambda i: (x[i] - x0) * fx + (y[i] - y0) * fy
 sp = (dist(-1) - dist(sel[0])) / (t[-1] - t[sel[0]])
 print('steps=%d simtime=%.2f s atomic=%s' % (len(rows), t[-1], not two))
-print('forward %.3f m, lateral %+.3f m, yaw change %+.2f deg' % (dist(-1), -(x[-1]-x0)*fy*-1*0 + (-(x[-1]-x0)*fy + (y[-1]-y0)*fx), math.degrees((yaw[-1] - yaw0 + math.pi) % (2*math.pi) - math.pi)))
+print('forward %.3f m, lateral %+.3f m, yaw change %+.2f deg' % (dist(-1), -(x[-1]-x0)*fy + (y[-1]-y0)*fx, math.degrees((yaw[-1] - yaw0 + math.pi) % (2*math.pi) - math.pi)))
 print('speed after 2 s (ground truth) %.3f m/s (command %.3f); wheel joint speeds L mean %.3f R mean %.3f m/s; max |L-R| %.4f' % (
     sp, v, sum(wl[i] for i in sel)/len(sel), sum(wr[i] for i in sel)/len(sel), max(abs(wl[i]-wr[i]) for i in sel)))

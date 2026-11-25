@@ -306,6 +306,13 @@ def report_straight(rows):
 def main():
     which = sys.argv[1:] or ['scan', 'camera', 'drive', 'turn', 'tf']
     rclpy.init(); rig = Rig()
+    try:
+        run(rig, which)
+    finally:
+        Pub.stop()          # never leave the `ros2 topic pub` subprocess running
+
+
+def run(rig, which):
     out(f'sim state {sim.getSimulationState()} time {sim.getSimulationTime():.2f}')
     for _ in range(30):
         rig.spin(0.1)
