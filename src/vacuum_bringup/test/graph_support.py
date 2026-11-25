@@ -38,7 +38,7 @@ QOS_IA368II = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.VOLATILE)
 QOS_LOG = QoSProfile(depth=200, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.VOLATILE)
 QOS_BEST_EFFORT = QoSProfile(depth=200, reliability=ReliabilityPolicy.BEST_EFFORT)
-STARTUP_TIMEOUT_S = 60.0
+STARTUP_TIMEOUT_S = 120.0
 # 001-R06/R07 say 0.5 s. Latency is measured on the supervisor's own Submode.stamp (taken in its tick), not on the
 # time this probe happens to receive the message, so probe-side scheduling and discovery waits are not counted.
 # What is left is allowed a documented margin (the supervisor publishes at 5 Hz, so one 0.2 s tick plus DDS
@@ -108,6 +108,9 @@ class Probe:
         rclpy.init(context=self.context, domain_id=domain_for(module_index))
         self.node = rclpy.create_node('vacuum_launch_probe', context=self.context)
         self._lock = threading.Lock()
+        self._active_clients = {}
+        self.core_startup_s = None
+        self.active_poll_log = {}
         self._submodes: List[Tuple[float, str]] = []
         self._submode_stamps: List[Tuple[float, str]] = []     # (supervisor stamp, system clock), submode
         self._stuck_stamps: List[float] = []
@@ -260,13 +263,26 @@ class Probe:
         assert result.results[0].successful, f'{node_name}.{name} = {value!r}: {result.results[0].reason}'
 
     # ------------------------------------------------------------ graph
-    def manager_is_active(self, manager: str) -> bool:
-        client = self.node.create_client(Trigger, f'/{manager}/is_active')
-        if not client.wait_for_service(timeout_sec=1.0):
+    def manager_is_active(self, manager: str, discovery_timeout_s: float = 2.0,
+                          answer_timeout_s: float = 3.0) -> bool:
+        """One poll of `/<manager>/is_active`. The client is reused between polls; when a request gets no
+        answer within `answer_timeout_s` the client is destroyed (not leaked) and the next poll sends on a new
+        one. A pending request must never be waited on indefinitely: seen on Jazzy with 1 CPU, every core node
+        `active` and the manager's is_active still unanswered after 127 s (lost service request/response)."""
+        client = self._active_clients.get(manager)
+        if client is None:
+            client = self._active_clients[manager] = self.node.create_client(Trigger, f'/{manager}/is_active')
+        if not client.wait_for_service(timeout_sec=discovery_timeout_s):
+            self.active_poll_log[manager] = 'service not discovered'
             return False
         future = client.call_async(Trigger.Request())
-        if not self.wait_for(future.done, 5.0):
+        if not self.wait_for(future.done, answer_timeout_s):
+            # also drop the client: if its response path never matched, a re-send on it would be lost too
+            self.node.destroy_client(client)
+            del self._active_clients[manager]
+            self.active_poll_log[manager] = 'no answer'
             return False
+        self.active_poll_log[manager] = f'answered success={future.result().success}'
         return bool(future.result().success)
 
     def lifecycle_label(self, node_name: str, discovery_timeout_s: float = 15.0) -> str:
@@ -295,7 +311,17 @@ class Probe:
         return self.node.get_publishers_info_by_topic(topic)
 
     def wait_core_active(self, timeout_s: float = STARTUP_TIMEOUT_S) -> bool:
-        return self.wait_for(lambda: self.manager_is_active('lifecycle_manager_core'), timeout_s, 0.5)
+        start = time.monotonic()
+        active = self.wait_for(lambda: self.manager_is_active('lifecycle_manager_core'), timeout_s, 0.5)
+        self.core_startup_s = time.monotonic() - start
+        print(f'lifecycle_manager_core is_active={active} after {self.core_startup_s:.1f} s', flush=True)
+        if not active:
+            # evidence for the next flake: which node is stuck, and was the manager reachable at all
+            states = {name: self.lifecycle_label(name, discovery_timeout_s=1.0) for name in core_config_nodes()}
+            seen = sorted(n for n, _ in self.node_names())
+            print(f'core node states at timeout: {states}; last is_active poll: {self.active_poll_log}; '
+                  f'nodes seen: {seen}', flush=True)
+        return active
 
 
 # ---------------------------------------------------------------------------- shared scenario steps
