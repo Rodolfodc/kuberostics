@@ -23,11 +23,13 @@ def declare_profile(node) -> RobotProfile:
 def declare_connection(node):
     node.declare_parameter('zmq_host', 'localhost')
     node.declare_parameter('zmq_port', 23000)
+    node.declare_parameter('atomic_wheel_write', False)   # opt-in; executeScriptString is absent on 4.10
 
 
 def make_client(node):
     return ZmqSimClient(node.get_parameter('zmq_host').value, int(node.get_parameter('zmq_port').value),
-                        node.get_logger())
+                        node.get_logger(),
+                        atomic_wheel_write=bool(node.get_parameter('atomic_wheel_write').value))
 
 
 def static_transform(node, parent, child, xyz, quat) -> StaticTransformBroadcaster:

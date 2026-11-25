@@ -53,3 +53,10 @@ with one write per step.
 * `ZmqSimClient` has socket timeouts. After any connection failure (including a simulator restart) it drops
   the connection and reconnects on the next call, with log messages; the nodes forget cached handles on error,
   and the odometry restarts from 0.
+
+## Wheel signal writes
+
+`leftVel`/`rightVel` are written with two `setFloatSignal` calls (default): enough with a model variant that
+holds the signals. `atomic_wheel_write: true` opts into one `executeScriptString` call; that function does not
+exist on the 4.10 `sim` object, so the client treats the missing attribute as an API error, logs one warning and
+falls back to the two calls.

@@ -33,13 +33,15 @@ class SimClient(Protocol):
 
 
 _TRANSIENT_NAMES = ('ZMQError', 'Again', 'ConnectionError', 'TimeoutError')
-_API_MARKERS = ('not found', 'nil value', 'no such', 'unknown function', 'not exist', 'attempt to call')
+_API_MARKERS = ('has no attribute', 'not found', 'nil value', 'no such', 'unknown function', 'not exist', 'attempt to call')
 
 
 def is_api_error(exc: Exception) -> bool:
     """True only for 'the API does not exist / was refused' errors, never for connection problems."""
     if isinstance(exc, (OSError, TimeoutError)) or type(exc).__name__ in _TRANSIENT_NAMES:
         return False
+    if isinstance(exc, AttributeError):      # the function does not exist on the sim object
+        return True
     return any(m in str(exc).lower() for m in _API_MARKERS)
 
 
@@ -81,17 +83,19 @@ class ZmqSimClient:
     .sim/p3/verify*.py. Any non-API failure (timeout, connection drop, simulator restart) drops the connection
     and re-raises; the next call reconnects through `sim_factory` (logged), so the nodes recover by themselves
     when the callers retry. Callers must also forget cached object handles on error (the nodes do).
-    The atomic wheel write (two signals in one executeScriptString) degrades to two calls only on API errors."""
+    Wheel speeds are written with two setFloatSignal calls (enough with a model that holds the signals). The
+    opt-in atomic write (`atomic_wheel_write`, one executeScriptString) latches off on any API error, including
+    a missing attribute, and falls back to the two calls."""
 
     def __init__(self, host: str = 'localhost', port: int = 23000, logger=None, sim=None, sim_factory=None,
-                 timeout_ms: int = 3000):
+                 timeout_ms: int = 3000, atomic_wheel_write: bool = False):
         self._lock = threading.RLock()
         if sim_factory is None:
             sim_factory = (lambda: sim) if sim is not None else _default_factory(host, port, timeout_ms, logger)
         self._factory = sim_factory
         self._sim = None
         self._log = logger
-        self._atomic_ok = True
+        self._atomic_ok = bool(atomic_wheel_write)   # opt-in: executeScriptString is absent on 4.10
         self._sandbox = None
         self._ever_connected = False
 
