@@ -117,7 +117,6 @@ class CoverageServerNode(LifecycleNode):
                 f'transition {request.transition.id} refused in state {self._state}: {type(exc).__name__}')
             response.success = False
             return response
-----------------------------------------------------------------------------------
     def on_configure(self, state) -> TransitionCallbackReturn:
         values = {name: self.get_parameter(name).value for name in CONFIG_PARAMS}
         try:
