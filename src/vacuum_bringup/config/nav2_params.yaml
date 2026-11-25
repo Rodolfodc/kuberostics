@@ -1,6 +1,6 @@
 # Nav2 configuration of spec 005 (planner_server, controller_server, bt_navigator). Configuration only (Art. II).
 # One file for both distributions: Nav2 ignores parameters it does not declare, so the entries that differ
-# between Jazzy (Nav2 1.3.x) and Lyrical (Nav2 1.5.x) are listed side by side and marked. docs of the differences:
+# between Jazzy (Nav2 1.3.x) and Lyrical (Nav2 1.5.x) are marked in place. Details of the differences:
 # the header of launch/nav.launch.py.
 #
 # Robot facts (src/vacuum_sim_bridge/README.md, profile.py): the model frame has forward = local +Y; the ROS frame
@@ -25,9 +25,9 @@ bt_navigator:
       plugin: "nav2_bt_navigator::NavigateToPoseNavigator"
     # nav_bt.xml is substituted into this parameter by nav.launch.py (absolute path of the installed file).
     default_nav_to_pose_bt_xml: "nav_bt.xml"
-    # Jazzy (1.3.x) name:
-    error_code_names: ["compute_path_error_code", "follow_path_error_code"]
-    # Lyrical (1.5.x) name:
+    # Error-code names: Lyrical (1.5.x) REFUSES to configure bt_navigator when the old `error_code_names` is set
+    # ("replaced by error_code_name_prefixes and MUST be removed", verified), so it is absent here and Jazzy
+    # (1.3.14, which also declares the new parameter) keeps its own default. Prefixes name the BT ports in use.
     error_code_name_prefixes: ["compute_path", "follow_path", "nav_to_pose"]
 
 controller_server:
@@ -50,7 +50,7 @@ controller_server:
     # Lyrical only (declared there, ignored on Jazzy):
     path_handler_plugins: ["PathHandler"]
     PathHandler:
-      plugin: "nav2_controller::SimplePathHandler"
+      plugin: "nav2_controller::FeasiblePathHandler"   # 1.5.x class name (verified in the Lyrical container)
     speed_limit_topic: "speed_limit"
 
     progress_checker:

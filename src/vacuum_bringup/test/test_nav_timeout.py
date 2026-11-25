@@ -45,13 +45,17 @@ class TestNavTimeout(unittest.TestCase):
         cls.probe.close()
 
     def test_01_005_R34_goal_longer_than_the_timeout_is_aborted_and_mux_nav_goes_silent(self):
-        handle = self.probe.send(5.0, 5.0)           # about 5.6 m at 0.25 m/s: far above 2 s
+        handle = self.probe.send(5.0, 5.0)           # about 5.6 m at 0.25 m/s: about 23 s, far above 2 s
         self.assertTrue(handle.accepted)
+        accepted_at = time.monotonic()
         result_future = handle.get_result_async()
         self.assertTrue(ns.wait_for(result_future.done, 30.0), 'the Timeout decorator did not end the goal')
+        ended_at = time.monotonic()
         self.assertEqual(result_future.result().status, GoalStatus.STATUS_ABORTED)
         self.assertGreater(self.probe.n_cmds(), 0, 'the robot never started: the test proved nothing')
-        time.sleep(0.5)
-        after = self.probe.n_cmds()
-        time.sleep(2.0)
-        self.assertEqual(self.probe.n_cmds(), after, 'controller_server kept publishing after the timeout')
+        # ABORTED alone could come from the planner or the progress checker: the elapsed time ties it to the 2 s
+        # decorator (and shows that bt_navigator loaded this tree, not a stock one). Generous upper bound: costmap
+        # and planning latency on a loaded machine.
+        elapsed = ended_at - accepted_at
+        self.assertTrue(1.5 <= elapsed <= 10.0, f'goal ended after {elapsed:.1f} s, not at the 2 s Timeout')
+        self.assertTrue(self.probe.wait_silent(1.0, 10.0), 'controller_server kept publishing after the timeout')

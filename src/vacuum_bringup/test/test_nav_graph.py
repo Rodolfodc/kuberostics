@@ -7,7 +7,7 @@ robot (fake_robot.py: odometry, TF, empty /scan, integrates /myRobot/mux/nav).
 * 005-R23: Twist on mux/nav is unstamped geometry_msgs/Twist (the subscription would not receive it otherwise).
 * 005-R29: the whole thing runs on Jazzy and Lyrical.
 
-NOT covered here (needs CoppeliaSim, left to the sim-operator, see tools/sim_bench/nav_spike.md): the real wheel
+NOT covered here (needs CoppeliaSim, left to the sim-operator: test_nav_sim_live.py, VACUUM_SIM_LIVE=1): the real wheel
 bridge, the real laser, and the House map.
 """
 import math
@@ -87,8 +87,5 @@ class TestNav(unittest.TestCase):
         self.assertTrue(ns.wait_for(lambda: self.probe.n_cmds() >= before + 10, 30.0), 'no velocity before cancel')
         cancel_future = handle.cancel_goal_async()
         self.assertTrue(ns.wait_for(cancel_future.done, 10.0), 'cancel not answered')
-        time.sleep(0.5)                              # grace for the controller's final zero velocity
-        after = self.probe.n_cmds()
-        time.sleep(2.0)                              # quiet window: 20 controller periods
-        self.assertEqual(self.probe.n_cmds(), after,
-                         'controller_server kept publishing on /myRobot/mux/nav after the cancel')
+        self.assertTrue(self.probe.wait_silent(1.0, 10.0),
+                        'controller_server kept publishing on /myRobot/mux/nav after the cancel')

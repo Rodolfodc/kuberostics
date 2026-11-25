@@ -80,7 +80,8 @@ def test_005_R19_the_tree_has_no_recovery_nodes_and_computes_and_follows(tree):
     assert tree.attrib['BTCPP_format'] == '4'
 
 
-def test_005_R19_the_params_point_at_the_installed_tree_file_through_the_launch_argument():
+def test_005_R19_nav_launch_starts_exactly_the_three_nav2_nodes_and_their_manager():
+    """That bt_navigator really reads nav_bt.xml through the bt_xml argument is proven live by test_nav_timeout.py."""
     spec = importlib.util.spec_from_file_location('nav_launch', PKG / 'launch' / 'nav.launch.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

@@ -9,11 +9,16 @@ Configuration only (Art. II): the stock Nav2 executables with config/nav2_params
   starts the manager), `with_manager` (default true; false when skeleton.launch.py with_sequencer:=true already
   runs a lifecycle_manager_nav, whose node_names must then list the three nodes), `params_file`, `bt_xml`.
 
-Differences found between Nav2 1.3.14 (Jazzy) and 1.5.2 (Lyrical), all absorbed by the single YAML because Nav2
-ignores parameters it does not declare:
-* bt_navigator `error_code_names` (Jazzy) became `error_code_name_prefixes` (Lyrical).
-* controller_server gained `path_handler_plugins` (+ `PathHandler`) and `speed_limit_topic` on Lyrical.
-* `enable_stamped_cmd_vel` exists only on Lyrical (the default there is a stamped cmd_vel); Jazzy ignores it.
+Differences found between Nav2 1.3.14 (Jazzy) and 1.5.2 (Lyrical), absorbed by the single YAML (Nav2 ignores
+parameters it does not declare, except where noted below). Method: run the stack in both containers, compare
+`ros2 param list` of every node with the YAML keys; only `path_handler_plugins` and `PathHandler.*` are not
+declared on Jazzy:
+* bt_navigator: Lyrical aborts on_configure if the old `error_code_names` is set (FATAL, "MUST be removed"), so the
+  YAML omits it; both distributions declare `error_code_name_prefixes`.
+* controller_server gained `path_handler_plugins` on Lyrical (Jazzy ignores it) and, with it, a required plugin; the available class
+  is `nav2_controller::FeasiblePathHandler` (there is no SimplePathHandler: the node dies in on_configure otherwise).
+* `enable_stamped_cmd_vel` is declared on both (verified with `ros2 param list`), so setting it false is real on
+  both, not merely harmless on Jazzy.
 * Lyrical ships more stock BTs (route graph, bounds check); plugin names used here (NavfnPlanner,
   RegulatedPurePursuitController, SimpleGoalChecker, SimpleProgressChecker, ObstacleLayer, InflationLayer,
   StaticLayer) are identical on both. The BT `Timeout` decorator is BehaviorTree.CPP built in on both.
