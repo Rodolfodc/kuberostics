@@ -9,6 +9,7 @@ from typing import Callable, Optional
 
 import rclpy
 from action_msgs.msg import GoalStatus
+from action_msgs.srv import CancelGoal
 from builtin_interfaces.msg import Time
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 # RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical.
@@ -22,11 +23,13 @@ from std_srvs.srv import Trigger
 from vacuum_interfaces.action import CoverRoom, Escape
 from vacuum_interfaces.msg import Notification, StuckEvent, Submode
 
+from vacuum_supervisor.feedback_watchdog import CancelWindow, FeedbackWatchdog
 from vacuum_supervisor.submode_machine import Effect, SubmodeMachine
 
 # QoS of the IA368II contract (specs/000-system/contracts/topics.yaml, profile ia368ii).
 QOS_IA368II = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.VOLATILE)
+WATCHDOG_PERIOD_S = 0.1     # detection resolution of 005-R34 (inside the 0.5 s margin of the test)
 SEVERITY = {'INFO': Notification.INFO, 'WARN': Notification.WARN, 'ERROR': Notification.ERROR}
 
 
@@ -54,6 +57,12 @@ class SupervisorNode(LifecycleNode):
         # stop_requested, so after charging it ends in CHARGED instead of resuming CLEANING).
         self.declare_parameter('start_stop_service', '/myRobot/start_stop')
         self.declare_parameter('dock_command', 'stop')
+        # 005-R34: the supervisor watches the feedback of cover_room (1 Hz from the server). A killed server does
+        # not cancel its Nav2 goal and controller_server keeps publishing, so after feedback_stale_s without
+        # feedback (or a server that is not ready) all /navigate_to_pose goals are cancelled within nav_cancel_s.
+        self.declare_parameter('feedback_stale_s', 2.5)
+        self.declare_parameter('nav_cancel_s', 1.0)
+        self.declare_parameter('nav_action', '/navigate_to_pose')
         self._dock_requester = dock_requester if dock_requester is not None else self._request_dock_default
         self._dock_client = None
         self._dock_timer = None
@@ -71,6 +80,13 @@ class SupervisorNode(LifecycleNode):
         self._pending_cover = False        # goal to send as soon as the server is up
         self._pending_escape_deadline: Optional[float] = None   # monotonic; set while waiting for the server
         self._timers = []
+        self._watchdog = FeedbackWatchdog(float(self.get_parameter('feedback_stale_s').value),
+                                          logger=self.get_logger())
+        self._cancel_window = CancelWindow(float(self.get_parameter('nav_cancel_s').value),
+                                           logger=self.get_logger())
+        self._nav_cancel_client = None
+        self._nav_cancel_inflight = False
+        self._nav_cancels = 0
 
     # ---------------------------------------------------------------- lifecycle
     def on_configure(self, state) -> TransitionCallbackReturn:
@@ -87,6 +103,8 @@ class SupervisorNode(LifecycleNode):
         self._escape_client = ActionClient(self, Escape, self.get_parameter('escape_action').value)
         self._srv_reset = self.create_service(Trigger, '/myRobot/supervisor/reset', self._on_reset)
         self._configure_dock_client()
+        self._nav_cancel_client = self.create_client(
+            CancelGoal, str(self.get_parameter('nav_action').value).rstrip('/') + '/_action/cancel_goal')
         log.info('configured')
         return TransitionCallbackReturn.SUCCESS
 
@@ -96,6 +114,7 @@ class SupervisorNode(LifecycleNode):
         self._timers = [
             self.create_timer(1.0 / self.get_parameter('publish_rate_hz').value, self._tick),
             self.create_timer(1.0 / self.get_parameter('telemetry_rate_hz').value, self._publish_telemetry),
+            self.create_timer(WATCHDOG_PERIOD_S, self._watchdog_tick),
         ]
         self.get_logger().info('activated')
         return TransitionCallbackReturn.SUCCESS
@@ -104,6 +123,7 @@ class SupervisorNode(LifecycleNode):
         self._active = False
         self._cancel_actions()
         self._stop_dock_timer()
+        self._cancel_window.done()
         self._machine.on_mode('')          # back to NONE; the lock is kept
         for t in self._timers:
             self.destroy_timer(t)
@@ -123,6 +143,8 @@ class SupervisorNode(LifecycleNode):
         if self._dock_client is not None:
             self.destroy_client(self._dock_client)
             self._dock_client = None
+        self.destroy_client(self._nav_cancel_client)
+        self._nav_cancel_client = None
         return TransitionCallbackReturn.SUCCESS
 
     # ---------------------------------------------------------------- inputs
@@ -181,6 +203,7 @@ class SupervisorNode(LifecycleNode):
         self._pending_cover = False
         self._pending_escape_deadline = None
         self._cover_seq += 1               # any callback of the goals cancelled below is stale
+        self._watchdog.disarm()
         self._escape_seq += 1
         self._stop_escape_timer()
         for handle in (self._cover_handle, self._escape_handle):
@@ -200,7 +223,8 @@ class SupervisorNode(LifecycleNode):
         seq = self._cover_seq
         goal = CoverRoom.Goal(room_id='', passes=1)
         self.get_logger().info('sending cover_room goal')
-        self._cover_client.send_goal_async(goal).add_done_callback(
+        self._cover_client.send_goal_async(
+            goal, feedback_callback=lambda fb, s=seq: self._on_cover_feedback(s)).add_done_callback(
             lambda fut, s=seq: self._on_cover_accepted(fut, s))
 
     def _on_cover_accepted(self, future, seq: int) -> None:
@@ -213,7 +237,12 @@ class SupervisorNode(LifecycleNode):
             self.get_logger().error('cover_room goal rejected')
             return
         self._cover_handle = handle
+        self._watchdog.arm(time.monotonic())          # 005-R34
         handle.get_result_async().add_done_callback(lambda fut, s=seq: self._on_cover_result(fut, s))
+
+    def _on_cover_feedback(self, seq: int) -> None:
+        if seq == self._cover_seq:
+            self._watchdog.feed(time.monotonic())
 
     def _on_cover_result(self, future, seq: int) -> None:
         status = future.result().status
@@ -221,9 +250,51 @@ class SupervisorNode(LifecycleNode):
         if seq != self._cover_seq:                    # cancelled by us (mode change, stuck): not a result
             return
         self._cover_handle = None
+        self._watchdog.disarm()
         wrapped = future.result()
         ok = status == GoalStatus.STATUS_SUCCEEDED and bool(wrapped.result.success)
         self._apply(self._machine.on_cover_result(success=ok))      # 005-R30 (no-op while the rows are off)
+
+    # ---------------------------------------------------------------- watchdog (005-R34)
+    def _watchdog_tick(self) -> None:
+        now = time.monotonic()
+        reason = self._watchdog.check(now, self._cover_client.server_is_ready())
+        if reason is not None:
+            self._on_cover_lost(reason, now)
+        if self._cancel_window.pending:
+            self._try_cancel_nav(now)
+
+    def _on_cover_lost(self, reason: str, now: float) -> None:
+        self.get_logger().error(f'cover_room server lost ({reason}): cancelling /navigate_to_pose, action failed')
+        self._cover_seq += 1                          # a late result of the lost goal is stale
+        handle, self._cover_handle = self._cover_handle, None
+        if handle is not None:
+            handle.cancel_goal_async()                # best effort: the server may be gone
+        self._cancel_window.start(now)
+        self._try_cancel_nav(now)
+        self._apply(self._machine.on_cover_result(success=False))     # treated as a failed action (005-R30 rows)
+
+    def _try_cancel_nav(self, now: float) -> None:
+        """Cancel request with zero goal id and zero stamp = cancel all goals of the action."""
+        if not self._cancel_window.should_try(now) or self._nav_cancel_inflight:
+            return
+        if not self._nav_cancel_client.service_is_ready():
+            self.get_logger().warning('navigate_to_pose cancel service not ready, will retry')
+            return
+        self._nav_cancel_inflight = True
+        self._nav_cancels += 1
+        self.get_logger().warning('cancelling all navigate_to_pose goals')
+        self._nav_cancel_client.call_async(CancelGoal.Request()).add_done_callback(self._on_nav_cancel_done)
+
+    def _on_nav_cancel_done(self, future) -> None:
+        self._nav_cancel_inflight = False
+        try:
+            code = future.result().return_code
+        except Exception as exc:                      # noqa: B902
+            self.get_logger().error(f'navigate_to_pose cancel failed: {exc!r}')
+            return                                    # the window decides whether to retry
+        self.get_logger().info(f'navigate_to_pose cancel answered (return_code {code})')
+        self._cancel_window.done()
 
     # ---------------------------------------------------------------- docking request (005-R30)
     def _configure_dock_client(self) -> None:
@@ -360,6 +431,7 @@ class SupervisorNode(LifecycleNode):
 
     def _publish_telemetry(self) -> None:
         snap = self._machine.snapshot()
+        snap.update(self._watchdog.snapshot(), nav_cancels=self._nav_cancels)
         status = DiagnosticStatus(
             name=self.get_name(), hardware_id='vacuum',
             level=DiagnosticStatus.ERROR if snap['locked'] else DiagnosticStatus.OK,
