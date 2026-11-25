@@ -231,8 +231,9 @@ class SilentCancelService(Node):
 
 def test_005_R34_unanswered_cancel_does_not_block_the_next_loss():
     rclpy.init()
+    silent = None
     try:
-        sup = SupervisorNode(parameter_overrides=[Parameter('nav_cancel_s', 0.6)])
+        sup = SupervisorNode(parameter_overrides=[Parameter('nav_cancel_s', value=0.6)])
         silent = SilentCancelService()
         executor = MultiThreadedExecutor(num_threads=4)
         executor.add_node(sup)
@@ -249,7 +250,8 @@ def test_005_R34_unanswered_cancel_does_not_block_the_next_loss():
         sup._on_cover_lost('feedback_stale', time.monotonic())     # second loss, the first was never answered
         assert wait_for(lambda: silent.requests > before), 'second loss sent no cancel (stuck in-flight guard)'
     finally:
-        silent.release.set()
+        if silent is not None:
+            silent.release.set()
         sup.trigger_deactivate()
         sup.trigger_cleanup()
         executor.shutdown()
