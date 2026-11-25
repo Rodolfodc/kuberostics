@@ -42,8 +42,8 @@ class FakeNav(Node):
     """`script(index, x, y)` returns REACH, ABORT or HANG for the index-th goal received (0-based).
     REACH moves the fake robot in 0.05 m steps (about 5 m/s at most) and succeeds; HANG waits for a cancel."""
 
-    def __init__(self, script, start=(1.0, 1.0), name='fake_nav2'):
-        super().__init__(name)
+    def __init__(self, script, start=(1.0, 1.0), name='fake_nav2', context=None):
+        super().__init__(name, context=context)
         self.script = script
         self.pose = list(start)
         self.goals = []              # (x, y) of every goal received
@@ -108,7 +108,7 @@ class FakeNav(Node):
 
 
 class MapPublisher(Node):
-    def __init__(self, raster, name='map_publisher'):
-        super().__init__(name)
+    def __init__(self, raster, name='map_publisher', context=None):
+        super().__init__(name, context=context)
         self.pub = self.create_publisher(OccupancyGrid, '/map', LATCHED)
         self.pub.publish(raster_to_grid(raster))

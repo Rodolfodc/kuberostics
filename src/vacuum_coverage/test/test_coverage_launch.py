@@ -7,7 +7,6 @@ generate_test_description. Requirements: 005-R16, R19, R21, R27, R28; node exit 
 """
 import os
 import threading
-import time
 import unittest
 
 import launch_testing
@@ -20,8 +19,7 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from lifecycle_msgs.msg import State
-from lifecycle_msgs.msg import Transition
-from lifecycle_msgs.srv import ChangeState, GetState
+from lifecycle_msgs.srv import GetState
 from rclpy.action import ActionClient
 from rclpy.action.client import GoalStatus
 from rclpy.executors import MultiThreadedExecutor
@@ -46,11 +44,16 @@ def generate_test_description():
 class TestCoverageAlone(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        rclpy.init()
-        cls.nav = FakeNav(lambda i, x, y: REACH)
-        cls.maps = MapPublisher(rect_room(2.0, 2.0))
-        cls.probe = rclpy.create_node('coverage_launch_probe')
-        cls.executor = MultiThreadedExecutor(num_threads=6)
+        # an own context, as the graph tests of vacuum_bringup do: the default one is also used by launch_testing
+        cls.context = rclpy.Context()
+        rclpy.init(context=cls.context, domain_id=int(os.environ['ROS_DOMAIN_ID']))
+        cls.nav = FakeNav(lambda i, x, y: REACH, context=cls.context)
+        cls.maps = MapPublisher(rect_room(2.0, 2.0), context=cls.context)
+        cls.probe = rclpy.create_node('coverage_launch_probe', context=cls.context)
+        # clients are created once: a client created per call can lose the first response while the server
+        # has not matched its reader yet (Fast DDS), which made the first polls time out
+        cls.get_state = cls.probe.create_client(GetState, '/coverage_server/get_state')
+        cls.executor = MultiThreadedExecutor(num_threads=6, context=cls.context)
         for n in (cls.nav, cls.maps, cls.probe):
             cls.executor.add_node(n)
         cls.thread = threading.Thread(target=cls.executor.spin, daemon=True)
@@ -61,41 +64,24 @@ class TestCoverageAlone(unittest.TestCase):
         cls.executor.shutdown()
         for n in (cls.nav, cls.maps, cls.probe):
             n.destroy_node()
-        rclpy.try_shutdown()
+        cls.context.try_shutdown()
         cls.thread.join(timeout=2)
 
     def _state(self):
-        client = self.probe.create_client(GetState, '/coverage_server/get_state')
-        if not client.wait_for_service(timeout_sec=1.0):
+        if not self.get_state.service_is_ready():
             return None
-        future = client.call_async(GetState.Request())
-        return future.result().current_state.id if wait_for(future.done, 5.0) else None
+        future = self.get_state.call_async(GetState.Request())
+        return future.result().current_state.id if wait_for(future.done, 3.0) else None
 
-    def _nudge(self, state):
-        """The launch autostart chain is event driven and, on Jazzy, its first request can be answered after the
-        launch side gave up. If the node is still not active after a grace period, do the next transition by
-        hand: the test is about the node running alone, not about that race."""
-        step = {State.PRIMARY_STATE_UNCONFIGURED: Transition.TRANSITION_CONFIGURE,
-                State.PRIMARY_STATE_INACTIVE: Transition.TRANSITION_ACTIVATE}.get(state)
-        if step is not None:
-            client = self.probe.create_client(ChangeState, '/coverage_server/change_state')
-            if client.wait_for_service(timeout_sec=1.0):
-                request = ChangeState.Request()
-                request.transition.id = step
-                wait_for(client.call_async(request).done, 5.0)
-
-    def _active_within(self, grace_s, total_s):
-        start = time.monotonic()
-
-        def active():
-            state = self._state()
-            if state != State.PRIMARY_STATE_ACTIVE and time.monotonic() - start > grace_s:
-                self._nudge(state)
-            return state == State.PRIMARY_STATE_ACTIVE
-        return wait_for(active, total_s)
+    def _active_within(self, total_s):
+        # Jazzy (Fast DDS) sometimes needs about a minute before the launched process and the test process see each
+        # other's services; the window is long on purpose, the test is quick when discovery is.
+        # No manual transitions here: a second `activate` on an already active node makes rclpy raise and the
+        # process exit on Jazzy, so the launch autostart chain is the only thing that drives the lifecycle.
+        return wait_for(lambda: self._state() == State.PRIMARY_STATE_ACTIVE, total_s)
 
     def test_R28_R21_real_node_reaches_active_and_covers_the_fake_room(self):
-        self.assertTrue(self._active_within(15.0, 60.0),
+        self.assertTrue(self._active_within(180.0),
                         'coverage_server did not become active (autostart)')
         client = ActionClient(self.probe, CoverRoom, '/myRobot/cover_room')
         self.assertTrue(client.wait_for_server(timeout_sec=30.0))
