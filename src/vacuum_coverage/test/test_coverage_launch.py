@@ -146,7 +146,7 @@ class TestCoverageAlone(unittest.TestCase):
         values = self._telemetry_values()
         print('launch test pose sampling: result ratio=%.3f telemetry=%s' % (
             result.result.covered_ratio, {k: values.get(k) for k in (
-                'covered_ratio', 'pose_samples', 'max_pose_hop_m', 'max_poll_gap_s', 'unbridged_hops')}))
+                'covered_ratio', 'pose_samples', 'max_pose_hop_m', 'max_poll_gap_s', 'unbridged_hops', 'skipped_waypoints', 'waypoints_total')}))
         self.assertEqual(result.status, GoalStatus.STATUS_SUCCEEDED)
         self.assertEqual(round(result.result.covered_ratio, 3), float(values['covered_ratio']))
         self.assertEqual(values['unbridged_hops'], '0',
