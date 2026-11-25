@@ -19,6 +19,7 @@ from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from lifecycle_msgs.msg import State
+from diagnostic_msgs.msg import DiagnosticArray
 from lifecycle_msgs.srv import GetState
 from rclpy.action import ActionClient
 from rclpy.action.client import GoalStatus
@@ -47,12 +48,20 @@ class TestCoverageAlone(unittest.TestCase):
         # an own context, as the graph tests of vacuum_bringup do: the default one is also used by launch_testing
         cls.context = rclpy.Context()
         rclpy.init(context=cls.context, domain_id=int(os.environ['ROS_DOMAIN_ID']))
-        cls.nav = FakeNav(lambda i, x, y: REACH, context=cls.context)
+        # 2 m/s: with the 20 Hz pose poll of the node a hop stays under 0.4 m even if the poll stalls to 0.2 s,
+        # well below max_pose_gap_m (1 m)
+        cls.nav = FakeNav(lambda i, x, y: REACH, context=cls.context, step_m=0.02, step_period_s=0.01)
         cls.maps = MapPublisher(rect_room(2.0, 2.0), context=cls.context)
         cls.probe = rclpy.create_node('coverage_launch_probe', context=cls.context)
         # clients are created once: a client created per call can lose the first response while the server
         # has not matched its reader yet (Fast DDS), which made the first polls time out
         cls.get_state = cls.probe.create_client(GetState, '/coverage_server/get_state')
+        cls.telemetry, cls.telemetry_lock = [], threading.Lock()
+
+        def on_telemetry(msg):
+            with cls.telemetry_lock:
+                cls.telemetry.append(msg)
+        cls.probe.create_subscription(DiagnosticArray, '/myRobot/telemetry/coverage_server', on_telemetry, 10)
         cls.executor = MultiThreadedExecutor(num_threads=6, context=cls.context)
         for n in (cls.nav, cls.maps, cls.probe):
             cls.executor.add_node(n)
@@ -70,19 +79,51 @@ class TestCoverageAlone(unittest.TestCase):
     def _state(self):
         if not self.get_state.service_is_ready():
             return None
+        self.ever_ready = True
         future = self.get_state.call_async(GetState.Request())
-        return future.result().current_state.id if wait_for(future.done, 3.0) else None
+        state = future.result().current_state.id if wait_for(future.done, 3.0) else None
+        self.last_state = state
+        return state
 
-    def _active_within(self, total_s):
-        # Jazzy (Fast DDS) sometimes needs about a minute before the launched process and the test process see each
-        # other's services; the window is long on purpose, the test is quick when discovery is.
-        # No manual transitions here: a second `activate` on an already active node makes rclpy raise and the
-        # process exit on Jazzy, so the launch autostart chain is the only thing that drives the lifecycle.
-        return wait_for(lambda: self._state() == State.PRIMARY_STATE_ACTIVE, total_s)
+    def _process_report(self):
+        """Exit codes of the processes that already ended (launch_testing records processes on exit only) and
+        the last lines of everything they printed."""
+        exited = [(e.process_details['name'], e.returncode) for e in self.proc_info]
+        lines = []
+        for name in self.proc_output.process_names():
+            text = b''.join(io.text for io in self.proc_output[name]).decode(errors='replace')
+            lines.append(f'--- {name}\n' + '\n'.join(text.splitlines()[-25:]))
+        return f'exited={exited}\n' + '\n'.join(lines)
+
+    def _wait_active(self, total_s):
+        """Waits for the autostart chain of the launch file. Fails fast, with the reason, when the process died;
+        on a timeout the message tells slow discovery (service never ready) from a startup failure (service ready,
+        node never active). Jazzy's Fast DDS sometimes needs about a minute before two processes see each other,
+        so the window is long; the test is quick when discovery is."""
+        self.ever_ready, self.last_state = False, None
+        died = []
+
+        def active():
+            if any(True for _ in self.proc_info):          # recorded on exit only: the node died
+                died.append(True)
+                return True
+            return self._state() == State.PRIMARY_STATE_ACTIVE
+        wait_for(active, total_s)
+        if died:
+            self.fail('coverage_server exited before becoming active\n' + self._process_report())
+        if self.last_state != State.PRIMARY_STATE_ACTIVE:
+            kind = ('startup failure: the service answered but the node never became active'
+                    if self.ever_ready else 'slow or failed discovery: get_state was never ready')
+            self.fail(f'coverage_server not active after {total_s} s ({kind}); last GetState result='
+                      f'{self.last_state}, service ever ready={self.ever_ready}\n' + self._process_report())
+
+    def _telemetry_values(self):
+        with self.telemetry_lock:
+            msg = self.telemetry[-1] if self.telemetry else None
+        return {kv.key: kv.value for kv in msg.status[0].values} if msg else {}
 
     def test_R28_R21_real_node_reaches_active_and_covers_the_fake_room(self):
-        self.assertTrue(self._active_within(180.0),
-                        'coverage_server did not become active (autostart)')
+        self._wait_active(180.0)
         client = ActionClient(self.probe, CoverRoom, '/myRobot/cover_room')
         self.assertTrue(client.wait_for_server(timeout_sec=30.0))
         accepted = []
@@ -96,14 +137,20 @@ class TestCoverageAlone(unittest.TestCase):
         wait_for(try_goal, 30.0)
         self.assertTrue(accepted, 'goal never accepted')
         result_future = accepted[0].get_result_async()
-        self.assertTrue(wait_for(result_future.done, 60.0))
+        self.assertTrue(wait_for(result_future.done, 120.0))
         result = result_future.result()
+        # telemetry of the finished goal: the ratio, how many poses the node sampled and the worst gaps
+        self.assertTrue(wait_for(lambda: self._telemetry_values().get('state') == 'idle'
+                                 and self._telemetry_values().get('succeeded') == '1', 10.0))
+        values = self._telemetry_values()
+        print('launch test pose sampling: result ratio=%.3f telemetry=%s' % (
+            result.result.covered_ratio, {k: values.get(k) for k in (
+                'covered_ratio', 'pose_samples', 'max_pose_hop_m', 'max_poll_gap_s', 'unbridged_hops')}))
         self.assertEqual(result.status, GoalStatus.STATUS_SUCCEEDED)
-        # The 0.95 target is asserted by the in-process node tests. Across two processes on a loaded Jazzy graph
-        # the TF stream can arrive in bursts, which the pose tracker credits conservatively, so this test only
-        # requires a success (target or degraded) and a ratio above min_acceptable_ratio.
-        self.assertTrue(result.result.success)
-        self.assertGreaterEqual(result.result.covered_ratio, 0.70)
+        self.assertEqual(round(result.result.covered_ratio, 3), float(values['covered_ratio']))
+        self.assertEqual(values['unbridged_hops'], '0',
+                         'the node polled TF too slowly for the fake robot speed: ' + str(values))
+        self.assertGreaterEqual(result.result.covered_ratio, 0.95, str(values))
         self.assertTrue(self.nav.goals)
 
 

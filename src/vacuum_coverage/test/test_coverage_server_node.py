@@ -18,6 +18,8 @@ from rclpy.lifecycle import TransitionCallbackReturn  # noqa: E402
 from rclpy.node import Node  # noqa: E402
 from rclpy.parameter import Parameter  # noqa: E402
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy  # noqa: E402
+from lifecycle_msgs.msg import State, Transition  # noqa: E402
+from lifecycle_msgs.srv import ChangeState, GetState  # noqa: E402
 from vacuum_interfaces.action import CoverRoom  # noqa: E402
 
 from coverage_fixtures import rect_room  # noqa: E402
@@ -301,3 +303,43 @@ def test_R16_two_simultaneous_goals_accept_exactly_one(system):
     accepted = [f.result() for f in futures if f.result().accepted]
     assert len(accepted) == 1
     assert wait_for(accepted[0].cancel_goal_async().done, 5.0)       # do not leave the goal hanging
+
+
+def _transition(s, transition_id):
+    """Sends a ChangeState request through the real lifecycle service; returns Response.success."""
+    client = s.probe.create_client(ChangeState, '/coverage_server/change_state')
+    assert client.wait_for_service(timeout_sec=10.0)
+    request = ChangeState.Request()
+    request.transition.id = transition_id
+    for _ in range(5):                  # a client that is new to the graph can miss its first response
+        future = client.call_async(request)
+        if wait_for(future.done, 3.0):
+            return future.result().success
+    raise AssertionError('no response from the lifecycle service')
+
+
+def _state(s):
+    client = s.probe.create_client(GetState, '/coverage_server/get_state')
+    assert client.wait_for_service(timeout_sec=10.0)
+    for _ in range(5):
+        future = client.call_async(GetState.Request())
+        if wait_for(future.done, 3.0):
+            return future.result().current_state.id
+    raise AssertionError('no response from get_state')
+
+
+def test_R27_redundant_lifecycle_transitions_are_refused_and_the_node_survives(system):
+    """Result recorded (rclpy of Jazzy raises out of the service callback for an impossible transition, which
+    ended the process; Lyrical answers success=false): the node overrides the callback so both distros answer
+    success=false and keep running, which keeps lifecycle manager retries safe."""
+    s = system()
+    s.up()
+    assert _state(s) == State.PRIMARY_STATE_ACTIVE
+    assert _transition(s, Transition.TRANSITION_ACTIVATE) is False        # activate while active
+    assert _transition(s, Transition.TRANSITION_CONFIGURE) is False       # configure while active
+    assert _state(s) == State.PRIMARY_STATE_ACTIVE                         # still alive and unchanged
+    assert _transition(s, Transition.TRANSITION_DEACTIVATE) is True
+    assert _transition(s, Transition.TRANSITION_DEACTIVATE) is False      # deactivate while inactive
+    assert _transition(s, Transition.TRANSITION_CONFIGURE) is False       # configure while configured
+    assert _transition(s, Transition.TRANSITION_ACTIVATE) is True         # and the node still works
+    assert _state(s) == State.PRIMARY_STATE_ACTIVE

@@ -74,6 +74,9 @@ class CoverageRun:
         self._session: Optional[CoverageSession] = None
         self._last_pose: Optional[Tuple[float, float]] = None
         self.region_source = ''
+        self.pose_samples = 0
+        self.max_hop_m = 0.0          # largest distance between two consecutive poses of the goal
+        self.unbridged_hops = 0       # hops longer than max_pose_gap_m: credited at their end only
 
     # ---- goal lifecycle -------------------------------------------------------------------------------
     def begin(self, t: float, raster: Raster, robot_xy: Tuple[float, float], room_id: str, passes: int,
@@ -82,6 +85,7 @@ class CoverageRun:
         (the node rejects the goal)."""
         self._room_id = room_id
         self._last_pose = None
+        self.pose_samples, self.max_hop_m, self.unbridged_hops = 0, 0.0, 0
         if self._store.matches(room_id, t):
             saved = self._store.take(room_id, t)
             self._session = saved
@@ -105,9 +109,14 @@ class CoverageRun:
         segment (a pose stream sampled too sparsely); a longer jump (relocalisation) credits only its end."""
         tracker = self.session.tracker
         last = self._last_pose
-        if last is not None and math.hypot(x - last[0], y - last[1]) <= self._max_gap:
+        self.pose_samples += 1
+        hop = 0.0 if last is None else math.hypot(x - last[0], y - last[1])
+        self.max_hop_m = max(self.max_hop_m, hop)
+        if last is not None and hop <= self._max_gap:
             tracker.mark_segment(last, (x, y))
         else:
+            if last is not None:
+                self.unbridged_hops += 1
             tracker.mark_pose(x, y)
         self._last_pose = (x, y)
 

@@ -40,11 +40,12 @@ def raster_to_grid(raster, stamp=None) -> OccupancyGrid:
 
 class FakeNav(Node):
     """`script(index, x, y)` returns REACH, ABORT or HANG for the index-th goal received (0-based).
-    REACH moves the fake robot in 0.05 m steps (about 5 m/s at most) and succeeds; HANG waits for a cancel."""
+    REACH moves the fake robot in 0.05 m steps (`step_m` per `step_period_s`, 5 m/s by default) and succeeds; HANG waits for a cancel."""
 
-    def __init__(self, script, start=(1.0, 1.0), name='fake_nav2', context=None):
+    def __init__(self, script, start=(1.0, 1.0), name='fake_nav2', context=None, step_m=0.05, step_period_s=0.01):
         super().__init__(name, context=context)
         self.script = script
+        self.step_m, self.step_period_s = step_m, step_period_s
         self.pose = list(start)
         self.goals = []              # (x, y) of every goal received
         self.cancel_times = []       # time.monotonic() of every cancel request
@@ -94,13 +95,13 @@ class FakeNav(Node):
                 goal_handle.abort()
                 return NavigateToPose.Result()
             sx, sy = self.pose
-            n = max(1, int(math.hypot(p.x - sx, p.y - sy) / 0.05))
+            n = max(1, int(math.hypot(p.x - sx, p.y - sy) / self.step_m))
             for i in range(1, n + 1):
                 if goal_handle.is_cancel_requested:
                     goal_handle.canceled()
                     return NavigateToPose.Result()
                 self.pose[:] = [sx + (p.x - sx) * i / n, sy + (p.y - sy) * i / n]
-                time.sleep(0.01)
+                time.sleep(self.step_period_s)
             goal_handle.succeed()
             return NavigateToPose.Result()
         finally:

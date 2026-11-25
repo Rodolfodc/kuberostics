@@ -101,8 +101,23 @@ class CoverageServerNode(LifecycleNode):
         self._state = 'unconfigured'
         self._ratio = 0.0
         self._snapshot = {}
+        self._max_poll_gap_s = 0.0
+        self._pose_stats = {'pose_samples': 0, 'max_pose_hop_m': 0.0, 'unbridged_hops': 0}
 
-    # ---- lifecycle --------------------------------------------------------------------------------------
+    # ---- lifecycle ----
+    def _LifecycleNodeMixin__on_change_state(self, request, response):  # noqa: N802 - overrides the rclpy callback
+        """A redundant or impossible transition (activate while active, configure while configured) must answer
+        success=false. Lyrical's rclpy does that; Jazzy's raises out of the service callback, which used to end
+        the process (found in the launch test). The service is registered with this attribute, so the override
+        is picked up on both distros; if a future rclpy renames it, `spin_resilient` is the backstop."""
+        try:
+            return super()._LifecycleNodeMixin__on_change_state(request, response)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().warning(
+                f'transition {request.transition.id} refused in state {self._state}: {type(exc).__name__}')
+            response.success = False
+            return response
+----------------------------------------------------------------------------------
     def on_configure(self, state) -> TransitionCallbackReturn:
         values = {name: self.get_parameter(name).value for name in CONFIG_PARAMS}
         try:
@@ -242,6 +257,8 @@ class CoverageServerNode(LifecycleNode):
         self._set_state('covering')
         self._publish_path(0)
         shown_pass = 0
+        last_poll = 0.0
+        self._max_poll_gap_s = 0.0
         next_feedback = next_covered = 0.0
         result = CoverRoom.Result(success=False, covered_ratio=0.0)
         try:
@@ -266,6 +283,8 @@ class CoverageServerNode(LifecycleNode):
                 pose = self._pose()
                 if pose is not None:
                     run.on_pose(*pose)
+                    self._max_poll_gap_s = max(self._max_poll_gap_s, t - last_poll) if last_poll else 0.0
+                    last_poll = t
                 with self._nav_lock:
                     outcome, self._nav_outcome = self._nav_outcome, None
                 if outcome is not None:
@@ -273,6 +292,8 @@ class CoverageServerNode(LifecycleNode):
                 step = run.step(t)
                 self._ratio = float(run.covered_ratio)
                 self._snapshot = run.session.snapshot()
+                self._pose_stats = {'pose_samples': run.pose_samples, 'max_pose_hop_m': round(run.max_hop_m, 3),
+                                    'unbridged_hops': run.unbridged_hops}
                 if step.kind is StepKind.SEND:
                     self._send_nav(step.waypoint)
                     if step.waypoint.pass_index != shown_pass:
@@ -303,6 +324,7 @@ class CoverageServerNode(LifecycleNode):
         run.end()
         self._publish_covered(run)
         result = CoverRoom.Result(success=bool(step.success), covered_ratio=float(run.covered_ratio))
+        self._ratio = result.covered_ratio
         if step.success:
             self._counters['succeeded'] += 1
             if step.degraded:
@@ -398,6 +420,8 @@ class CoverageServerNode(LifecycleNode):
         values['skipped_waypoints'] = self._snapshot.get('skipped_waypoints', 0)
         values['waypoints_total'] = self._snapshot.get('waypoints_total', 0)
         values['current_index'] = self._snapshot.get('current_index', 0)
+        values.update(self._pose_stats)
+        values['max_poll_gap_s'] = round(self._max_poll_gap_s, 3)
         status = DiagnosticStatus(
             name=self.get_name(), hardware_id='vacuum', level=DiagnosticStatus.OK, message=self._state,
             values=[KeyValue(key='state', value=self._state)] + [
@@ -407,15 +431,27 @@ class CoverageServerNode(LifecycleNode):
         self._pub_telemetry.publish(array)
 
 
+def spin_resilient(executor, node) -> None:
+    """Spins until shutdown; an exception of one callback is logged and does not end the process."""
+    while rclpy.ok():
+        try:
+            executor.spin()
+            return
+        except KeyboardInterrupt:
+            return
+        except Exception as exc:  # noqa: BLE001 - backstop, the guarded callbacks should not get here
+            if not rclpy.ok():
+                return
+            node.get_logger().error(f'callback raised {type(exc).__name__}: {exc}; spinning on')
+
+
 def main(args=None) -> None:
     rclpy.init(args=args)
     node = CoverageServerNode()
     executor = MultiThreadedExecutor(num_threads=6)
     executor.add_node(node)
     try:
-        executor.spin()
-    except KeyboardInterrupt:
-        pass
+        spin_resilient(executor, node)
     finally:
         node.destroy_node()
         rclpy.try_shutdown()

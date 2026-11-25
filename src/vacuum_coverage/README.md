@@ -31,6 +31,17 @@ stays reserved for the stub. It publishes `/myRobot/coverage/path`, `/myRobot/co
   or another goal is running. `configure` and `activate` never wait for Nav2 (core starts before nav, 005-R35).
 - Result: success at `covered_ratio >= 0.95`; degraded success (`success=true`, `covered_ratio` below 0.95) from
   0.70; failure below that, on too many skipped waypoints or on `coverage_timeout_s`.
+- Lifecycle: a redundant or impossible transition (activate while active, configure while configured) answers
+  `success=false` and the node keeps running (test `test_R27_redundant_lifecycle_transitions...`). Recorded
+  result: Lyrical's rclpy already does that; Jazzy's rclpy raises out of the `change_state` service callback, which
+  ended the process (seen in the launch test). The node overrides the callback to catch it, and `main` spins with
+  `spin_resilient` as a backstop, so lifecycle manager retries are safe on both distros.
+- Known limitation, pose sampling is poll-based: `covered_ratio` credits the cells under the poses the decision
+  loop reads from TF every 0.05 s; hops up to `max_pose_gap_m` (1 m, constant of `CoverageRun`) are bridged with a
+  straight segment and longer ones credit only their end. Robot speed times the largest poll gap must therefore stay
+  under 1 m (0.2 m/s real robot: no issue; the fake robot of the tests runs at 2 m/s in the launch test, 5 m/s in
+  the in-process tests). Telemetry reports `pose_samples`, `max_pose_hop_m`, `max_poll_gap_s` and `unbridged_hops`
+  to check it. Node-side fix if it ever matters: also sample on TF or odometry callbacks, not only in the loop.
 - Run alone: `ros2 launch vacuum_coverage coverage.launch.py` (autostart configure + activate); needs `/map`,
   TF `map -> base_link` and a `NavigateToPose` server (the tests use fakes).
 - Tests: `test_coverage_run.py` (pure), `test_coverage_server_node.py` (in-process rclpy with a fake Nav2) and
