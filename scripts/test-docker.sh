@@ -4,6 +4,7 @@
 # which is where they are tracked (twist_mux, python3-pytest, python3-yaml, ...).
 # Usage: scripts/test-docker.sh [jazzy|lyrical|both]        (default both)
 #        ROS_IMAGE=<image> scripts/test-docker.sh lyrical    overrides the image
+#        DOCKER_CPUS=<n> scripts/test-docker.sh lyrical      limits the container to n CPUs (reproduces loaded runners)
 #        TEST_OUT=<dir> scripts/test-docker.sh lyrical       also copies the XML results and logs to <dir>/<distro>/
 # Exit code 0 only if every selected distro passes.
 set -euo pipefail
@@ -23,7 +24,9 @@ run() {
     mkdir -p "$TEST_OUT/$distro"
     outargs=(-v "$(cd "$TEST_OUT/$distro" && pwd)":/out)
   fi
-  docker run --rm -e DISTRO="$distro" -v "$REPO":/repo:ro ${outargs[@]+"${outargs[@]}"} "$image" bash -c '
+  local cpuargs=()
+  [ -n "${DOCKER_CPUS:-}" ] && cpuargs=(--cpus="$DOCKER_CPUS")
+  docker run --rm ${cpuargs[@]+"${cpuargs[@]}"} -e DISTRO="$distro" -v "$REPO":/repo:ro ${outargs[@]+"${outargs[@]}"} "$image" bash -c '
     set -e
     mkdir -p /ws && cd /repo && tar --exclude=./src/deps --exclude=./build --exclude=./install --exclude=./log \
       --exclude=./.git --exclude=./.sim --exclude=./.venv -cf - . | tar -xf - -C /ws
