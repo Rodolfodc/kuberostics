@@ -2,7 +2,8 @@
 -- Derived from the P3 (slam_toolbox) laser script. Differences: no graph object calls (debug only, they cost time),
 -- the unused point cloud is not computed, and the sweep can run every Nth step.
 -- Contract kept: float array signal "distSignal" on /myRobot, default 452 beams, -90..+90.4 deg, 0 for a miss
--- (the proximity sensor returns no distance on a miss in the House scene; the stock script's fallback is kept).
+-- (measured: handleProximitySensor returns 0 for a miss in the House scene, so distSignal had zeros and never the
+-- stock script's range_max + 1 fallback; the zero is now set explicitly from the detection flag).
 -- Settings (model customData on LaserScanner_2D, optional):
 --   scanEveryN  (int, default 1)   sweep only every Nth simulation step; distSignal keeps its last value in between
 --   (diagnostic output: float signal laserSweepSeconds = wall time of the last sweep)
@@ -14,7 +15,6 @@ function sysCall_init()
     laserHandle = sim.getObjectHandle("LaserScannerLaser_2D")
     jointHandle = sim.getObjectHandle("LaserScannerJoint_2D")
     modelHandle = sim.getObjectHandle(sim.handle_self)
-    range_max = 10 -- scan can measure up to this range
     stepCounter = 0
 end
 
@@ -39,8 +39,8 @@ function sysCall_sensing()
         sim.setJointPosition(jointHandle, p)
         p = p + stepSize
         local r, dist = sim.handleProximitySensor(laserHandle)
-        if dist == nil then
-            dist = range_max + 1
+        if r <= 0 or dist == nil then
+            dist = 0 -- miss
         end
         distance[#distance + 1] = dist
     end

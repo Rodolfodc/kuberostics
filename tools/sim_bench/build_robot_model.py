@@ -23,6 +23,9 @@ ap.add_argument('--out', default=os.path.join(REPO, '.sim', 'myRobotLaserFixed.t
 ap.add_argument('--base', help='start from an existing combined model (skips steps 1-2)')
 a = ap.parse_args()
 ab = lambda p: os.path.abspath(p)
+for _opt, _path in (('--base', a.base),) if a.base else (('--robot', a.robot),):
+    if not os.path.isfile(_path):
+        raise SystemExit(f'{_opt} file not found: {ab(_path)} (export it first, see models/README.md)')
 sim = RemoteAPIClient().require('sim')
 if sim.getSimulationState() != sim.simulation_stopped:
     sim.stopSimulation()
