@@ -14,7 +14,9 @@ src/vacuum_coverage/test/
   test_escape_policy.py   # fixed vectors; synthetic weights + golden committed under test/data/ (tiny, not a trained policy)
 rl/                       # rl-trainer only
   README.md               # how to build, train, evaluate; results table (R20) and go/no-go (R23)
-  requirements.txt        # pinned: gymnasium==1.4.0, stable-baselines3==2.9.2, torch==2.15.0 (CPU), numpy, pyyaml, pytest
+  requirements.txt        # pinned: gymnasium==1.4.0, stable-baselines3==2.9.2, torch==2.15.0, numpy, pyyaml, pytest;
+                          #   torch from the PyTorch CPU index (--index-url .../whl/cpu): the default Linux wheel pulls
+                          #   the CUDA dependencies (several GB). A 2.15.0 CPU wheel on that index is NOT verified.
   run.sh                  # docker run python:3.12-slim --cpus=4, repo mounted read-only, rl/runs mounted rw,
                           #   PYTHONPATH=src/vacuum_coverage (imports escape_policy, escape_script, scan_utils)
   configs/env_v1.yaml     # geometry, randomization ranges, reward weights, scenario mix, seed splits
@@ -46,7 +48,8 @@ The env and the node call it with the same arguments. The env passes its simulat
 node passes `LaserScan.ranges` and the odometry pose. Neither does any other preprocessing.
 
 `PolicyInference.load(path) -> (ok, reason)`; `act(obs) -> int`; `logits(obs) -> list[float]`. It is a plain
-matrix product with `tanh`. The PPO actor is `obs -> Linear(43,64) -> tanh -> Linear(64,64) -> tanh -> Linear(64,8)`, the
+matrix product with `tanh`, computed in float32 like SB3, so that near-ties do not flip the argmax. As a guard, the
+golden rows whose top-2 logit margin is below 1e-4 are excluded from the 100 % argmax check and counted separately. The PPO actor is `obs -> Linear(43,64) -> tanh -> Linear(64,64) -> tanh -> Linear(64,8)`, the
 SB3 default `pi=[64,64]` (`mlp_extractor.policy_net` plus `action_net`). The export reads these modules from the PPO
 policy's `state_dict`. No `VecNormalize` is used: the observation is already in [0, 1], so no running statistics need
 exporting.
@@ -133,7 +136,7 @@ fitted numbers and the summary go into `rl/configs/env_v1.yaml` and `rl/README.m
 | R16 | `LoadGate` truth table (mode x goal running x sha changed x file valid) |
 | R14, R15, R17 | Core test of the policy-then-fallback sequencer with a fake policy (always "forward"; raises an error; yields NaN). The node test uses a fake mode topic, fake scan and odometry, and asserts that only `mux/escape` is published, the result is `rl` or `scripted`, and that nothing loads outside CHARGED. |
 | R01 to R07, R10 | `rl/tests/`: `check_env`; determinism by seed; the kinematics of each action in free space; the laser against analytic distances; that contact never ends an episode; that each class starts in contact; the scripted adapter runs to a result |
-| R12, R13 parity | `rl/tests/test_export.py`: export then reload with `PolicyInference`, 100 % argmax match on `golden.json` |
+| R12, R13 parity | `rl/tests/test_export.py`: export then reload with `PolicyInference`, 100 % argmax match on the `golden.json` rows with a top-2 margin of at least 1e-4 |
 
 ## Risks
 

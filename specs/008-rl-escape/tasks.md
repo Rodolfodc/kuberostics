@@ -69,7 +69,7 @@ If the go/no-go fails, T812 to T814 are dropped, `strategy` stays `scripted`, an
   runs in the background with a CPU limit. Owner: rl-trainer. Depends on: T801, T805 (T808 if it is ready; otherwise train with the
   wide ranges and retrain after T808). (008-R11)
 - [ ] **T810** `export.py`: weights JSON, `.sha256` sidecar and `golden.json`. Add a parity test that reloads with `PolicyInference`
-  (100 % argmax, logits within 1e-4). Owner: rl-trainer. Depends on: T809, T801. (008-R12, R13)
+  (logits within 1e-4; 100 % argmax on rows with a top-2 margin of at least 1e-4). Owner: rl-trainer. Depends on: T809, T801. (008-R12, R13)
 - [ ] **T811** `evaluate.py` on the test seeds with all four configurations of the plan. Paste the table into `rl/README.md`
   and give the go/no-go verdict of R23 with its numbers. Owner: rl-trainer. Depends on: T806, T810. (008-R20, R23)
 

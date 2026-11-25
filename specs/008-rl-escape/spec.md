@@ -76,7 +76,7 @@ Shared observation and inference (`vacuum_coverage/core/escape_policy.py`, owner
 | 008-R08 | `ObservationBuilder` (observation version 1) shall produce 43 float32 values in [0, 1]: (a) 30 sectors. Sector `i` covers beam indices `floor(i*n/30)` to `floor((i+1)*n/30) - 1` of the live scan (`n` beams; 452 expected). Its value is the minimum valid range, where NaN and values <= 0 are dropped and `inf` is kept; an empty sector or `inf` becomes `range_cap_m` (2.0 m). The value is clipped to [0, `range_cap_m`] and divided by `range_cap_m`. (b) The previous action, one-hot over 8 (all zero at the start). (c) The elapsed time of the policy phase divided by `primary_budget_s`, clipped to [0, 1]. (d) The odometry displacement since the goal start, in the start frame: `(dx, dy) / 0.5 m` clipped to [-1, 1] and mapped to [0, 1], then `(sin dyaw + 1) / 2` and `(cos dyaw + 1) / 2`. The builder takes plain lists and floats and no messages. | unit (fixed vectors) |
 | 008-R09 | Action table version 1 (`v = reverse_speed_m_s` 0.15, `w = turn_speed_rad_s` 1.0, the same speeds the script uses, so the comparison is fair and the 005-R11 c limit check holds): 0 forward `(+v, 0)`, 1 reverse `(-v, 0)`, 2 left `(0, +w)`, 3 right `(0, -w)`, 4 forward-left `(+v, +w/2)`, 5 forward-right `(+v, -w/2)`, 6 reverse-left `(-v, +w/2)`, 7 reverse-right `(-v, -w/2)`. | unit |
 | 008-R12 | The export shall write a JSON weights file with: `format: "vacuum-escape-policy/1"`, `obs_version: 1`, `n_obs: 43`, `n_actions: 8`, `action_table_version: 1`, the actor layers in order (`W` as a list of rows, `b`, `activation` `tanh` or `linear`), `range_cap_m`, `n_sectors`, the training run id, the git sha and the config hash. A sidecar `<file>.sha256` holds the file hash. Weights are not committed (`.gitignore` rule; they are supplied by path, as the run-time models are). The export shall also write `golden.json` with at least 200 observations (taken from test-seed episodes) and the logits and argmax that SB3 computes for each. | unit (rl) |
-| 008-R13 | `PolicyInference` shall load the file of 008-R12. It shall reject it, with a reason, on a wrong `format`, `obs_version`, `n_obs`, `n_actions` or layer shapes, on a non-finite value, or on a sha256 that differs from the sidecar. `act(obs)` shall return the argmax of the logits (ties go to the lowest index), so the result is deterministic. On `golden.json` the action shall match SB3 on 100 % of the rows and the logits shall be within 1e-4. It imports numpy and the standard library only. | unit (both sides: rl with SB3, ros-dev with a committed synthetic weights + golden pair) |
+| 008-R13 | `PolicyInference` shall load the file of 008-R12. It shall reject it, with a reason, on a wrong `format`, `obs_version`, `n_obs`, `n_actions` or layer shapes, on a non-finite value, or on a sha256 that differs from the sidecar. `act(obs)` shall return the argmax of the logits (ties go to the lowest index), so the result is deterministic. It computes in float32. On `golden.json` the logits shall be within 1e-4 of SB3, and the action shall match SB3 on 100 % of the rows whose top-2 logit margin is at least 1e-4; the near-tie rows are counted and reported. It imports numpy and the standard library only. | unit (both sides: rl with SB3, ros-dev with a committed synthetic weights + golden pair) |
 
 `escape_server` with `strategy: policy` (owner ros-dev, in the real node of T509).
 
@@ -96,7 +96,7 @@ Calibration and evaluation.
 | 008-R20 | On test seeds (at least 200 episodes per class), the evaluation shall report for the policy (policy phase only, 5 s) and for `EscapeScript` (primary phase alone, and primary + fallback): success rate, median and p90 time to success, truncation rate, contact steps and `free_after`. It shall report these per class and in total, with 3 training seeds and their spread. | script + committed summary table (numbers only; raw CSVs stay local) |
 | 008-R21 | Needs simulator: on the same at least 20 stuck poses as T515, each strategy (`scripted`, `policy`) shall run once per pose through the real `escape_server` with `use_sim_time`. The run shall record success, duration, final phase, collisions and whether a new `StuckEvent` follows within 10 s of resuming. The default `strategy` changes to `policy` only on the project owner's decision and only if the policy's success rate is at least the scripted one and it has no more failed escapes. | sim (local) + report |
 | 008-R22 | The ROS parts (`escape_policy.py`, the `escape_server` changes and their tests) shall build and pass on Jazzy and Lyrical (Art. X). Training (`rl/`) runs in its own Python 3.12 container, outside ROS (Q-05). The robot never imports torch or SB3. | CI matrix |
-| 008-R23 | Go/no-go on **2026-12-01**. If by then the policy's 2D test success rate (008-R20, policy phase) is below the success rate of `EscapeScript`'s primary phase on the same seeds, or 008-R13 parity fails, the RL policy is cut (Art. IX.3). `strategy` stays `scripted`, and the negative result is reported with its numbers. | report |
+| 008-R23 | Go/no-go on **2026-12-01**. If by then the policy's 2D test success rate (008-R20, policy phase) is below the success rate of `EscapeScript`'s primary phase on the same seeds, or its `free_after` rate is below that of `EscapeScript`'s primary phase (so a policy that only turns until the front sector reads 0.40 m, still facing the trap, does not pass), or 008-R13 parity fails, the RL policy is cut (Art. IX.3). `strategy` stays `scripted`, and the negative result is reported with its numbers. | report |
 
 ## Contract needs (not applied here; for the next serialized contract batch, Art. I)
 
@@ -111,6 +111,17 @@ New public parameters of `escape_server` (`topics.yaml`, `parameters.escape_serv
 New consumer: `escape_server` subscribes to `/myRobot/behaviour/mode` (frozen IA368II topic, QoS `ia368ii`). Add it to the consumers of that entry.
 
 Unchanged: `Escape.action` (the result `strategy` uses the existing value `"rl"`), `StuckEvent.msg`, `/myRobot/mux/escape`.
+
+## Amendments to spec 005 required by this spec (not applied; for the architect)
+
+Amendment B1 (from 008-R14 and R15). These amendments apply only when the T812 integration happens. If the
+go/no-go fails, they are dropped.
+1. 005-R08 to R11 apply where `strategy` is `scripted` (the default) or where no valid weights are loaded. Where
+   `strategy` is `policy`, the policy phase (008-R14) replaces the attempts of R08 to R10, and R11 (the fallback) runs
+   after it.
+2. 005-R13: the result `strategy` is `"scripted"` or `"rl"`, as 008-R14 and R15 define.
+3. 005-R33: the escape launch gains the arguments `strategy` (default `scripted`) and `policy_path` (default `""`).
+4. 005-R12 and 005-R14 are unchanged.
 
 ## Follow-ups outside this change (architect)
 
