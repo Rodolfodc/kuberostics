@@ -38,6 +38,8 @@ from vacuum_mapping.core.types import Raster, classify_occupancy
 
 MAP_FRAME = 'map'
 BASE_FRAME = 'base_link'
+POSE_PERIOD_S = 0.02            # pose sampler timer, independent of the decision loop (a stalled loop must not
+                                # leave holes in the covered mask)
 LOOP_PERIOD_S = 0.05            # decision loop of a goal; bounds the reaction time of cancel and timeouts
 FEEDBACK_PERIOD_S = 0.5         # 005-R34: 1 Hz or faster
 COVERED_PERIOD_S = 1.0
@@ -96,12 +98,16 @@ class CoverageServerNode(LifecycleNode):
         self._nav_outcome: Optional[bool] = None
         self._wake = threading.Event()
         self._timer = None
+        self._sampler = None
         self._counters = {'goals': 0, 'succeeded': 0, 'failed': 0, 'cancelled': 0, 'degraded': 0,
                           'resumed': 0, 'rejected': 0}
         self._state = 'unconfigured'
         self._ratio = 0.0
         self._snapshot = {}
         self._max_poll_gap_s = 0.0
+        self._last_sample_t = 0.0
+        self._sampling = False
+        self._run_lock = threading.RLock()
         self._pose_stats = {'pose_samples': 0, 'max_pose_hop_m': 0.0, 'unbridged_hops': 0}
 
     # ---- lifecycle ----
@@ -149,6 +155,7 @@ class CoverageServerNode(LifecycleNode):
         self._active = True
         self._timer = self.create_timer(1.0 / self.get_parameter('telemetry_rate_hz').value, self._telemetry,
                                         callback_group=self._group)
+        self._sampler = self.create_timer(POSE_PERIOD_S, self._sample_pose, callback_group=self._group)
         self._set_state('idle')
         return TransitionCallbackReturn.SUCCESS
 
@@ -160,6 +167,9 @@ class CoverageServerNode(LifecycleNode):
         if self._timer is not None:
             self.destroy_timer(self._timer)
             self._timer = None
+        if self._sampler is not None:
+            self.destroy_timer(self._sampler)
+            self._sampler = None
         super().on_deactivate(state)
         self._set_state('inactive')
         return TransitionCallbackReturn.SUCCESS
@@ -192,6 +202,22 @@ class CoverageServerNode(LifecycleNode):
     @property
     def has_map(self) -> bool:
         return self._raster is not None
+
+    def _sample_pose(self) -> None:
+        """Feeds the tracker from TF while a goal runs. Its own timer, not the decision loop: the loop can be
+        held up by publishes and Nav2 calls, and a hop longer than max_pose_gap_m is not credited."""
+        if not self._sampling:
+            return
+        pose = self._pose()
+        if pose is None:
+            return
+        t = self._now()
+        with self._run_lock:
+            if self._sampling and self._run is not None:
+                self._run.on_pose(*pose)
+                if self._last_sample_t:
+                    self._max_poll_gap_s = max(self._max_poll_gap_s, t - self._last_sample_t)
+                self._last_sample_t = t
 
     def _on_map(self, msg: OccupancyGrid) -> None:
         self._raster = grid_to_raster(msg)
@@ -256,8 +282,9 @@ class CoverageServerNode(LifecycleNode):
         self._set_state('covering')
         self._publish_path(0)
         shown_pass = 0
-        last_poll = 0.0
+        self._last_sample_t = 0.0
         self._max_poll_gap_s = 0.0
+        self._sampling = True
         next_feedback = next_covered = 0.0
         result = CoverRoom.Result(success=False, covered_ratio=0.0)
         try:
@@ -279,20 +306,16 @@ class CoverageServerNode(LifecycleNode):
                     goal_handle.abort()
                     self.get_logger().warning('goal aborted: node deactivated')
                     return result
-                pose = self._pose()
-                if pose is not None:
-                    run.on_pose(*pose)
-                    self._max_poll_gap_s = max(self._max_poll_gap_s, t - last_poll) if last_poll else 0.0
-                    last_poll = t
                 with self._nav_lock:
                     outcome, self._nav_outcome = self._nav_outcome, None
-                if outcome is not None:
-                    run.goal_result(t, outcome)
-                step = run.step(t)
-                self._ratio = float(run.covered_ratio)
-                self._snapshot = run.session.snapshot()
-                self._pose_stats = {'pose_samples': run.pose_samples, 'max_pose_hop_m': round(run.max_hop_m, 3),
-                                    'unbridged_hops': run.unbridged_hops}
+                with self._run_lock:             # the pose sampler timer feeds the same tracker
+                    if outcome is not None:
+                        run.goal_result(t, outcome)
+                    step = run.step(t)
+                    self._ratio = float(run.covered_ratio)
+                    self._snapshot = run.session.snapshot()
+                    self._pose_stats = {'pose_samples': run.pose_samples, 'max_pose_hop_m': round(run.max_hop_m, 3),
+                                        'unbridged_hops': run.unbridged_hops}
                 if step.kind is StepKind.SEND:
                     self._send_nav(step.waypoint)
                     if step.waypoint.pass_index != shown_pass:
@@ -316,6 +339,7 @@ class CoverageServerNode(LifecycleNode):
             goal_handle.abort()
             return result
         finally:
+            self._sampling = False
             self._busy = False
             self._set_state('idle' if self._active else 'inactive')
 

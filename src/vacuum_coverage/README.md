@@ -36,12 +36,13 @@ stays reserved for the stub. It publishes `/myRobot/coverage/path`, `/myRobot/co
   result: Lyrical's rclpy already does that; Jazzy's rclpy raises out of the `change_state` service callback, which
   ended the process (seen in the launch test). The node overrides the callback to catch it, and `main` spins with
   `spin_resilient` as a backstop, so lifecycle manager retries are safe on both distros.
-- Known limitation, pose sampling is poll-based: `covered_ratio` credits the cells under the poses the decision
-  loop reads from TF every 0.05 s; hops up to `max_pose_gap_m` (1 m, constant of `CoverageRun`) are bridged with a
-  straight segment and longer ones credit only their end. Robot speed times the largest poll gap must therefore stay
-  under 1 m (0.2 m/s real robot: no issue; the fake robot of the tests runs at 2 m/s in the launch test, 5 m/s in
-  the in-process tests). Telemetry reports `pose_samples`, `max_pose_hop_m`, `max_poll_gap_s` and `unbridged_hops`
-  to check it. Node-side fix if it ever matters: also sample on TF or odometry callbacks, not only in the loop.
+- Pose sampling: `covered_ratio` credits the cells under the poses read from TF by a 50 Hz timer of its own
+  (`POSE_PERIOD_S`), not by the decision loop. Hops up to `max_pose_gap_m` (1 m, constant of `CoverageRun`) are
+  bridged with a straight segment; a longer jump credits only its end. Robot speed times the largest gap between
+  samples must stay under 1 m (0.2 m/s real robot: no issue). Telemetry reports `pose_samples`, `max_pose_hop_m`,
+  `max_poll_gap_s` and `unbridged_hops` to check it. History: while the poses were read inside the decision loop, a
+  launch test on Jazzy measured a loop gap of 1.9 s (3 unbridged hops, ratio 0.74); the separate sampler removed
+  the dependence on that loop. A further node-side step, if ever needed, is sampling on TF callbacks.
 - Run alone: `ros2 launch vacuum_coverage coverage.launch.py` (autostart configure + activate); needs `/map`,
   TF `map -> base_link` and a `NavigateToPose` server (the tests use fakes).
 - Tests: `test_coverage_run.py` (pure), `test_coverage_server_node.py` (in-process rclpy with a fake Nav2) and
