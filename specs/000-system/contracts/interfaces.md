@@ -164,3 +164,30 @@ uint32 frontiers_remaining
 float32 elapsed_s
 ```
 
+
+## Simulator interface: robot model and bridges (contract batch 2, 001-R23)
+
+Not a ROS type: the signals and properties through which the CoppeliaSim model (`myRobotLaser.ttm`, the combined
+`myRobot` + laser model) and the `vacuum_sim_bridge` nodes (D-27) talk over the ZeroMQ Remote API (D-14). A model
+variant or a different robot must keep these names, or override them in its profile YAML (`params_file`).
+
+| Direction | Name | Kind | Content | Written / read by |
+|---|---|---|---|---|
+| bridge -> model | `<h>leftVel`, `<h>rightVel` | float signal (`sim.setFloatSignal`) | left and right wheel speed in m/s; `<h>` is the decimal integer handle of `robot_path` (`/myRobot`), e.g. `"16leftVel"` | written by `my_robot_cmd_vel_node` every `1 / write_rate_hz` s while driving; read by the model script `python_controler` |
+| model -> bridge | `signal.distSignal` on `robot_path` | float-array property (`sim.getFloatArrayProperty`) | one range per beam in m, beam 0 at `scan_angle_min` (right side), step `scan_angle_increment`; 0 = no hit; 452 values expected | written by the model's laser script; read by `my_robot_scan_node` |
+| model -> bridge | pose of `robot_path` | `sim.getObjectPose(h, sim.handle_world)` | x y z qx qy qz qw | read by `my_robot_odometry_node` (`odom_source: ground_truth`) |
+| model -> bridge | `left_motor_path`, `right_motor_path` | joint position | rad | read by `my_robot_odometry_node` (`odom_source: wheels`) |
+| model -> bridge | `rgb_sensor_path`, `depth_sensor_path` | vision sensor image / depth buffer | rgb8 640x480 and float32 0..1 (scaled with `camera_near`/`camera_far`) | read by `my_robot_vision_node` |
+
+Rules:
+
+- The stock `python_controler` clears both wheel signals after one actuation, so the bridge rewrites them every cycle
+  and the robot moves reliably only with a model variant that holds them, or in stepping mode with one write per step
+  (`src/vacuum_sim_bridge/README.md`). The signal `<h>Battery` equal to 0 forces the wheels to zero (Q-01 note 5).
+- The two wheel signals are written with two `setFloatSignal` calls (right first). `atomic_wheel_write: true` asks for
+  one `executeScriptString` call; that function does not exist on the CoppeliaSim 4.10 `sim` object, so the client falls
+  back to two calls after one warning.
+- The beam count is taken from the data: a count other than `scan_num_beams` is accepted with one warning, and
+  `angle_max = scan_angle_min + (n - 1) * scan_angle_increment`. Fewer than 2 values publish nothing.
+- Wheel speed per side follows the model: right = v + (L/2) w, left = v - (L/2) w, with L = `wheel_separation` (0.2 m),
+  capped by `max_linear` / `max_angular`, zeroed after `cmd_timeout` without a command.

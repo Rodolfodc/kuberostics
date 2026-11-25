@@ -61,7 +61,7 @@ flowchart TB
 
 ## 2. Control and motion
 
-The three lifecycle managers, the orchestrator mode, the supervisor actions and the `twist_mux` inputs with priority. Orange: reuse from the 2025S2 project.
+The three lifecycle managers, the orchestrator mode, the supervisor actions and the `twist_mux` inputs with priority. Orange: reuse from the 2025S2 project. Coverage motion goes through Nav2 (D-24): `coverage_server` sends `NavigateToPose` goals and `controller_server` drives on `mux/nav`; `mux/coverage` is reserved and only the stub publishes there. The wheel bridge is the `vacuum_sim_bridge` replacement for the combined model (D-27) or the stock 2025S2 node, never both.
 
 ```mermaid
 flowchart TB
@@ -85,12 +85,12 @@ flowchart TB
     MQB["MQTT bridge"]
   end
 
-  NAV["Nav2 controller<br/>enable_stamped_cmd_vel: false"]
+  NAV["Nav2 controller_server<br/>enable_stamped_cmd_vel: false"]
   TEL["teleop_twist_keyboard"]
   SCHED["schedule (module 4)"]
   HMI["interface (module 6)"]
   MUX["twist_mux<br/>use_stamped: false"]
-  WHEEL["wheel bridge (2025S2)<br/>/cmd_vel → /myRobot/cmd_vel"]
+  WHEEL["wheel bridge my_robot_cmd_vel_node<br/>vacuum_sim_bridge (D-27) or 2025S2<br/>/cmd_vel → /myRobot/cmd_vel"]
   SIM["CoppeliaSim"]
   SINK(["/myRobot/legacy/cleaning_cmd_vel<br/>no subscriber (D-04)"])
 
@@ -108,7 +108,8 @@ flowchart TB
   TEL -->|"mux/teleop · 100"| MUX
   ESC -->|"mux/escape · 80"| MUX
   NAV -->|"mux/nav · 60"| MUX
-  COV -->|"mux/coverage · 50"| MUX
+  COV -->|"NavigateToPose goals (D-24)"| NAV
+  COV -.->|"mux/coverage · 50 · reserved, stub only"| MUX
   DOC -->|"mux/docking · 40 (remap D-05)"| MUX
   SUP -->|"mux/lock_stop · lock 200"| MUX
   SUP -->|"lock_stop"| STOPG

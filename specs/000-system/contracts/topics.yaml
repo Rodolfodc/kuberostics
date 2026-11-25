@@ -12,8 +12,9 @@
 #     entry with a later `since` (e.g. /detections_markers, "009a") is required only from that
 #     spec onward; before that, the contract tests must skip it. Frozen and `since` are independent.
 #   owner may be a list when exactly one of several nodes runs at a time (e.g. /map: slam_toolbox or
-#     map_server); the contract test shall accept any of them (contract batch 1; the test does not handle
-#     a list yet, which is harmless while every such entry has a later `since`).
+#     map_server); the contract test accepts any of them (contract batch 1; owner_names() in
+#     vacuum_contract_tests/contract.py, PR #43).
+#   max_publishers: 1 also restricts WHO publishes: only the owner (001-R03; D-28 for lock_stop).
 #   reserved: true = the entry keeps its name, type and twist_mux subscription but has no owner in the
 #     default launch (e.g. /myRobot/mux/coverage after D-24); the contract test tolerates no publisher.
 #
@@ -59,6 +60,11 @@ topics:
   - {name: /scan,         type: sensor_msgs/msg/LaserScan, qos: default, owner: my_robot_scan_node,   frozen: true}
   - {name: /camera,       type: sensor_msgs/msg/Image,     qos: default, owner: my_robot_vision_node, frozen: true}
   - {name: /camera_depth, type: sensor_msgs/msg/Image,     qos: default, owner: my_robot_vision_node, frozen: true}
+  # Contract batch 2: the 2025S2 odometry topic, consumed by odom_tf_bridge (003-R02), stuck_detector and escape_server
+  # (D-07). Name and type are inherited (frozen); `since` is 003 because no 001 node needs it and the skeleton graph
+  # runs without the simulator (the contract test would report it "not in the graph"). The publisher is the
+  # same-name replacement in vacuum_sim_bridge (D-27): reliable, volatile, depth 10 = profile `default`.
+  - {name: /myrobot/odom, type: nav_msgs/msg/Odometry, qos: default, owner: my_robot_odometry_node, frozen: true, since: "003", note: "D-23: simulator pose relative to the first sample (odom_source ground_truth); header.frame_id = odom_frame, child_frame_id = footprint_frame of the bridge profile"}
 
   # ---- new (spec 001) ----
   - name: /myRobot/behaviour/submode
@@ -81,7 +87,9 @@ topics:
     type: std_msgs/msg/Bool
     qos: ia368ii
     owner: supervisor
+    max_publishers: 1         # D-28: only the supervisor may lock or release (Art. VI)
     since: "001"
+    note: "D-28: not latched (volatile); the supervisor republishes the current value, true or false, at publish_rate_hz (5 Hz); the twist_mux lock has timeout 0 and holds the last value"
 
   - name: /myRobot/telemetry/supervisor
     type: diagnostic_msgs/msg/DiagnosticArray
@@ -130,7 +138,7 @@ topics:
   - {name: /myRobot/mux/stop,     type: geometry_msgs/msg/Twist, qos: ia368ii, owner: stop_guard,         priority: 250, since: "001", note: "D-22: zero velocity, published only while lock_stop is true"}
   - {name: /myRobot/mux/escape,   type: geometry_msgs/msg/Twist, qos: ia368ii, owner: escape_server,      priority: 80,  since: "001"}
   - {name: /myRobot/mux/nav,      type: geometry_msgs/msg/Twist, qos: ia368ii, owner: controller_server,  priority: 60,  since: "005"}
-  - {name: /myRobot/mux/coverage, type: geometry_msgs/msg/Twist, qos: ia368ii, reserved: true,             priority: 50,  since: "001", note: "D-24, Q-10: no owner; the real coverage_server publishes no Twist (Nav2 drives on mux/nav); only the stub publishes here, with with_stubs:=true"}
+  - {name: /myRobot/mux/coverage, type: geometry_msgs/msg/Twist, qos: ia368ii, reserved: true,             priority: 50,  since: "001", note: "D-24, Q-10: no owner; the real coverage_server publishes no Twist (Nav2 drives on mux/nav); only the vacuum_stubs coverage_server publishes here (started by skeleton.launch.py; no with_stubs argument exists yet)"}
   - {name: /myRobot/mux/docking,  type: geometry_msgs/msg/Twist, qos: ia368ii, owner: autodocking_server, priority: 40,  since: "001"}
   - {name: /myRobot/legacy/cleaning_cmd_vel, type: geometry_msgs/msg/Twist, qos: ia368ii, owner: cleaning_server, sink: true, since: "001", note: "D-04: nobody subscribes"}
 
@@ -195,16 +203,28 @@ actions:
   # consumed Nav2 interface, declared so the contract tests see it (third party, Art. II)
   - {name: /navigate_to_pose, type: nav2_msgs/action/NavigateToPose,      owner: bt_navigator, frozen: true, since: "005"}
 
+# TF broadcasters (contract batch 2). Not read by the contract tests yet. One broadcaster per child frame
+# (003-R02). Frame names are parameters of the broadcaster; the values below are the ones the launch must use.
+tf:
+  - {parent: map,            child: odom,           owner: [slam_toolbox, static_transform_publisher], since: "003", note: "003-R05; static from the recorded start pose with map_file (003-R06, R30)"}
+  - {parent: odom,           child: base_footprint, owner: my_robot_odometry_node, since: "003", note: "D-27: the bridge parameter odom_frame (default my_robot_odom, the 2025S2 name) shall be set to odom by our launch; with these bridges odom_tf_bridge is not started (003-R02: one broadcaster); proposal, see Q-14 in spec 003"}
+  - {parent: base_footprint, child: base_link,      owner: my_robot_odometry_node, static: true, since: "003", note: "z = footprint_to_base_z (0.08 m)"}
+  - {parent: base_link,      child: laser_link,     owner: my_robot_scan_node,     static: true, since: "003", note: "laser_xyz of the profile; the mapping launch shall not publish it a second time (003-R03)"}
+  - {parent: base_link,      child: camera_link,    owner: my_robot_vision_node,   static: true, since: "003", note: "camera_xyz + camera_quat; optical frame (x right, y down, z forward); same caveat as laser_link"}
+
 lifecycle:
   ia368ii_manager: [myrobot, behaviour_server, cleaning_server, autodocking_server, charging_server, charged_server]
   # spec 003 adds odom_tf_bridge, exploration_server and room_segmenter here when its nodes land (003-R26)
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]
   lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # when the nav nodes land (T510); Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
+  # not managed (plain, D-26): the four vacuum_sim_bridge nodes (my_robot_scan_node, my_robot_vision_node,
+  # my_robot_cmd_vel_node, my_robot_odometry_node), same-name drop-ins of the plain 2025S2 bridges (D-27)
   lifecycle_manager_optional: []      # detection chain of 009a (detector_local, image_throttle, detection_selector) when the sequencer launch includes it; MQTT bridge in spec 009; detector_cloud runs in K3s, outside the robot managers
 
 # Public parameters (Art. I.1). Values are the defaults; the launch file may override them.
 # Blocks are keyed by node name, except `detector` (keyed by executable: it runs as detector_local and
-# detector_cloud) and `mapping` (keyed by launch file: launch arguments of mapping.launch.py, not a node).
+# detector_cloud), `sim_bridge` (parameters shared by the four nodes of vacuum_sim_bridge) and the blocks whose
+# name ends in `_launch` or is `mapping` (launch arguments of a launch file, not a node).
 parameters:
   lifecycle_sequencer:
     manager_startup_timeout_s: {type: double, default: 30.0, requirement: 005-R35}
@@ -233,7 +253,7 @@ parameters:
   stop_guard:
     publish_rate_hz: {type: double, default: 10.0, note: "must stay above 1 / timeout of the mux stop input (0.5 s)"}
     telemetry_rate_hz: {type: double, default: 1.0}
-  # coverage_server, escape_server, stuck_detector: the stub (vacuum_stubs, with_stubs:=true) and the real node
+  # coverage_server, escape_server, stuck_detector: the stub (vacuum_stubs, started by skeleton.launch.py) and the real node
   # (vacuum_coverage) share the node name (005-R26); parameters marked "stub only" are ignored by the real node.
   coverage_server:
     telemetry_rate_hz: {type: double, default: 1.0}
@@ -254,6 +274,8 @@ parameters:
     max_region_area_m2: {type: double, default: 150.0, requirement: 005-R16}
     map_topic: {type: string, default: /map}
     nav_action: {type: string, default: /navigate_to_pose, requirement: 005-R19}
+    map_frame: {type: string, default: map, requirement: 005-R19, note: "contract batch 2: frame of the goals, the path and the covered grid; today a constant MAP_FRAME in coverage_server_node.py, to be declared (ros-dev)"}
+    base_frame: {type: string, default: base_link, requirement: 005-R21, note: "contract batch 2: robot frame of the map -> base_frame lookup that feeds the covered mask; today a constant BASE_FRAME, to be declared (ros-dev)"}
     # nav_goal_timeout_s (180 s, 005-R34) is a Timeout of nav_bt.xml, not a node parameter: not declared here.
   escape_server:
     telemetry_rate_hz: {type: double, default: 1.0}
@@ -385,3 +407,79 @@ parameters:
     min_votes: {type: int, default: 2, requirement: 003-R21}
     observations_topic: {type: string, default: /detections_markers, requirement: 003-R22}
     rules_file: {type: string, default: config/room_rules.yaml}
+    # contract batch 2: declared by the node (room_segmenter_node.py); mapping.launch.py passes its launch arguments
+    # of the same name. The rooms file is <dir of map_file, or maps/>/<map_name>_rooms.yaml.
+    map_name: {type: string, default: house, requirement: 003-R07}
+    map_file: {type: string, default: "", requirement: 003-R06, note: "non-empty: segment the loaded map at activation (003-R18)"}
+    start_pose_xyyaw: {type: double_array, default: [0.0, 0.0, 0.0], requirement: 003-R30, note: "start pose recorded in the rooms file when the map is saved; any length other than 3 means none"}
+
+  # ---- CoppeliaSim bridges (vacuum_sim_bridge, D-27; contract batch 2) ----
+  # Plain nodes (D-26 exception, docs/lifecycle-managers.md). Every node below declares the whole `sim_bridge` block;
+  # the defaults are the measured values of the combined model myRobotLaser.ttm (vacuum_sim_bridge/profile.py, mirrored in
+  # config/sim_bridge.yaml, kept equal by a test). A per-robot profile is a copy of that YAML passed as params_file.
+  sim_bridge:
+    zmq_host: {type: string, default: localhost, note: "CoppeliaSim ZeroMQ Remote API host (D-14)"}
+    zmq_port: {type: int, default: 23000}
+    atomic_wheel_write: {type: bool, default: false, requirement: 001-R23, note: "true: one executeScriptString call for both wheel signals; absent on CoppeliaSim 4.10, so the client logs one warning and falls back to two setFloatSignal calls"}
+    wheel_radius: {type: double, default: 0.05, note: "m"}
+    wheel_separation: {type: double, default: 0.2, note: "m"}
+    axle_offset_x: {type: double, default: 0.07, note: "m, wheel-axle centre ahead of the base_link origin"}
+    max_linear: {type: double, default: 0.5, note: "m/s, the cap of the model's python_controler"}
+    max_angular: {type: double, default: 1.5707963267948966, note: "rad/s (90 deg/s)"}
+    cmd_timeout: {type: double, default: 0.5, requirement: 001-R13, note: "s without a /cmd_vel message before the wheels are zeroed (answers Q-01 note 4 for this bridge)"}
+    joint_sign: {type: double, default: -1.0, note: "wheel travel = joint_sign * joint angle * radius"}
+    scan_num_beams: {type: int, default: 452, requirement: 001-R23, note: "expected count; the bridge uses the real count and warns once on a mismatch"}
+    scan_angle_min: {type: double, default: -1.5707963267948966}
+    scan_angle_increment: {type: double, default: 0.006981317007977318, note: "pi/450"}
+    scan_range_min: {type: double, default: 0.055, note: "below it (the model writes 0 for a miss) the range becomes inf"}
+    scan_range_max: {type: double, default: 10.0}
+    laser_xyz: {type: double_array, default: [0.0, 0.0, 0.16], note: "base_link -> laser_frame, no rotation"}
+    camera_width: {type: int, default: 640}
+    camera_height: {type: int, default: 480}
+    camera_fx: {type: double, default: 589.4, note: "fx = fy, cx = 319.5, cy = 239.5; the projector defaults (fx 525) differ, to be aligned when the projector runs on this model"}
+    camera_near: {type: double, default: 0.01}
+    camera_far: {type: double, default: 3.5}
+    camera_xyz: {type: double_array, default: [0.0983, 0.0141, 0.077]}
+    camera_quat: {type: double_array, default: [-0.5628, 0.5628, -0.4168, 0.439], note: "x y z w, optical frame in base_link"}
+    camera_flip_horizontal: {type: bool, default: false}
+    camera_flip_vertical: {type: bool, default: true, note: "the Remote API returns rows bottom to top (verified live)"}
+    odom_frame: {type: string, default: my_robot_odom, note: "2025S2 name; our launch shall set odom (003-R01), see tf"}
+    footprint_frame: {type: string, default: base_footprint}
+    base_frame: {type: string, default: base_link}
+    laser_frame: {type: string, default: laser_link}
+    camera_frame: {type: string, default: camera_link}
+    footprint_to_base_z: {type: double, default: 0.08}
+    robot_path: {type: string, default: /myRobot, requirement: 001-R23}
+    left_motor_path: {type: string, default: /myRobot/leftMotor}
+    right_motor_path: {type: string, default: /myRobot/rightMotor}
+    rgb_sensor_path: {type: string, default: /myRobot/kinect/rgb}
+    depth_sensor_path: {type: string, default: /myRobot/kinect/depth}
+    scan_signal: {type: string, default: signal.distSignal, requirement: 001-R23, note: "float-array property on robot_path"}
+  my_robot_scan_node:
+    rate_hz: {type: double, default: 10.0}
+  my_robot_vision_node:
+    rate_hz: {type: double, default: 10.0}
+    explicit_sensor_handling: {type: bool, default: false, note: "true: handleVisionSensor on rgb and depth before each frame; only for a model with explicit handling"}
+  my_robot_cmd_vel_node:
+    write_rate_hz: {type: double, default: 20.0, requirement: 001-R23, note: "rewrite period of the wheel signals (the stock model clears them after each actuation)"}
+  my_robot_odometry_node:
+    rate_hz: {type: double, default: 20.0}
+    odom_source: {type: string, default: ground_truth, values: [ground_truth, wheels], requirement: 003-R01, note: "NOT the mapping argument of the same name: mapping odom_source sim = bridge ground_truth; mapping laser = rf2o, the bridge is then not the TF broadcaster"}
+
+  # ---- launch arguments (contract batch 2) ----
+  sim_bridges_launch:               # vacuum_sim_bridge/launch/sim_bridges.launch.py
+    odom_source: {type: string, default: ground_truth, values: [ground_truth, wheels], note: "passed to my_robot_odometry_node"}
+    params_file: {type: string, default: "<share>/vacuum_sim_bridge/config/sim_bridge.yaml", note: "robot profile; start this launch or the stock 2025S2 bridges, never both"}
+  detection_launch:                 # vacuum_detection/launch/detection.launch.py (009a-R01)
+    offload: {type: bool, default: false, requirement: 009a-R01, note: "true adds image_throttle (cloud path); false: no image leaves the robot"}
+    local_weights: {type: string, default: yolo11n.pt, requirement: 009a-R04}
+    backend: {type: string, default: ultralytics, values: [ultralytics, "null"]}
+    device: {type: string, default: cpu}
+    with_manager: {type: bool, default: true, note: "false when an outer launch already runs lifecycle_manager_optional with these node names"}
+  coverage_launch:                  # vacuum_coverage/launch/coverage.launch.py
+    autostart: {type: bool, default: true, note: "configure and activate coverage_server without a lifecycle manager (stand-alone use)"}
+  skeleton_launch:                  # vacuum_bringup/launch/skeleton.launch.py
+    with_ia368ii: {type: bool, default: true, requirement: 001-R01}
+    with_wheel_bridge: {type: bool, default: true, requirement: 001-R13, note: "ignored when with_ia368ii is false"}
+    with_teleop: {type: bool, default: true}
+    with_sequencer: {type: bool, default: false, requirement: 005-R35}

@@ -113,6 +113,24 @@ Cross-cutting.
 - Timeouts in this spec (R10, R11, R31, R32) use the node clock: wall time unless Q-13 sets `use_sim_time`.
 - Contract change order: this spec's changes are applied first, then those of spec 005; one serialized change each.
 - Q-13: time source. Does the 2025S2 bridge publish `/clock` and are its stamps simulation time? It decides `use_sim_time` for SLAM Toolbox, Nav2 and TF. Needs T301 (simulator) and T302 (code).
+  Answer for the `vacuum_sim_bridge` replacement (D-27; contract batch 2, from `src/vacuum_sim_bridge/README.md`): no
+  `/clock` is published; message and TF stamps are the node clock (wall time); odometry velocities use the simulation
+  time only for `dt`. So `use_sim_time` shall stay `false` on the bridges and on every consumer (SLAM Toolbox, Nav2, our
+  nodes). The stock 2025S2 bridge is still unread.
 - Q-14: does the 2025S2 odometry node already broadcast `odom -> base_link`? Frame names, parent/child, pose in world or in the start frame, and message rate. Needs T302 (read `src/deps`, read-only) and T301.
+  **Answered from code for the `vacuum_sim_bridge` replacement (D-27; proposal of contract batch 2, pending review;
+  the stock node is still unread).** `src/vacuum_sim_bridge/vacuum_sim_bridge/odometry_node.py` and `profile.py`:
+  `my_robot_odometry_node` publishes `/myrobot/odom` at `rate_hz` (20 Hz) with `header.frame_id = odom_frame` (default
+  `my_robot_odom`, the 2025S2 name) and `child_frame_id = base_footprint`, and **broadcasts** the TF
+  `odom_frame -> base_footprint` plus a static `base_footprint -> base_link` (z 0.08 m). With `odom_source: ground_truth`
+  the pose is relative to the first sample (start frame, so `zero_at_first_message` is not needed). The scan and vision
+  bridges broadcast the static `base_link -> laser_link` and `base_link -> camera_link` from the profile.
+  Consequences (the `tf` section of `topics.yaml`): (a) our launch sets the bridge parameter `odom_frame: odom`, so the
+  tree is `map -> odom -> base_footprint -> base_link -> {laser_link, camera_link}`, which satisfies 003-R01;
+  (b) with these bridges `odom_tf_bridge` is **not** started, otherwise `base_link` would get a second parent
+  (003-R02, one broadcaster); (c) the mapping launch does not publish `laser_to_base_xyz_rpy` / `camera_to_base_xyz_rpy`
+  while these bridges run (003-R03 is met by the bridges, with `scan_frame: laser_link`). The mapping argument
+  `odom_source` (`sim`, `laser`) is not the bridge parameter of the same name (`ground_truth`, `wheels`): `sim` means
+  the bridge runs with `ground_truth`.
 - Q-15: does the `slam_toolbox` release on each distro offer a lifecycle variant of its node that `lifecycle_manager_core` can manage (Art. III.2)? If not, it is accepted as a third-party plain node and documented as an exception. Not verified; T311 checks.
 - Q-16: availability of `python3-scipy` (used by `RoomSegmenter`) through rosdep on Ubuntu 24.04 and 26.04 with Python 3.12 and 3.14. Not verified; T304 checks. Fallback: `python3-opencv`, or a numpy-only distance transform.

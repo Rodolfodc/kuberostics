@@ -25,7 +25,7 @@ flowchart TB
     SUP["supervisor (SubmodeMachine)<br/>/myRobot/behaviour/submode · /myRobot/mux/lock_stop<br/>BUILT"]:::built
 
     subgraph ACT["Actuators (each publishes only to its own mux input)"]
-      COV["coverage_server<br/>action CoverRoom · mux/coverage 50<br/>STUB (constant forward speed)"]:::stub
+      COV["coverage_server<br/>action CoverRoom · NavigateToPose goals (D-24)<br/>stub: mux/coverage 50 (reserved)"]:::stub
       ESC["escape_server<br/>action Escape · mux/escape 80<br/>STUB (scripted reverse and turn)"]:::stub
       DOCK["autodocking_server<br/>mux/docking 40<br/>PLANNED (docking behaviour)"]:::planned
       NAVC["controller_server (Nav2)<br/>mux/nav 60<br/>PLANNED (real coverage and navigation)"]:::planned
@@ -36,8 +36,8 @@ flowchart TB
     STUCKD["stuck_detector<br/>/myRobot/stuck (StuckEvent)<br/>STUB (manual trigger service)"]:::stub
     GUARD["stop_guard<br/>zero Twist on mux/stop 250 while lock_stop is true<br/>BUILT"]:::built
     MUX["twist_mux<br/>stop 250 · lock 200 · teleop 100 · escape 80 · nav 60 · coverage 50 · docking 40<br/>sole publisher of /myRobot/cmd_vel (Twist)<br/>3RD, configured by us"]:::third
-    WHEEL["wheel bridge (2025S2)<br/>/cmd_vel remapped<br/>3RD"]:::third
-    SENS["sensor bridges (2025S2)<br/>/scan · /camera · /camera_depth · /myrobot/odom<br/>3RD"]:::third
+    WHEEL["wheel bridge my_robot_cmd_vel_node<br/>/cmd_vel remapped<br/>vacuum_sim_bridge (D-27) or 2025S2"]:::third
+    SENS["sensor bridges<br/>/scan · /camera · /camera_depth · /myrobot/odom<br/>vacuum_sim_bridge (D-27) or 2025S2"]:::third
 
     subgraph PERC["Perception"]
       THR["image_throttle<br/>compressed RGB, 2 Hz<br/>BUILT"]:::built
@@ -74,7 +74,8 @@ flowchart TB
   SUP -->|"action Escape"| ESC
 
   %% Stage 3: motion
-  COV -->|"mux/coverage"| MUX
+  COV -.->|"NavigateToPose (D-24)"| NAVC
+  COV -->|"mux/coverage (stub only, reserved)"| MUX
   ESC -->|"mux/escape"| MUX
   DOCK -.->|"mux/docking"| MUX
   NAVC -.->|"mux/nav"| MUX

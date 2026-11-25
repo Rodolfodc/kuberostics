@@ -103,19 +103,7 @@ Where it runs: the library and unit tests run in the default `colcon test`. The 
 
 ### Domain ID allocation
 
-Tests that bring up a graph use `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` and a random `ROS_DOMAIN_ID` from a range reserved per package, so parallel `colcon test` runs do not see each other:
-
-| Package | Range |
-|---|---|
-| `vacuum_stubs` | 10-39 |
-| `vacuum_safety` | 40-69 |
-| `vacuum_supervisor` | 70-99 |
-| `vacuum_bringup` (live-graph tests of `skeleton.launch.py`, `graph_support.py`) | 100-129 |
-| `vacuum_bringup` (live-graph tests of the lifecycle sequencer, `test_sequencer_graph.py`, 005-R38) | 130-159 |
-| `vacuum_detection` | 160-189 |
-| `vacuum_contract_tests` (reserved for T022, not used yet) | 190-219 |
-
-The range 130-159 was first reserved here for `vacuum_contract_tests`; the sequencer tests (T521, already merged) took it, so the contract tests move to 190-219 (architect decision; T022 and any code that sets a domain follow this table). `vacuum_detection` takes 160-189 (its `conftest.py` draws from 160 to 189). `vacuum_mapping` and `vacuum_interfaces` start no graph and have no range. Not verified here: whether domain IDs above 101 clash with the operating system ephemeral port range for the DDS vendors in use (the ranges above 101 predate this change); the localhost-only discovery in these tests limits the exposure.
+Moved to `specs/000-system/spec.md` §7, the single allocation table for every package and tool (contract batch 2). The ranges of this plan are unchanged there; history: 130-159 was first reserved here for `vacuum_contract_tests`, the sequencer tests (T521) took it and the contract tests moved to 190-219.
 
 ## Steps/s measurement (D-11)
 
