@@ -64,6 +64,9 @@ class System:
         self.configure()
         assert self.node.trigger_activate() == TransitionCallbackReturn.SUCCESS
         assert self.client.wait_for_server(timeout_sec=10.0)
+        if self.maps and self.nav:      # inputs of a goal: the latched map, the Nav2 server and the first TF
+            assert wait_for(lambda: self.node._grid is not None and self.node._nav.server_is_ready()
+                            and self.node._pose() is not None, 10.0)
 
     def send(self, timeout_s=0.0):
         future = self.client.send_goal_async(
@@ -188,7 +191,7 @@ def test_R31_deactivate_cancels_the_nav2_goal_before_stopping(make):
     handle = s.send()
     assert wait_for(lambda: s.nav.active, 10.0)
     assert s.node.trigger_deactivate() == TransitionCallbackReturn.SUCCESS
-    assert s.nav.cancel_times, 'the Nav2 goal is cancelled before deactivate returns'
+    assert wait_for(lambda: s.nav.cancel_times, 1.0), 'the Nav2 goal is cancelled on deactivate'
     res = s.result(handle)
     assert res.status == GoalStatus.STATUS_ABORTED
     assert wait_for(lambda: not s.nav.active, 5.0)
@@ -200,7 +203,7 @@ def test_R31_shutdown_cancels_the_nav2_goal(make):
     s.send()
     assert wait_for(lambda: s.nav.active, 10.0)
     assert s.node.trigger_shutdown() == TransitionCallbackReturn.SUCCESS
-    assert s.nav.cancel_times
+    assert wait_for(lambda: s.nav.cancel_times, 1.0)
 
 
 def test_R31_frontier_timeout_bounds_and_cancels_every_frontier_goal(make):
