@@ -43,18 +43,36 @@ def is_api_error(exc: Exception) -> bool:
     return any(m in str(exc).lower() for m in _API_MARKERS)
 
 
-def _default_factory(host, port, timeout_ms):
+def _default_factory(host, port, timeout_ms, logger=None):
+    """Returns make(); make.close_last() releases the socket and context of the last connection made."""
+    state = {'client': None}
+
     def make():
         from coppeliasim_zmqremoteapi_client import RemoteAPIClient   # lazy: not a rosdep key
         client = RemoteAPIClient(host=host, port=port)
+        state['client'] = client
         try:   # bounded waits: a dead simulator must not block a call forever
             import zmq
             client.socket.setsockopt(zmq.RCVTIMEO, timeout_ms)
             client.socket.setsockopt(zmq.SNDTIMEO, timeout_ms)
             client.socket.setsockopt(zmq.LINGER, 0)
-        except Exception:
-            pass
+        except Exception as exc:
+            if logger:
+                logger.warning(f'could not set the ZMQ socket timeouts ({exc!r}); calls may block')
         return client.require('sim')
+
+    def close_last():
+        client, state['client'] = state['client'], None
+        for name, args in (('socket', (0,)), ('context', ())):
+            try:
+                obj = getattr(client, name, None)
+                if obj is not None:
+                    obj.close(*args) if name == 'socket' else obj.term()
+            except Exception as exc:
+                if logger:
+                    logger.warning(f'closing the ZMQ {name} failed ({exc!r})')
+
+    make.close_last = close_last
     return make
 
 
@@ -69,7 +87,7 @@ class ZmqSimClient:
                  timeout_ms: int = 3000):
         self._lock = threading.RLock()
         if sim_factory is None:
-            sim_factory = (lambda: sim) if sim is not None else _default_factory(host, port, timeout_ms)
+            sim_factory = (lambda: sim) if sim is not None else _default_factory(host, port, timeout_ms, logger)
         self._factory = sim_factory
         self._sim = None
         self._log = logger
@@ -95,8 +113,15 @@ class ZmqSimClient:
                 if not is_api_error(exc):
                     if self._log:
                         self._log.warning(f'simulator connection dropped ({exc!r}); will reconnect')
-                    self._sim = None
+                    self._drop()
                 raise
+
+    def _drop(self):
+        """Forget the connection and release its socket and context (repeated reconnects must not leak)."""
+        self._sim = None
+        close = getattr(self._factory, 'close_last', None)
+        if close is not None:
+            close()
 
     def get_object(self, path):
         return self._call(lambda sim: sim.getObject(path))

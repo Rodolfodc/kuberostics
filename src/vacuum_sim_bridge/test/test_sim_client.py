@@ -99,3 +99,17 @@ def test_factory_failure_propagates_and_is_retried():
     with pytest.raises(TimeoutError):
         c.get_sim_time()
     assert len(calls) == 1
+
+
+def test_drop_closes_the_old_connection():
+    closed = []
+
+    def factory():
+        return FakeApi([])
+    factory.close_last = lambda: closed.append(1)
+    c = ZmqSimClient(sim_factory=factory)
+    api_calls = []
+    c._call(lambda sim: api_calls.append(1))
+    with pytest.raises(ConnectionError):
+        c._call(lambda sim: (_ for _ in ()).throw(ConnectionError('x')))
+    assert closed == [1]

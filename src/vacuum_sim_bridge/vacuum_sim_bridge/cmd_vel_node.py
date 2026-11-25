@@ -35,12 +35,24 @@ class CmdVelNode(Node):
 
     def _io_loop(self):
         while not self._stop.is_set():
-            self.tick()
+            try:
+                self.tick()
+            except Exception as exc:   # an unexpected error must not kill the IO thread silently
+                try:
+                    self.get_logger().error(f'cmd_vel IO loop error: {exc!r}', throttle_duration_sec=5.0)
+                except Exception:
+                    pass               # node already destroyed
             self._stop.wait(self._period)
 
     def destroy_node(self):
         self._stop.set()
-        self._thread.join(timeout=1.0)
+        # longer than the socket timeout (3 s default) plus margin, so a call in flight can finish
+        self._thread.join(timeout=5.0)
+        if not self._thread.is_alive() and self._handle is not None:
+            try:
+                self._client.set_wheel_speeds(self._handle, 0.0, 0.0)    # final stop
+            except Exception:
+                pass
         super().destroy_node()
 
     def _on_cmd(self, msg: Twist):

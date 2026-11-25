@@ -226,12 +226,30 @@ def test_cmd_vel_slow_simulator_call_cannot_expire_a_fresh_command():
     msg.linear.x = 0.2
     pub.publish(msg)
     assert spin_until(ex, lambda: sim.entered.is_set())       # IO thread is now stuck inside the call
-    now[0] = 100.3
+    now[0] = 100.6
     msg.linear.x = 0.3
     pub.publish(msg)
-    received = []
-    assert spin_until(ex, lambda: node._core._stamp == 100.3)     # arrival stamped while IO is blocked
-    now[0] = 100.7                                            # the blocked call took longer than cmd_timeout
+    assert spin_until(ex, lambda: node._core._stamp == 100.6)     # arrival stamped while IO is blocked
+    now[0] = 100.9      # the blocked call lasted 0.9 s (> cmd_timeout 0.5); the second command is only 0.3 s old
     sim.release.set()
     assert spin_until(ex, lambda: any(w[1] == 0.3 for w in sim.wheel_writes))
+    node.destroy_node()
+
+
+def test_odometry_resets_after_a_simulator_error():
+    """After a failure (e.g. a simulator restart) the pose restarts at 0 instead of jumping."""
+    sim = FakeSim()
+    sim.pose = (3.0, 1.0, 0.08) + quaternion_from_yaw(0.0)
+    node, probe, ex = make(OdometryNode, sim, {'rate_hz': 50.0})
+    odom = []
+    probe.create_subscription(Odometry, '/myrobot/odom', odom.append, 10)
+    assert spin_until(ex, lambda: odom)
+    sim.fail = True
+    n = len(odom)
+    spin_until(ex, lambda: False, timeout=0.3)
+    sim.fail = False
+    sim.pose = (50.0, -20.0, 0.08) + quaternion_from_yaw(1.0)       # the restarted scene placed it elsewhere
+    assert spin_until(ex, lambda: len(odom) > n)
+    m = odom[-1].pose.pose
+    assert (m.position.x, m.position.y) == (0.0, 0.0) and m.orientation.z == 0.0
     node.destroy_node()
