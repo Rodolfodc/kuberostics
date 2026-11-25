@@ -50,3 +50,52 @@ def test_api_error_degrades_permanently_to_two_calls():
     c.set_wheel_speeds(5, 0.3, 0.4)
     assert api.executed == 1
     assert api.signals == [('5rightVel', 0.2), ('5leftVel', 0.1), ('5rightVel', 0.4), ('5leftVel', 0.3)]
+
+
+class Logger:
+    def __init__(self):
+        self.lines = []
+
+    def info(self, m):
+        self.lines.append(('info', m))
+
+    def warning(self, m):
+        self.lines.append(('warning', m))
+
+
+def test_reconnects_after_a_connection_failure_and_logs():
+    made = []
+
+    class Api(FakeApi):
+        def getObject(self, path):
+            if len(made) == 1:
+                raise ConnectionError('socket closed')
+            return 3
+
+    def factory():
+        made.append(1)
+        return Api([])
+
+    log = Logger()
+    c = ZmqSimClient(sim_factory=factory, logger=log)
+    with pytest.raises(ConnectionError):
+        c.get_object('/myRobot')
+    assert c.get_object('/myRobot') == 3
+    assert len(made) == 2
+    assert [k for k, m in log.lines if 'reconnected' in m] == ['info']
+    assert any(k == 'warning' for k, _ in log.lines)
+
+
+def test_factory_failure_propagates_and_is_retried():
+    calls = []
+
+    def factory():
+        calls.append(1)
+        if len(calls) == 1:
+            raise TimeoutError('no simulator')
+        return FakeApi([])
+
+    c = ZmqSimClient(sim_factory=factory)
+    with pytest.raises(TimeoutError):
+        c.get_sim_time()
+    assert len(calls) == 1

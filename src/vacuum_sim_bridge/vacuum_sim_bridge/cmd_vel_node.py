@@ -1,6 +1,7 @@
 """my_robot_cmd_vel_node (plain Node on purpose, see README): /cmd_vel (unstamped Twist; the launch remaps it to /myRobot/cmd_vel, D-06) -> wheel
 speed signals of the model. Rewrites the signals every cycle (the model clears them) and zeroes them when the
-command stream stops."""
+command stream stops. Plain Node on purpose, see README."""
+import threading
 import time
 
 import rclpy
@@ -20,16 +21,35 @@ class CmdVelNode(Node):
         self._client = client if client is not None else make_client(self)
         self._now = clock
         self._core = WheelCommandCore(self._p)
+        self._core_lock = threading.Lock()
         self._handle = None
         self._was_idle = True
         self.create_subscription(Twist, '/cmd_vel', self._on_cmd, 10)
-        self.create_timer(1.0 / self.get_parameter('write_rate_hz').value, self.tick)
+        # Simulator IO runs in its own thread: a Remote API call takes about one simulation step (0.26 s at
+        # 4 steps/s), and blocking the executor would delay the command subscription. Commands are stamped on
+        # arrival in the executor, so a slow call cannot expire cmd_timeout.
+        self._period = 1.0 / self.get_parameter('write_rate_hz').value
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._io_loop, name='cmd_vel_io', daemon=True)
+        self._thread.start()
+
+    def _io_loop(self):
+        while not self._stop.is_set():
+            self.tick()
+            self._stop.wait(self._period)
+
+    def destroy_node(self):
+        self._stop.set()
+        self._thread.join(timeout=1.0)
+        super().destroy_node()
 
     def _on_cmd(self, msg: Twist):
-        self._core.command(msg.linear.x, msg.angular.z, self._now())
+        with self._core_lock:
+            self._core.command(msg.linear.x, msg.angular.z, self._now())
 
     def tick(self):
-        left, right = self._core.output(self._now())
+        with self._core_lock:
+            left, right = self._core.output(self._now())
         idle = left == 0.0 and right == 0.0
         try:
             if self._handle is None:

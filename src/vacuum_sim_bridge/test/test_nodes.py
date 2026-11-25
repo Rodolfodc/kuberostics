@@ -197,3 +197,41 @@ def test_odometry_node_warns_on_a_large_wheel_jump():
     sim.joints[sim.objects['/myRobot/leftMotor']] = 2.0           # > quarter turn in one poll
     assert spin_until(ex, lambda: warnings)
     node.destroy_node()
+
+
+def test_cmd_vel_slow_simulator_call_cannot_expire_a_fresh_command():
+    """A write that blocks longer than cmd_timeout must not make the wheels stop: commands are stamped on arrival
+    while the IO thread is stuck in the simulator call."""
+    import threading
+
+    class BlockingSim(FakeSim):
+        def __init__(self):
+            super().__init__()
+            self.entered = threading.Event()
+            self.release = threading.Event()
+            self.block_next = True
+
+        def set_wheel_speeds(self, robot, left, right):
+            if self.block_next:
+                self.block_next = False
+                self.entered.set()
+                assert self.release.wait(TIMEOUT)
+            super().set_wheel_speeds(robot, left, right)
+
+    sim = BlockingSim()
+    now = [100.0]
+    node, probe, ex = make(CmdVelNode, sim, {'write_rate_hz': 1000.0}, clock=lambda: now[0])
+    pub = probe.create_publisher(Twist, '/cmd_vel', 10)
+    msg = Twist()
+    msg.linear.x = 0.2
+    pub.publish(msg)
+    assert spin_until(ex, lambda: sim.entered.is_set())       # IO thread is now stuck inside the call
+    now[0] = 100.3
+    msg.linear.x = 0.3
+    pub.publish(msg)
+    received = []
+    assert spin_until(ex, lambda: node._core._stamp == 100.3)     # arrival stamped while IO is blocked
+    now[0] = 100.7                                            # the blocked call took longer than cmd_timeout
+    sim.release.set()
+    assert spin_until(ex, lambda: any(w[1] == 0.3 for w in sim.wheel_writes))
+    node.destroy_node()

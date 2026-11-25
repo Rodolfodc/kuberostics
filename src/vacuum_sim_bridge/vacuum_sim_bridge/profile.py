@@ -40,8 +40,11 @@ class RobotProfile:
     camera_xyz: tuple = (0.0983, 0.0141, 0.077)       # m, optical frame origin in base_link
     # optical frame (x right, y down, z forward) in base_link, quaternion x y z w: pitched down 15.5 deg
     camera_quat: tuple = (-0.5628, 0.5628, -0.4168, 0.4390)
-    camera_flip_horizontal: bool = True   # the sensor +x points left; same as the stock bridge
-    camera_flip_vertical: bool = False    # UNVERIFIED: the stock bridge does not flip rows; check live (see tests)
+    # The Remote API returns rows bottom to top and columns left to right (verified live: mean depth error
+    # 0.026 m with these flips, 1.02 m with the old ones). The published camera_link is a true optical frame
+    # (x right, y down, z forward); the simulator sensor frame is x left, y up, z forward.
+    camera_flip_horizontal: bool = False
+    camera_flip_vertical: bool = True
     # --- frames and object paths ---
     odom_frame: str = 'my_robot_odom'     # same as the stock odometry node
     footprint_frame: str = 'base_footprint'  # odometry child frame, same as the stock node

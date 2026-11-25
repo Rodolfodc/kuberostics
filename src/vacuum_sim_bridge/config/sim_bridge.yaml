@@ -22,8 +22,8 @@
     camera_far: 3.5
     camera_xyz: [0.0983, 0.0141, 0.077]
     camera_quat: [-0.5628, 0.5628, -0.4168, 0.439]
-    camera_flip_horizontal: true
-    camera_flip_vertical: false
+    camera_flip_horizontal: false
+    camera_flip_vertical: true
     odom_frame: 'my_robot_odom'
     footprint_frame: 'base_footprint'
     base_frame: 'base_link'

@@ -28,7 +28,9 @@ class OdometryNode(Node):
         if source not in ('ground_truth', 'wheels'):
             raise ValueError(f"odom_source must be 'ground_truth' or 'wheels', got {source!r}")
         self._source = source
-        self._core = GroundTruthOdometry(self._p) if source == 'ground_truth' else WheelOdometry(self._p)
+        self._new_core = (lambda: GroundTruthOdometry(self._p)) if source == 'ground_truth' else (
+            lambda: WheelOdometry(self._p))
+        self._core = self._new_core()
         self._client = client if client is not None else make_client(self)
         self._handles = None
         self._last_joints = None
@@ -65,6 +67,8 @@ class OdometryNode(Node):
             state = self._read()
         except Exception as exc:
             self._handles = None
+            self._last_joints = None
+            self._core = self._new_core()      # a restarted simulator restarts time and pose: begin again at 0
             self.get_logger().warning(f'simulator not ready: {exc}', throttle_duration_sec=5.0)
             return
         stamp = self.get_clock().now().to_msg()

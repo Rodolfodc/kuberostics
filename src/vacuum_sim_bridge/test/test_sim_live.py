@@ -47,22 +47,43 @@ def test_live_depth_floor_is_nearer_at_the_bottom_of_the_image(sim):
     assert bottom < top
 
 
-def test_live_drive_matches_between_ground_truth_and_wheel_odometry(sim):
-    """Drives forward through the wheel signals for ~2 s of simulation and compares both odometry sources
-    (needs the simulation running in real time stepping, GUI mode)."""
+def _drive(sim, v, w, seconds):
+    """Drives for `seconds` of simulation time, feeding both odometry sources at every iteration (a wheel turns
+    many radians over a drive, so a single start/end update would alias). Returns (ground truth, wheels,
+    elapsed sim time)."""
     import time
     robot = sim.get_object(P.robot_path)
     left, right = sim.get_object(P.left_motor_path), sim.get_object(P.right_motor_path)
     gt, wh = GroundTruthOdometry(P), WheelOdometry(P)
-    t0 = sim.get_sim_time()
-    g = gt.update(sim.get_object_pose(robot), t0)
-    w = wh.update(sim.get_joint_position(left), sim.get_joint_position(right), t0)
-    deadline = time.monotonic() + 120.0
-    while sim.get_sim_time() - t0 < 2.0 and time.monotonic() < deadline:
-        sim.set_wheel_speeds(robot, 0.2, 0.2)
+
+    def sample():
+        t = sim.get_sim_time()
+        return (t, gt.update(sim.get_object_pose(robot), t),
+                wh.update(sim.get_joint_position(left), sim.get_joint_position(right), t))
+
+    t0, g, w_ = sample()
+    half = P.wheel_separation / 2
+    deadline = time.monotonic() + 300.0
+    t = t0
+    while t - t0 < seconds and time.monotonic() < deadline:
+        sim.set_wheel_speeds(robot, v - w * half, v + w * half)
+        t, g, w_ = sample()
     sim.set_wheel_speeds(robot, 0.0, 0.0)
-    t = sim.get_sim_time()
-    g = gt.update(sim.get_object_pose(robot), t)
-    w = wh.update(sim.get_joint_position(left), sim.get_joint_position(right), t)
+    t, g, w_ = sample()
+    return g, w_, t - t0
+
+
+def test_live_drive_matches_between_ground_truth_and_wheel_odometry(sim):
+    g, w, dt = _drive(sim, 0.2, 0.0, 2.0)
     assert g.x > 0.1 and abs(g.y) < 0.05 and abs(g.yaw) < 0.05          # forward is +x of the odom frame
     assert math.isclose(g.x, w.x, rel_tol=0.1, abs_tol=0.03)
+
+
+def test_live_wheel_speed_is_about_the_command(sim):
+    g, _, dt = _drive(sim, 0.2, 0.0, 3.0)
+    assert 0.1 < g.x / dt < 0.25            # 0.2 m/s commanded (acceleration ramp and coasting included)
+
+
+def test_live_straight_drive_has_no_yaw_drift(sim):
+    g, w, _ = _drive(sim, 0.2, 0.0, 3.0)
+    assert abs(math.degrees(g.yaw)) < 3.0 and abs(math.degrees(w.yaw)) < 3.0
