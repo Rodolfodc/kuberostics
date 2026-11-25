@@ -123,6 +123,7 @@ class CoverageServerNode(LifecycleNode):
                 f'transition {request.transition.id} refused in state {self._state}: {type(exc).__name__}')
             response.success = False
             return response
+
     def on_configure(self, state) -> TransitionCallbackReturn:
         values = {name: self.get_parameter(name).value for name in CONFIG_PARAMS}
         try:
@@ -203,6 +204,11 @@ class CoverageServerNode(LifecycleNode):
     def has_map(self) -> bool:
         return self._raster is not None
 
+    def _stop_sampling(self) -> None:
+        """Waits for a sample in progress, then keeps the sampler away from the run (suspend, end, finish)."""
+        with self._run_lock:
+            self._sampling = False
+
     def _sample_pose(self) -> None:
         """Feeds the tracker from TF while a goal runs. Its own timer, not the decision loop: the loop can be
         held up by publishes and Nav2 calls, and a hop longer than max_pose_gap_m is not credited."""
@@ -282,9 +288,10 @@ class CoverageServerNode(LifecycleNode):
         self._set_state('covering')
         self._publish_path(0)
         shown_pass = 0
-        self._last_sample_t = 0.0
-        self._max_poll_gap_s = 0.0
-        self._sampling = True
+        with self._run_lock:
+            self._last_sample_t = 0.0
+            self._max_poll_gap_s = 0.0
+            self._sampling = True
         next_feedback = next_covered = 0.0
         result = CoverRoom.Result(success=False, covered_ratio=0.0)
         try:
@@ -292,6 +299,7 @@ class CoverageServerNode(LifecycleNode):
                 t = self._now()
                 if goal_handle.is_cancel_requested:
                     self._cancel_nav()
+                    self._stop_sampling()
                     run.suspend(t)
                     self._counters['cancelled'] += 1
                     result.covered_ratio = float(run.covered_ratio)
@@ -300,6 +308,7 @@ class CoverageServerNode(LifecycleNode):
                     return result
                 if not self._active or generation != self._generation:
                     self._cancel_nav()
+                    self._stop_sampling()
                     run.end()
                     self._counters['failed'] += 1
                     result.covered_ratio = float(run.covered_ratio)
@@ -344,6 +353,7 @@ class CoverageServerNode(LifecycleNode):
             self._set_state('idle' if self._active else 'inactive')
 
     def _finish(self, goal_handle, run, step) -> CoverRoom.Result:
+        self._stop_sampling()
         run.end()
         self._publish_covered(run)
         result = CoverRoom.Result(success=bool(step.success), covered_ratio=float(run.covered_ratio))

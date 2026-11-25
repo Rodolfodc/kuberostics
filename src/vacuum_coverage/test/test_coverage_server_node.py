@@ -343,3 +343,38 @@ def test_R27_redundant_lifecycle_transitions_are_refused_and_the_node_survives(s
     assert _transition(s, Transition.TRANSITION_CONFIGURE) is False       # configure while configured
     assert _transition(s, Transition.TRANSITION_ACTIVATE) is True         # and the node still works
     assert _state(s) == State.PRIMARY_STATE_ACTIVE
+
+
+def test_R21_pose_sampler_feeds_the_tracker_while_the_decision_loop_is_blocked(system):
+    """The tracker is fed by a timer of its own, not by the decision loop: with the loop blocked inside a publish,
+    poses must still be sampled and cells covered. Fails if the sampler timer stops firing."""
+    s = system(script=lambda i, x, y: HANG)
+    s.up()
+    s.wait_ready()
+    release = threading.Event()
+    s.node._publish_covered = lambda run: release.wait(30.0)         # stall injection: the loop blocks here
+    try:
+        handle = s.send()
+        assert handle.accepted
+        assert wait_for(lambda: s.nav.goals, 10.0)                  # the loop got as far as sending a waypoint
+        run = s.node._run
+        assert wait_for(lambda: run.pose_samples >= 10, 5.0), 'no pose samples while the loop is blocked'
+        assert run.session.tracker.covered_count > 0
+        sent = len(s.feedback)
+        assert wait_for(lambda: run.pose_samples >= 25, 5.0)
+        assert len(s.feedback) == sent, 'the decision loop was expected to stay blocked'
+    finally:
+        release.set()
+    assert wait_for(handle.cancel_goal_async().done, 5.0)
+    s.result(handle)
+
+
+def test_R27_telemetry_reports_pose_sampling_after_a_goal(system):
+    s = system()
+    s.up()
+    s.wait_ready()
+    s.result(s.send())
+    assert wait_for(lambda: s.telemetry and int(s.status_values().get('pose_samples', '0')) > 0, 5.0)
+    values = s.status_values()
+    assert values['unbridged_hops'] == '0', values
+    assert float(values['max_pose_hop_m']) < 1.0, values
