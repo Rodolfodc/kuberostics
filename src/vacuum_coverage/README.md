@@ -25,6 +25,9 @@ stays reserved for the stub. It publishes `/myRobot/coverage/path`, `/myRobot/co
 - Parameters: exactly the `coverage_server` block of `contracts/topics.yaml` (the "stub only" ones are not declared).
   Robot radius, tool radius, lane spacing and `margin_m` are placeholders until the robot profile exists; the
   speeds belong to the Nav2 controller configuration, not to this node.
+- Slow simulator: `coverage.launch.py sim_slowdown:=<factor>` (default `1.0`, nothing overridden) multiplies
+  `waypoint_timeout_s`, `coverage_timeout_s` and `resume_window_s` (`core/slowdown.py`, defaults read from
+  `CoverageConfig`). Use the same factor as on `nav.launch.py`; at 0.09x real time use about 11.
 - Constants, not parameters (the contract lists none yet): TF frames `map` and `base_link`.
 - Goals are rejected while there is no `/map`, no TF, no `/navigate_to_pose` server (005-R36), an unknown
   `room_id` (the room topics wait for the Room messages of spec 003, so any non-empty `room_id` is unknown for now)

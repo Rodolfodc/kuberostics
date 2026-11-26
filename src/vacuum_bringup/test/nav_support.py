@@ -41,10 +41,11 @@ def write_map(directory):
     return os.path.join(directory, 'room.yaml')
 
 
-def launch_nav(module, bt_xml=None):
+def launch_nav(module, bt_xml=None, **launch_arguments):
     share = get_package_share_directory('vacuum_bringup')
     directory = tempfile.mkdtemp(prefix='nav_graph_')
     args = {'bt_xml': bt_xml} if bt_xml else {}
+    args.update({k: str(v) for k, v in launch_arguments.items()})
     return LaunchDescription([
         SetEnvironmentVariable('ROS_DOMAIN_ID', str(gs.domain_for(module))),
         SetEnvironmentVariable('ROS_AUTOMATIC_DISCOVERY_RANGE', gs.DISCOVERY_RANGE),

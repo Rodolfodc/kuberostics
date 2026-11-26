@@ -90,14 +90,25 @@ def launch_name(node):
         else node.node_name
 
 
+def expanded_nodes(module, **arguments):
+    """The Node actions that nav.launch.py's OpaqueFunction produces for the given launch arguments."""
+    from launch import LaunchContext
+    from launch_ros.actions import Node
+    context = LaunchContext()
+    context.launch_configurations.update({
+        'params_file': str(PKG / 'config' / 'nav2_params.yaml'), 'bt_xml': str(PKG / 'config' / 'nav_bt.xml'),
+        'autostart': 'true', 'with_manager': 'true', 'sim_slowdown': '1.0'})
+    context.launch_configurations.update(arguments)
+    return [e for e in module._nodes(context) if isinstance(e, Node)]
+
+
 def test_005_R19_nav_launch_starts_exactly_the_three_nav2_nodes_and_their_manager():
     """That bt_navigator really reads nav_bt.xml through the bt_xml argument is proven live by test_nav_timeout.py."""
     spec = importlib.util.spec_from_file_location('nav_launch', PKG / 'launch' / 'nav.launch.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     from launch_ros.actions import Node
-    description = module.generate_launch_description()
-    nodes = {launch_name(e): e for e in description.entities if isinstance(e, Node)}
+    nodes = {launch_name(e): e for e in expanded_nodes(module)}
     assert set(nodes) == {'controller_server', 'planner_server', 'bt_navigator', 'lifecycle_manager_nav'}
 
 
@@ -108,8 +119,7 @@ def test_005_R23_controller_server_cmd_vel_is_remapped_to_mux_nav():
     from launch import LaunchContext
     from launch.utilities import perform_substitutions, normalize_to_list_of_substitutions
     from launch_ros.actions import Node
-    controller = next(e for e in module.generate_launch_description().entities
-                      if isinstance(e, Node) and launch_name(e) == 'controller_server')
+    controller = next(e for e in expanded_nodes(module) if launch_name(e) == 'controller_server')
     remaps = [(perform_substitutions(LaunchContext(), normalize_to_list_of_substitutions(a)),
                perform_substitutions(LaunchContext(), normalize_to_list_of_substitutions(b)))
               for a, b in (getattr(controller, '_Node__remappings', None) or controller.expanded_remapping_rules or [])]

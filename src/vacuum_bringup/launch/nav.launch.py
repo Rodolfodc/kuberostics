@@ -7,7 +7,11 @@ Configuration only (Art. II): the stock Nav2 executables with config/nav2_params
   fake robot of the tests). /scan and /myrobot/odom come from the sim bridges (D-07).
 * Arguments: `autostart` (default true: the spike mode; with lifecycle_sequencer pass false, the sequencer then
   starts the manager), `with_manager` (default true; false when skeleton.launch.py with_sequencer:=true already
-  runs a lifecycle_manager_nav, whose node_names must then list the three nodes), `params_file`, `bt_xml`.
+  runs a lifecycle_manager_nav, whose node_names must then list the three nodes), `params_file`, `bt_xml`,
+  `sim_slowdown` (default 1.0 = real time: the files are used untouched). For a slow simulator (about 0.09x real
+  time with the laser model; use_sim_time stays false) `sim_slowdown:=<factor>` writes an overlay copy of the params
+  and of the BT with the wall-clock timeouts multiplied by the factor (vacuum_bringup/slowdown.py:
+  movement_time_allowance, costmap_update_timeout of controller and planner, the BT Timeout of 005-R34).
 
 Differences found between Nav2 1.3.14 (Jazzy) and 1.5.2 (Lyrical), absorbed by the single YAML (Nav2 ignores
 parameters it does not declare, except where noted below). Method: run the stack in both containers, compare
@@ -23,25 +27,50 @@ declared on Jazzy:
   RegulatedPurePursuitController, SimpleGoalChecker, SimpleProgressChecker, ObstacleLayer, InflationLayer,
   StaticLayer) are identical on both. The BT `Timeout` decorator is BehaviorTree.CPP built in on both.
 """
+import os
+import tempfile
+
+import yaml
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
+from vacuum_bringup.slowdown import parse_factor, scale_bt_xml, scale_nav_params
+
 NAV_CMD_VEL = '/myRobot/mux/nav'
 NAV_NODES = ['controller_server', 'planner_server', 'bt_navigator']
 
 
-def generate_launch_description():
-    share = FindPackageShare('vacuum_bringup')
-    params = LaunchConfiguration('params_file')
-    bt_xml = LaunchConfiguration('bt_xml')
-    # later dictionaries override the YAML: the BT path is the installed file
+def slowed_files(params_path, bt_path, factor, directory=None):
+    """(params_path, bt_path) to launch with: the inputs for factor 1.0, else overlay copies with scaled timeouts."""
+    factor = parse_factor(factor)
+    if factor == 1.0:
+        return params_path, bt_path
+    directory = directory or tempfile.mkdtemp(prefix='nav_slowdown_')
+    with open(params_path) as f:
+        scaled = scale_nav_params(yaml.safe_load(f), factor)
+    out_params = os.path.join(directory, 'nav2_params_slow.yaml')
+    with open(out_params, 'w') as f:
+        yaml.safe_dump(scaled, f, sort_keys=False)
+    with open(bt_path) as f:
+        text = f.read()
+    out_bt = os.path.join(directory, 'nav_bt_slow.xml')
+    with open(out_bt, 'w') as f:
+        f.write(scale_bt_xml(text, factor))
+    return out_params, out_bt
+
+
+def _nodes(context, *args, **kwargs):
+    params, bt_xml = slowed_files(LaunchConfiguration('params_file').perform(context),
+                                  LaunchConfiguration('bt_xml').perform(context),
+                                  LaunchConfiguration('sim_slowdown').perform(context))
+    # later dictionaries override the YAML: the BT path is the installed (or scaled) file
     bt_param = {'default_nav_to_pose_bt_xml': bt_xml}
-    nodes = [
+    return [
         Node(package='nav2_controller', executable='controller_server', name='controller_server', output='screen',
              parameters=[params], remappings=[('cmd_vel', NAV_CMD_VEL)]),
         Node(package='nav2_planner', executable='planner_server', name='planner_server', output='screen',
@@ -54,10 +83,16 @@ def generate_launch_description():
                           'bond_timeout': 0.0,
                           'node_names': NAV_NODES}]),
     ]
+
+
+def generate_launch_description():
+    share = FindPackageShare('vacuum_bringup')
     return LaunchDescription([
         DeclareLaunchArgument('params_file', default_value=PathJoinSubstitution([share, 'config', 'nav2_params.yaml'])),
         DeclareLaunchArgument('bt_xml', default_value=PathJoinSubstitution([share, 'config', 'nav_bt.xml'])),
         DeclareLaunchArgument('autostart', default_value='true'),
         DeclareLaunchArgument('with_manager', default_value='true'),
-        *nodes,
+        DeclareLaunchArgument('sim_slowdown', default_value='1.0',
+                              description='factor > 0 that scales the wall-clock timeouts (1.0 = real time)'),
+        OpaqueFunction(function=_nodes),
     ])
