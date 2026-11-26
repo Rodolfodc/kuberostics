@@ -13,7 +13,7 @@ Weights are loaded only in mode CHARGED (Art. VII.3) by a pure-Python inference 
 
 ## Out of scope
 
-- Training in CoppeliaSim (see D-27). CoppeliaSim is used only to calibrate the 2D model and to validate the policy.
+- Training in CoppeliaSim (see D-29). CoppeliaSim is used only to calibrate the 2D model and to validate the policy.
 - Cloud retraining, MQTT, the digital twin and weight approval (009b). In this spec the weights file is copied by hand.
 - The Kinect. The policy uses only the laser and the odometry (this is the answer to the question D-11 leaves to 008).
 - Changing `Escape.action`, `StuckEvent.msg` or the mux priorities.
@@ -23,9 +23,9 @@ Weights are loaded only in mode CHARGED (Art. VII.3) by a pure-Python inference 
 
 | ID | Status | Decision | Rationale |
 |---|---|---|---|
-| D-27 | **Proposed** (architect, 2026-11-25); the project owner must confirm, D-11 leaves this choice to them | The escape policy is trained in a 2D Gymnasium environment (`rl/`) calibrated against CoppeliaSim, and validated in CoppeliaSim on the poses of T515. It is not trained in CoppeliaSim. | The policy needs the laser. On the combined model (`myRobotLaser`, GUI mode, `.sim/laser_sweep_bench.out`) one sweep of the 452-beam laser takes about 0.22 s of wall time: 3.96 steps/s with a sweep every step (N=1), 7.0 with N=2, 10.9 with N=4, and 21.8 with the sweep switched off (N=1000). Some starts stall at about 0.95 steps/s and are discarded. The 319 steps/s of D-11 was measured headless on a robot **without the laser and without the Kinect**, so it does not apply. Because the sweep costs about 0.22 s, a laser-equipped robot cannot go above about 4.5 steps/s at N=1 headless either. That figure is inferred and was not measured; headless with the Kinect crashes (D-11). The plan 001 rule (200 steps/s or more trains in the simulator) is therefore not met for any robot that has a laser. |
-| D-28 | Proposed | The policy replaces only the **primary phase** of the escape and uses its budget, `primary_budget_s`. When that budget ends, the same fallback sweep of `EscapeScript` runs (005-R11). The time budgets of 005-R10 to R12 do not change. | Art. VI.3 requires a deterministic fallback. A learned policy is a deterministic function, but its behaviour cannot be checked by hand. Reusing the budgets keeps the 005-R11 c check valid with no new numbers. |
-| D-29 | Proposed | The observation builder, the action table and the inference class live in **one** pure-Python module, `vacuum_coverage/core/escape_policy.py`. It needs numpy and imports neither ROS nor torch. ros-dev owns it. The 2D environment in `rl/` imports that module; it does not copy it. | A mismatch between the observations seen in training and at run time is the most likely silent failure. One implementation removes it. rl-trainer writes only in `rl/` and ros-dev only in `src/vacuum_*` (CLAUDE.md), so the module goes to the package that runs it. |
+| D-29 | **Proposed** (architect, 2026-11-25); the project owner must confirm, D-11 leaves this choice to them | The escape policy is trained in a 2D Gymnasium environment (`rl/`) calibrated against CoppeliaSim, and validated in CoppeliaSim on the poses of T515. It is not trained in CoppeliaSim. | The policy needs the laser. On the combined model (`myRobotLaser`, GUI mode, `.sim/laser_sweep_bench.out`) one sweep of the 452-beam laser takes about 0.22 s of wall time: 3.96 steps/s with a sweep every step (N=1), 7.0 with N=2, 10.9 with N=4, and 21.8 with the sweep switched off (N=1000). Some starts stall at about 0.95 steps/s and are discarded. The 319 steps/s of D-11 was measured headless on a robot **without the laser and without the Kinect**, so it does not apply. Because the sweep costs about 0.22 s, a laser-equipped robot cannot go above about 4.5 steps/s at N=1 headless either. That figure is inferred and was not measured; headless with the Kinect crashes (D-11). The plan 001 rule (200 steps/s or more trains in the simulator) is therefore not met for any robot that has a laser. |
+| D-30 | Proposed | The policy replaces only the **primary phase** of the escape and uses its budget, `primary_budget_s`. When that budget ends, the same fallback sweep of `EscapeScript` runs (005-R11). The time budgets of 005-R10 to R12 do not change. | Art. VI.3 requires a deterministic fallback. A learned policy is a deterministic function, but its behaviour cannot be checked by hand. Reusing the budgets keeps the 005-R11 c check valid with no new numbers. |
+| D-31 | Proposed | The observation builder, the action table and the inference class live in **one** pure-Python module, `vacuum_coverage/core/escape_policy.py`. It needs numpy and imports neither ROS nor torch. ros-dev owns it. The 2D environment in `rl/` imports that module; it does not copy it. | A mismatch between the observations seen in training and at run time is the most likely silent failure. One implementation removes it. rl-trainer writes only in `rl/` and ros-dev only in `src/vacuum_*` (CLAUDE.md), so the module goes to the package that runs it. |
 
 ## Facts this spec relies on (checked 2026-11-25)
 
@@ -69,7 +69,7 @@ Weights are loaded only in mode CHARGED (Art. VII.3) by a pure-Python inference 
 | 008-R10 | The environment shall be able to run `EscapeScript` (vacuum_coverage, pure Python) as the agent through an adapter that feeds it pose, front range and `rear_range=None` and turns its `Command` into the kinematic input, with the full primary + fallback budget (16.5 s). This gives the scripted baseline in 2D. | unit |
 | 008-R11 | Training shall be reproducible. The config and seeds are committed under `rl/configs/`. Runs, checkpoints, CSVs and weights are written under `rl/runs/` (gitignored). Every run records the git sha, the config hash and the package versions. Training runs in a Docker container with Python 3.12 and a CPU limit (default `--cpus=4`), in the background. | inspection |
 
-Shared observation and inference (`vacuum_coverage/core/escape_policy.py`, owner ros-dev, D-29).
+Shared observation and inference (`vacuum_coverage/core/escape_policy.py`, owner ros-dev, D-31).
 
 | ID | Requirement | Verification |
 |---|---|---|
@@ -125,8 +125,8 @@ go/no-go fails, they are dropped.
 
 ## Follow-ups outside this change (architect)
 
-- Record D-27 to D-29 in spec 000 §5 and amend the D-11 text with the laser figures (after the owner confirms D-27).
-- `docs/architecture.md` and its diagram source show a separate node `escape_rl`. With D-29 it is `escape_server` with
+- Record D-29 to D-31 in spec 000 §5 and amend the D-11 text with the laser figures (after the owner confirms D-29).
+- `docs/architecture.md` and its diagram source show a separate node `escape_rl`. With D-31 it is `escape_server` with
   `strategy: policy`. Update the `.mmd` sources of the cloud cycle and dock sync and re-render.
 - `CLAUDE.md` setup table: the `rl/requirements.txt` and the training image (devops task T803).
 

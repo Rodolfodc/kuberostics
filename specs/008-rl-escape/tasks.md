@@ -4,7 +4,7 @@
 A task is done only when the test or report that verifies its requirements exists and passes.
 
 **Pre-conditions (architect, not a task of the agents).**
-- The project owner confirms D-27, the 2D environment.
+- The project owner confirms D-29, the 2D environment.
 - The "Contract needs" of the spec go into the next serialized contract batch before T812.
 
 **Schedule.**

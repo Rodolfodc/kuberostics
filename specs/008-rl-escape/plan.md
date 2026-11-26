@@ -38,7 +38,7 @@ The import direction is one way: `rl/` imports `vacuum_coverage.core.*` through 
 imports from `rl/`. `vacuum_coverage/core` has empty `__init__.py` files and needs no ROS to import (checked
 2026-11-25).
 
-## Observation, action and inference (D-29)
+## Observation, action and inference (D-31)
 
 `ObservationBuilder(n_sectors=30, range_cap_m=2.0, budget_s, n_actions=8)` takes:
 - `reset(start_pose)`
