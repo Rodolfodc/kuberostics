@@ -1,4 +1,5 @@
-"""The shipped YAML profile must equal the documented defaults (no hidden second source of truth)."""
+"""The shipped YAML profile must equal the documented defaults (no hidden second source of truth).
+Requirement: 001-R23."""
 import os
 
 import yaml

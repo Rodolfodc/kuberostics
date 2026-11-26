@@ -29,7 +29,7 @@ class CoverageConfig:
     """Defaults of the contract (`parameters.coverage_server` of topics.yaml); placeholders until the robot
     profile exists. The node passes its parameters, nothing is hard-coded below."""
     lane_spacing_m: float = 0.25
-    robot_radius_m: float = 0.16
+    robot_radius_m: float = 0.18
     margin_m: float = 0.05
     min_segment_m: float = 0.30
     tool_radius_m: float = 0.15

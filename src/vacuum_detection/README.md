@@ -92,7 +92,7 @@ The watermark is internal state, not a parameter.
 
 `projector`: topics `detections_topic`, `depth_topic` (`/camera_depth`), `map_topic` (`/topologic_map`),
 `output_topic`; frames `target_frame` (`map`), `camera_frame` (empty: detection header); intrinsics `fx fy cx cy`
-(525, 525, 319.5, 239.5: Kinect defaults, confirm against the scene); `tf_timeout_s` (0.1), `republish_period_s`
+(589.4, 589.4, 319.5, 239.5: `camera_fx` of the myRobot model in the `vacuum_sim_bridge` profile); `tf_timeout_s` (0.1), `republish_period_s`
 (2.0), `min_confidence` (0.7), `allowed_labels` (unset: all), `check_mapped_area` (true), `merge_distance_m`
 (0.5), `depth_cache_size` (8), `depth_cache_max_age_s` (2.0), `depth_tolerance_s` (0.05), `depth_window_px` (2),
 `telemetry_rate_hz` (1.0). Depth is `32FC1` (m) or `16UC1` (mm), same resolution as the RGB image.

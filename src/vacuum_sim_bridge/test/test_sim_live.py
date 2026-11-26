@@ -1,4 +1,4 @@
-"""Checks against a running CoppeliaSim with myRobotLaser.ttm loaded, GUI mode (local only, Art. V).
+"""Checks against a running CoppeliaSim with myRobotLaser.ttm loaded, GUI mode (local only, Art. V). Requirement: 001-R23.
 Run: VACUUM_SIM_LIVE=1 python3 -m pytest -m sim test/test_sim_live.py   (the simulation must be running;
 ask the sim-operator). They exercise ZmqSimClient, the part the fake cannot cover."""
 import math

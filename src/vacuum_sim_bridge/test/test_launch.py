@@ -1,4 +1,5 @@
-"""The launch file replaces the stock bridges by name (Art. II, D-06): same executables, cmd_vel remapped."""
+"""The launch file replaces the stock bridges by name (Art. II, D-06): same executables, cmd_vel remapped.
+Requirement: 001-R23."""
 import importlib.util
 import os
 

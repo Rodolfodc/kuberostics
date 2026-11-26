@@ -11,7 +11,7 @@ from vacuum_coverage.core.coverage_tracker import CoverageTracker, coverable_mas
 from vacuum_coverage.core.grid_ops import reachable_mask
 from vacuum_mapping.core.types import FREE
 
-CLEARANCE = 0.16 + 0.05
+CLEARANCE = 0.18 + 0.05
 
 
 def free_region(raster):

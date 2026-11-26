@@ -41,7 +41,7 @@ class Frontier:
 
 
 class FrontierFinder:
-    def __init__(self, min_frontier_cells: int = 8, gain_weight: float = 0.05, robot_radius_m: float = 0.16,
+    def __init__(self, min_frontier_cells: int = 8, gain_weight: float = 0.05, robot_radius_m: float = 0.18,
                  max_snap_m: float = 1.0, blacklist_tolerance_m: float = 0.3,
                  log: Logger = null_logger, metrics: Metrics = _no_metrics) -> None:
         self._min_cells = min_frontier_cells

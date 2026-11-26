@@ -231,11 +231,11 @@ class SilentCancelService(Node):
 
 def test_005_R34_unanswered_cancel_does_not_block_the_next_loss():
     rclpy.init()
-    silent = None
+    silent = sup = executor = thread = None
     try:
         sup = SupervisorNode(parameter_overrides=[Parameter('nav_cancel_s', value=0.6)])
         silent = SilentCancelService()
-        executor = MultiThreadedExecutor(num_threads=4)
+        executor = MultiThreadedExecutor(num_threads=6)
         executor.add_node(sup)
         executor.add_node(silent)
         thread = threading.Thread(target=executor.spin, daemon=True)
@@ -252,10 +252,15 @@ def test_005_R34_unanswered_cancel_does_not_block_the_next_loss():
     finally:
         if silent is not None:
             silent.release.set()
-        sup.trigger_deactivate()
-        sup.trigger_cleanup()
-        executor.shutdown()
-        sup.destroy_node()
-        silent.destroy_node()
-        thread.join(timeout=2)
+        if sup is not None:
+            sup.trigger_deactivate()
+            sup.trigger_cleanup()
+        if executor is not None:
+            executor.shutdown()
+        if sup is not None:
+            sup.destroy_node()
+        if silent is not None:
+            silent.destroy_node()
+        if thread is not None:
+            thread.join(timeout=2)
         rclpy.try_shutdown()

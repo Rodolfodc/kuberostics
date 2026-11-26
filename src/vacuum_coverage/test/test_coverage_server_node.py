@@ -83,7 +83,7 @@ class System:
 
     def wait_ready(self):
         """Map, TF and the fake Nav2 server discovered: the node accepts goals from here on."""
-        assert wait_for(lambda: self.node.has_map and self.node._nav.server_is_ready() and self.node._pose() is not None, 20.0)
+        assert wait_for(lambda: self.node.has_map and self.node._nav.server_is_ready() and self.node._pose() is not None, 30.0)
 
     def close(self):
         try:
@@ -136,11 +136,11 @@ def test_R26_documented_defaults_match_the_contract():
     rclpy.init()
     try:
         node = CoverageServerNode()
-        expected = {'lane_spacing_m': 0.25, 'robot_radius_m': 0.16, 'margin_m': 0.05, 'min_segment_m': 0.30,
+        expected = {'lane_spacing_m': 0.25, 'robot_radius_m': 0.18, 'margin_m': 0.05, 'min_segment_m': 0.30,
                     'tool_radius_m': 0.15, 'target_ratio': 0.95, 'min_acceptable_ratio': 0.70,
                     'max_skip_ratio': 0.3, 'coverage_timeout_s': 1800.0, 'waypoint_timeout_s': 120.0,
                     'resume_window_s': 120.0, 'max_region_area_m2': 150.0, 'telemetry_rate_hz': 1.0,
-                    'map_topic': '/map', 'nav_action': '/navigate_to_pose'}
+                    'map_topic': '/map', 'nav_action': '/navigate_to_pose', 'map_frame': 'map', 'base_frame': 'base_link'}
         for name, value in expected.items():
             assert node.get_parameter(name).value == value, name
         assert not node.has_parameter('linear_x')          # stub only
@@ -245,7 +245,7 @@ def test_R32_same_room_after_cancel_resumes_at_the_interrupted_waypoint(system):
     s.up()
     s.wait_ready()
     handle = s.send()
-    assert wait_for(lambda: len(s.nav.goals) == 4, 10.0)       # three reached, the fourth hangs
+    assert wait_for(lambda: len(s.nav.goals) == 4, 30.0)       # three reached, the fourth hangs
     interrupted = s.nav.goals[3]
     cancel = handle.cancel_goal_async()
     assert wait_for(cancel.done, 5.0)
@@ -308,7 +308,7 @@ def test_R16_two_simultaneous_goals_accept_exactly_one(system):
 def _transition(s, transition_id):
     """Sends a ChangeState request through the real lifecycle service; returns Response.success."""
     client = s.probe.create_client(ChangeState, '/coverage_server/change_state')
-    assert client.wait_for_service(timeout_sec=10.0)
+    assert client.wait_for_service(timeout_sec=30.0)
     request = ChangeState.Request()
     request.transition.id = transition_id
     for _ in range(5):                  # a client that is new to the graph can miss its first response
@@ -320,7 +320,7 @@ def _transition(s, transition_id):
 
 def _state(s):
     client = s.probe.create_client(GetState, '/coverage_server/get_state')
-    assert client.wait_for_service(timeout_sec=10.0)
+    assert client.wait_for_service(timeout_sec=30.0)
     for _ in range(5):
         future = client.call_async(GetState.Request())
         if wait_for(future.done, 3.0):

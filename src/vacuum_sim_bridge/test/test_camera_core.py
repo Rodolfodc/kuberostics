@@ -1,4 +1,5 @@
-"""Camera buffers. Basis: spec 000 section 4 (frozen /camera, /camera_depth), robot_report.txt section 1."""
+"""Camera buffers. Basis: spec 000 section 4 (frozen /camera, /camera_depth), robot_report.txt section 1.
+Requirement: 001-R23."""
 import math
 from dataclasses import replace
 

@@ -69,7 +69,7 @@ def test_001_R04_services_and_actions_are_expected(contract):
 
 def test_001_R04_exclude_owners_drops_sim_topics(contract):
     names = {e.name for e in build_expectations(contract, exclude_owners=SIM_OWNERS)}
-    assert '/scan' not in names and '/camera' not in names
+    assert '/scan' not in names and '/camera' not in names and '/myrobot/odom' not in names
     assert '/myRobot/cmd_vel' in names
 
 

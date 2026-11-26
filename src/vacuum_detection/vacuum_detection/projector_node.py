@@ -76,8 +76,8 @@ class ProjectorNode(LifecycleNode):
         self.declare_parameter('output_topic', '/detections_markers')
         self.declare_parameter('target_frame', FRAME)
         self.declare_parameter('camera_frame', '')              # empty: the detection header frame_id
-        self.declare_parameter('fx', 525.0)
-        self.declare_parameter('fy', 525.0)
+        self.declare_parameter('fx', 589.4)       # model camera_fx (vacuum_sim_bridge profile)
+        self.declare_parameter('fy', 589.4)
         self.declare_parameter('cx', 319.5)
         self.declare_parameter('cy', 239.5)
         self.declare_parameter('tf_timeout_s', 0.1)             # 009a-R12

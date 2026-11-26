@@ -1,4 +1,5 @@
-"""Wheel mapping. Basis: spec 000 D-03/D-06 (cmd_vel is unstamped Twist), robot_report.txt (caps, separation)."""
+"""Wheel mapping. Basis: spec 000 D-03/D-06 (cmd_vel is unstamped Twist), robot_report.txt (caps, separation).
+Requirement: 001-R23."""
 import math
 
 from vacuum_sim_bridge.profile import RobotProfile

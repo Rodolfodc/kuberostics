@@ -1,5 +1,5 @@
 """Odometry integration. Basis: Q-03 (odometry source), robot_report.txt section 5 (the stock script is wrong:
-forward is +Y, heading sign inverted, 25 percent long)."""
+forward is +Y, heading sign inverted, 25 percent long). Requirement: 001-R23."""
 import math
 
 from vacuum_sim_bridge.geometry import quaternion_from_yaw
