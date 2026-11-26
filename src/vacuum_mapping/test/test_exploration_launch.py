@@ -76,6 +76,7 @@ class TestExplorationAlone(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.nav.stopped = True
         cls.executor.shutdown()
         for n in (cls.nav, cls.maps, cls.probe):
             n.destroy_node()

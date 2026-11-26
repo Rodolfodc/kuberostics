@@ -26,8 +26,8 @@ from action_msgs.msg import GoalInfo  # noqa: E402
 from action_msgs.srv import CancelGoal  # noqa: E402
 from ament_index_python.packages import get_package_prefix  # noqa: E402
 from geometry_msgs.msg import Twist  # noqa: E402
-from lifecycle_msgs.msg import Transition  # noqa: E402
-from lifecycle_msgs.srv import ChangeState  # noqa: E402
+from lifecycle_msgs.msg import State, Transition  # noqa: E402
+from lifecycle_msgs.srv import ChangeState, GetState  # noqa: E402
 from rclpy.action import ActionClient  # noqa: E402
 from rclpy.executors import MultiThreadedExecutor  # noqa: E402
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy  # noqa: E402
@@ -63,6 +63,7 @@ def test_R31_kill_mid_goal_stand_in_watchdog_silences_mux_nav_within_budget():
         velocity_pub.publish(msg)
     probe.create_timer(0.1, fake_controller)
     change_state = probe.create_client(ChangeState, '/exploration_server/change_state')
+    get_state = probe.create_client(GetState, '/exploration_server/get_state')
     cancel_all = probe.create_client(CancelGoal, '/navigate_to_pose/_action/cancel_goal')
     client = ActionClient(probe, Explore, '/myRobot/explore')
     executor = MultiThreadedExecutor(num_threads=6, context=context)
@@ -73,10 +74,19 @@ def test_R31_kill_mid_goal_stand_in_watchdog_silences_mux_nav_within_budget():
     env = dict(os.environ, ROS_DOMAIN_ID=str(domain), ROS_AUTOMATIC_DISCOVERY_RANGE='LOCALHOST')
     proc = subprocess.Popen([_node_executable(), '--ros-args', '-r', '__node:=exploration_server'], env=env)
     try:
-        assert wait_for(change_state.service_is_ready, 120.0), 'node never appeared'
-        for transition in (Transition.TRANSITION_CONFIGURE, Transition.TRANSITION_ACTIVATE):
-            future = change_state.call_async(ChangeState.Request(transition=Transition(id=transition)))
-            assert wait_for(future.done, 30.0) and future.result().success
+        def state():
+            future = get_state.call_async(GetState.Request())
+            return future.result().current_state.id if wait_for(future.done, 3.0) else None
+        # A response proves discovery both ways; a lost first response of change_state is retried and the
+        # outcome is checked through get_state (Fast DDS can drop the first response of a fresh client).
+        assert wait_for(lambda: state() is not None, 120.0), 'node never appeared'
+        for transition, target in ((Transition.TRANSITION_CONFIGURE, State.PRIMARY_STATE_INACTIVE),
+                                   (Transition.TRANSITION_ACTIVATE, State.PRIMARY_STATE_ACTIVE)):
+            def reached(transition=transition, target=target):
+                future = change_state.call_async(ChangeState.Request(transition=Transition(id=transition)))
+                wait_for(future.done, 5.0)
+                return state() == target
+            assert wait_for(reached, 60.0), f'transition {transition} did not reach state {target}'
         assert client.wait_for_server(timeout_sec=30.0)
 
         accepted = []
@@ -115,6 +125,7 @@ def test_R31_kill_mid_goal_stand_in_watchdog_silences_mux_nav_within_budget():
         if proc.poll() is None:
             proc.kill()
             proc.wait(timeout=5)
+        nav.stopped = True
         executor.shutdown()
         for n in (nav, maps, probe):
             n.destroy_node()

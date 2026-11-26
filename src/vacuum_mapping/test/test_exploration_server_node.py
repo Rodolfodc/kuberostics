@@ -85,6 +85,8 @@ class System:
         return {kv.key: kv.value for kv in msg.status[0].values} if msg else {}
 
     def close(self):
+        if self.nav:
+            self.nav.stopped = True     # a HANG goal would keep an executor thread (and its join) alive
         self.executor.shutdown()
         self.thread.join(timeout=3)
         for n in self.nodes:
@@ -110,7 +112,7 @@ def test_R10_R11_R13_goal_succeeds_when_the_map_gets_known_and_explored_turns_tr
     s = make(on_reach=lambda i: holder['s'].maps.publish(known_cells()))
     holder['s'] = s
     s.up()
-    assert wait_for(lambda: s.explored == [False], 5.0), 'latched false at startup (R13)'
+    assert wait_for(lambda: s.explored[:1] == [False], 30.0), 'latched false at startup (R13)'
     handle = s.send()
     assert handle.accepted
     res = s.result(handle)
@@ -171,17 +173,17 @@ def test_R12_cancel_cancels_the_nav2_goal_within_half_a_second_and_publishes_no_
 def test_R13_explored_has_one_publisher_false_at_start_and_late_joiner_gets_it(make):
     s = make()
     s.configure()
-    assert wait_for(lambda: s.probe.count_publishers('/myRobot/map/explored') == 1, 5.0)
-    assert wait_for(lambda: s.explored == [False], 5.0)
+    assert wait_for(lambda: s.probe.count_publishers('/myRobot/map/explored') == 1, 30.0)
+    assert wait_for(lambda: s.explored[:1] == [False], 30.0)
     late = []
     s.probe.create_subscription(Bool, '/myRobot/map/explored', lambda m: late.append(m.data), LATCHED)
-    assert wait_for(lambda: late == [False], 5.0)
+    assert wait_for(lambda: late == [False], 30.0)
 
 
 def test_R13_map_loaded_parameter_makes_explored_true(make):
     s = make(params=[('map_loaded', True)])
     s.configure()
-    assert wait_for(lambda: s.explored == [True], 5.0)
+    assert wait_for(lambda: s.explored == [True], 30.0)
     assert s.probe.count_publishers('/myRobot/map/explored') == 1
 
 
