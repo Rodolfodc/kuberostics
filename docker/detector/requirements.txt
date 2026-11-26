@@ -1,0 +1,6 @@
+# Python dependencies of the detector image (docker/detector/Dockerfile). Installed into /opt/venv (system site packages visible
+# for rclpy and OpenCV from apt). Pinned for reproducibility; tracked here per the CLAUDE.md setup rule.
+# torch and torchvision come from the CPU wheel index (PYTORCH_INDEX_URL build arg), not from PyPI.
+ultralytics==8.3.200
+torch==2.9.1
+torchvision==0.24.1

@@ -5,6 +5,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Submode.msg"
@@ -12,8 +13,12 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Notification.msg"
   "msg/OffloadStatus.msg"
   "action/Escape.action"
+  "msg/Room.msg"
+  "msg/RoomArray.msg"
+  "srv/SetRoomLabel.srv"
   "action/CoverRoom.action"
-  DEPENDENCIES builtin_interfaces geometry_msgs
+  "action/Explore.action"
+  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)
