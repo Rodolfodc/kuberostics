@@ -1,4 +1,4 @@
-"""T904: SelectorCore tests (circuit breaker table, age and watermark filters), simulated clock.
+"""SelectorCore tests (circuit breaker table, age and watermark filters), simulated clock.
 
 Each test cites the requirement it verifies (Art. VIII). No ROS, no real time.
 """
