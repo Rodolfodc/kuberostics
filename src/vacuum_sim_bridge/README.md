@@ -18,6 +18,15 @@ or activate them. All state logic is in pure-Python cores; the nodes are thin gl
   to 2 steps/s with the kinect and laser, far from real time.
 * Therefore `use_sim_time` must stay `false` (the default) on the bridges and on every node that consumes
   their topics or TF, in every launch. With `use_sim_time: true` and no `/clock`, those nodes never get time.
+* Wall-clock timeouts of Nav2 and coverage_server assume about real time; for a slow simulator pass
+  `sim_slowdown:=<factor>` to `nav.launch.py` and `coverage.launch.py` (see their READMEs), not `use_sim_time`.
+* Startup "Message Filter dropping message ... earlier than all the data in the transform cache" (Nav2 costmaps,
+  observed live at about 0.09x real time): the first scans are stamped before the first dynamic TF
+  (`my_robot_odom` -> `base_footprint`) reaches the listener's cache, mostly in the first seconds, occasionally later; it did not
+  break any run (goal reached, coverage completed). Deliberately not changed here: stamping the scan further in
+  the past would make the early drops worse, stamping it later than the data it was read with would be wrong,
+  and buffering scans in the bridge would add latency and still not create TF history that does not exist
+  yet. The message filter queue of the costmaps recovers by itself once the TF stream is running.
 
 ## Parameters
 

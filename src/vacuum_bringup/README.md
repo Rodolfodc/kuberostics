@@ -69,10 +69,30 @@ cd src/vacuum_bringup && python3 -m pytest test/test_manager_sequencer.py
 nodes; the whole goal sits under a `Timeout` of 180 s, 005-R34). One YAML serves Jazzy (Nav2 1.3.x) and Lyrical
 (1.5.x): Nav2 ignores undeclared parameters, and the differences are listed in the launch file docstring.
 Arguments: `autostart` (default true; false when `lifecycle_sequencer` starts the manager), `with_manager`,
-`params_file`, `bt_xml`. `skeleton.launch.py` does not include it yet and `lifecycle_nav.yaml` still has an empty
+`params_file`, `bt_xml`, `sim_slowdown` (below). `skeleton.launch.py` does not include it yet and `lifecycle_nav.yaml` still has an empty
 `node_names` (the sequencer wiring is a later task). `nav.launch.py` sets `bond_timeout: 0.0` on its manager, so a
 crashed Nav2 node is not detected by the manager; the sequencer wiring follow-up must restore a bond timeout.
 
+#### Slow simulator: `sim_slowdown`
+
+With the laser model CoppeliaSim ran at 1.5 to 1.9 steps/s (about 0.09x real time) and every wall-clock timeout
+(`use_sim_time` stays false, there is no `/clock`) aborted valid goals. `sim_slowdown:=<factor>` (default `1.0`,
+real time: the shipped files are used untouched) multiplies `progress_checker.movement_time_allowance`, the
+`costmap_update_timeout` of `controller_server` and `planner_server` and the BT `Timeout` (005-R34) by the
+factor. The launch writes overlay copies of the params and of the BT to a temporary directory
+(`vacuum_bringup/slowdown.py`, pure and unit-tested), so nothing is edited in two places:
+
+```bash
+ros2 launch vacuum_bringup nav.launch.py sim_slowdown:=11     # 15 s -> 165 s, 180 s -> 1980 s, 1 s -> 11 s
+ros2 launch vacuum_coverage coverage.launch.py sim_slowdown:=11   # waypoint_timeout_s 120 -> 1320 s
+```
+
+Use the same factor on both launches (factor about 1 / real-time factor). The supervisor and skeleton timeouts
+(`escape_timeout_s`, `dock_request_timeout_s`, `feedback_stale_s`) are not scaled: the skeleton launches only
+the stubs, and the real escape and stuck nodes do not exist yet.
+
+- `test/test_slowdown.py`, `test/test_nav_slowdown_graph.py`: the helper, the launch argument and a live Nav2 started
+  with `sim_slowdown:=4` (parameters read back from the nodes; domain from `graph_support.domain_for(22)`).
 - `test/test_nav_config.py`: YAML and BT checks, no ROS graph (005-R19, R23, R34).
 - `test/test_nav_graph.py`, `test/test_nav_timeout.py`: live graph with real Nav2, real `map_server` and
   `test/fake_robot.py` (odometry, TF, empty scan); goal reached, cancel silences `mux/nav`, the `Timeout`

@@ -478,6 +478,13 @@ parameters:
     with_manager: {type: bool, default: true, note: "false when an outer launch already runs lifecycle_manager_optional with these node names"}
   coverage_launch:                  # vacuum_coverage/launch/coverage.launch.py
     autostart: {type: bool, default: true, note: "configure and activate coverage_server without a lifecycle manager (stand-alone use)"}
+    sim_slowdown: {type: double, default: 1.0, note: "factor > 0 for a slow simulator (about 0.09x real time): multiplies waypoint_timeout_s, coverage_timeout_s and resume_window_s; 1.0 overrides nothing; use the same value as nav_launch"}
+  nav_launch:                       # vacuum_bringup/launch/nav.launch.py (005-R19)
+    autostart: {type: bool, default: true, note: "false when lifecycle_sequencer starts the manager"}
+    with_manager: {type: bool, default: true}
+    params_file: {type: string, default: "<share>/vacuum_bringup/config/nav2_params.yaml"}
+    bt_xml: {type: string, default: "<share>/vacuum_bringup/config/nav_bt.xml", requirement: 005-R34}
+    sim_slowdown: {type: double, default: 1.0, requirement: 005-R34, note: "factor > 0 for a slow simulator: multiplies progress_checker.movement_time_allowance, costmap_update_timeout (controller and planner) and the BT Timeout (nav_goal_timeout_s); 1.0 uses the files untouched; use_sim_time stays false"}
   skeleton_launch:                  # vacuum_bringup/launch/skeleton.launch.py
     with_ia368ii: {type: bool, default: true, requirement: 001-R01}
     with_wheel_bridge: {type: bool, default: true, requirement: 001-R13, note: "ignored when with_ia368ii is false"}
