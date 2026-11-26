@@ -81,7 +81,7 @@ topics:
   - name: /myRobot/notifications
     type: vacuum_interfaces/msg/Notification
     qos: default
-    owner: "*"                # any node may notify
+    owner: "*"                # any node may notify; exploration_server notifies EXPLORATION_INCOMPLETE (WARN, 003-R11)
     since: "001"
   - name: /myRobot/mux/lock_stop
     type: std_msgs/msg/Bool
@@ -96,7 +96,7 @@ topics:
     qos: default
     owner: supervisor
     since: "001"
-    note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz"
+    note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz; 005-R34 watchdog keys watchdog_armed, watchdog_* (counters of FeedbackWatchdog) and nav_cancels"
 
   - name: /myRobot/telemetry/lifecycle_sequencer
     type: diagnostic_msgs/msg/DiagnosticArray
@@ -161,7 +161,7 @@ topics:
 
   # ---- mapping and rooms (spec 003) ----
   - {name: /map, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: [slam_toolbox, map_server], since: "003", note: "exactly one of them runs (map_file selects map_server); the contract test shall accept either owner"}
-  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, max_publishers: 1, reserved: true, since: "003", note: "003-R13; reserved: no publisher while exploration is cut (map_file path), tolerated as for mux/coverage; drop reserved when exploration_server lands"}
+  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, max_publishers: 1, since: "003", note: "003-R13; published by exploration_server (false, or true with map_loaded)"}
   - {name: /myRobot/map/room_labels, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: room_segmenter, since: "003", note: "003-R18: value = Room.index from 1, 0 = no room, -1 = unknown; same geometry as /map"}
   - {name: /myRobot/map/rooms,       type: vacuum_interfaces/msg/RoomArray, qos: latched, owner: room_segmenter, since: "003"}
   - {name: /myRobot/telemetry/odom_tf_bridge,     type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: odom_tf_bridge, since: "003"}
@@ -206,8 +206,8 @@ actions:
 # TF broadcasters (contract batch 2). Not read by the contract tests yet. One broadcaster per child frame
 # (003-R02). Frame names are parameters of the broadcaster; the values below are the ones the launch must use.
 tf:
-  - {parent: map,            child: odom,           owner: [slam_toolbox, static_transform_publisher], since: "003", note: "003-R05; static from the recorded start pose with map_file (003-R06, R30)"}
-  - {parent: odom,           child: base_footprint, owner: my_robot_odometry_node, since: "003", note: "D-27: the bridge parameter odom_frame (default my_robot_odom, the 2025S2 name; sim_bridges.launch.py and config/sim_bridge.yaml still use it) is to be set to odom by the bridge launch/profile (code follow-up); with these bridges odom_tf_bridge is not started (003-R02: one broadcaster); proposal, see Q-14 in spec 003"}
+  - {parent: map,            child: my_robot_odom,           owner: [slam_toolbox, static_transform_publisher], since: "003", note: "003-R05; static from the recorded start pose with map_file (003-R06, R30)"}
+  - {parent: my_robot_odom,  child: base_footprint, owner: my_robot_odometry_node, since: "003", note: "D-27: the bridge parameter odom_frame keeps its default my_robot_odom (the 2025S2 name, also used by nav2_params.yaml); with these bridges odom_tf_bridge is not started (003-R02: one broadcaster); proposal, see Q-14 in spec 003"}
   - {parent: base_footprint, child: base_link,      owner: my_robot_odometry_node, static: true, since: "003", note: "z = footprint_to_base_z (0.08 m)"}
   - {parent: base_link,      child: laser_link,     owner: my_robot_scan_node,     static: true, since: "003", note: "laser_xyz of the profile; the mapping launch shall not publish it a second time (003-R03)"}
   - {parent: base_link,      child: camera_link,    owner: my_robot_vision_node,   static: true, since: "003", note: "camera_xyz + camera_quat; optical frame (x right, y down, z forward); same caveat as laser_link"}
@@ -216,7 +216,7 @@ lifecycle:
   ia368ii_manager: [myrobot, behaviour_server, cleaning_server, autodocking_server, charging_server, charged_server]
   # spec 003 adds odom_tf_bridge, exploration_server and room_segmenter here when its nodes land (003-R26)
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]
-  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # when the nav nodes land (T510); Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
+  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # nav.launch.py (T510) has its own lifecycle_manager_nav (params autostart, bond_timeout); wiring into the sequencer pending; Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
   # not managed (plain; D-26 exception PROPOSED in D-27, awaiting the project owner): the four vacuum_sim_bridge nodes (my_robot_scan_node, my_robot_vision_node,
   # my_robot_cmd_vel_node, my_robot_odometry_node), same-name drop-ins of the plain 2025S2 bridges (D-27)
   lifecycle_manager_optional: []      # detection chain of 009a (detector_local, image_throttle, detection_selector) when the sequencer launch includes it; MQTT bridge in spec 009; detector_cloud runs in K3s, outside the robot managers
@@ -247,7 +247,7 @@ parameters:
     dock_command: {type: string, default: stop, requirement: 005-R30, note: "command sent on start_stop_service to request docking (unverified, T520)"}
     feedback_stale_s: {type: double, default: 2.5, requirement: 005-R34}
     nav_cancel_s: {type: double, default: 1.0, requirement: 005-R34}
-    nav_cancel_action: {type: string, default: /navigate_to_pose, requirement: 005-R34}
+    nav_action: {type: string, default: /navigate_to_pose, requirement: 005-R34, note: "the watchdog sends a CancelGoal request (zero goal id and stamp: cancel all) to <nav_action>/_action/cancel_goal (action_msgs/srv/CancelGoal, Nav2 interface, client of the supervisor)"}
     explore_on_start: {type: bool, default: false, requirement: 003-R14, note: "true needs amendment A1 of spec 001; false until exploration exists"}
     explore_action: {type: string, default: /myRobot/explore}
   stop_guard:
@@ -443,7 +443,7 @@ parameters:
     camera_quat: {type: double_array, default: [-0.5628, 0.5628, -0.4168, 0.439], note: "x y z w, optical frame in base_link"}
     camera_flip_horizontal: {type: bool, default: false}
     camera_flip_vertical: {type: bool, default: true, note: "the Remote API returns rows bottom to top (verified live)"}
-    odom_frame: {type: string, default: my_robot_odom, note: "2025S2 name; our launch shall set odom (003-R01), see tf"}
+    odom_frame: {type: string, default: my_robot_odom, note: "2025S2 name, kept: nav2_params.yaml and the bridge use it; 003-R01 and the tf table say my_robot_odom"}
     footprint_frame: {type: string, default: base_footprint}
     base_frame: {type: string, default: base_link}
     laser_frame: {type: string, default: laser_link}

@@ -46,7 +46,7 @@ Odometry and TF.
 
 | ID | Requirement | Verification |
 |---|---|---|
-| 003-R01 | The system shall use a single odometry source for SLAM and Nav2, chosen by the launch argument `odom_source` (`sim` default, `laser`), with the same TF names in both: `map -> odom -> base_link -> <sensor frames>`. | launch_testing (TF tree) |
+| 003-R01 | The system shall use a single odometry source for SLAM and Nav2, chosen by the launch argument `odom_source` (`sim` default, `laser`), with the same TF names in both: `map -> my_robot_odom -> base_link -> <sensor frames>` (`my_robot_odom` is the odometry frame name of the 2025S2 bridge and of the bridges of `vacuum_sim_bridge`; it is not renamed to `odom`). | launch_testing (TF tree) |
 | 003-R02 | Where `odom_source:=sim` and the 2025S2 node does not broadcast `odom -> base_link`, `odom_tf_bridge` shall broadcast it from the pose and the `header.stamp` of each `/myrobot/odom` message. There shall be exactly one broadcaster of `odom -> base_link` at any time. | unit + launch_testing |
 | 003-R03 | The launch shall publish the static transforms `base_link -> <laser frame>` and `base_link -> <camera frame>` from parameters whose values come from the scene (T301). The frame of `/scan` shall be the one declared in the parameter `scan_frame`. | launch_testing |
 | 003-R04 | Where `odom_source:=laser`, the launch shall start `rf2o` (built from source, `deps.repos`) instead of `odom_tf_bridge`, without any change in the other nodes (Art. III.5). Cut candidate. | launch_testing + sim |
@@ -125,8 +125,8 @@ Cross-cutting.
   `odom_frame -> base_footprint` plus a static `base_footprint -> base_link` (z 0.08 m). With `odom_source: ground_truth`
   the pose is relative to the first sample (start frame, so `zero_at_first_message` is not needed). The scan and vision
   bridges broadcast the static `base_link -> laser_link` and `base_link -> camera_link` from the profile.
-  Consequences (the `tf` section of `topics.yaml`): (a) our launch sets the bridge parameter `odom_frame: odom`, so the
-  tree is `map -> odom -> base_footprint -> base_link -> {laser_link, camera_link}`, which satisfies 003-R01;
+  Consequences (the `tf` section of `topics.yaml`): (a) the bridge parameter `odom_frame` keeps its default `my_robot_odom` (not renamed to `odom`), so the
+  tree is `map -> my_robot_odom -> base_footprint -> base_link -> {laser_link, camera_link}`, which satisfies 003-R01;
   (b) with these bridges `odom_tf_bridge` is **not** started, otherwise `base_link` would get a second parent
   (003-R02, one broadcaster); (c) the mapping launch does not publish `laser_to_base_xyz_rpy` / `camera_to_base_xyz_rpy`
   while these bridges run (003-R03 is met by the bridges, with `scan_frame: laser_link`). The mapping argument
