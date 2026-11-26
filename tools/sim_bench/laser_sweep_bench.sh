@@ -9,7 +9,8 @@ set -uo pipefail
 B="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; R="$B/../.."
 model="$1"; shift
 [ -f "$model" ] || { echo "model not found: $model" >&2; exit 2; }
-extra=(); if [ "${1:-}" = "--kinect-explicit" ]; then extra=(--kinect-explicit); shift; fi
+extra=(); [ -n "${DENSITY:-}" ] && extra+=(--density "$DENSITY")
+if [ "${1:-}" = "--kinect-explicit" ]; then extra+=(--kinect-explicit); shift; fi
 N_LIST=(1 2 4); [ $# -gt 0 ] && N_LIST=("$@")
 for N in "${N_LIST[@]}"; do
   for try in 1 2 3 4 5 6 7 8; do

@@ -8,7 +8,7 @@ Usage: laser_sweep_bench.py MODEL.ttm [--n 1] [--freerun SECONDS] [--steps 40] [
 import argparse, math, statistics, time
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 ap = argparse.ArgumentParser(); ap.add_argument('model'); ap.add_argument('--n', type=int, default=1)
-ap.add_argument('--steps', type=int, default=40); ap.add_argument('--freerun', type=float, metavar='SECONDS', help='no stepping: measure simulated time per wall second over SECONDS (the GUI stepping stall does not apply)'); ap.add_argument('--kinect-explicit', action='store_true')
+ap.add_argument('--steps', type=int, default=40); ap.add_argument('--freerun', type=float, metavar='SECONDS', help='no stepping: measure simulated time per wall second over SECONDS (the GUI stepping stall does not apply)'); ap.add_argument('--kinect-explicit', action='store_true'); ap.add_argument('--density', type=float, help='beams per degree over 180 deg (model default 2.5 = 452 beams); sets customData.scanDensity')
 a = ap.parse_args()
 sim = RemoteAPIClient().require('sim')
 sim.setBoolParam(sim.boolparam_display_enabled, False)
@@ -30,6 +30,8 @@ sim.setStepping(True); sim.startSimulation()
 for _ in range(8): sim.step()  # warm-up: the first steps take ~10 s (first sweep and script start)
 sim.setObjectPosition(R, sim.handle_world, [rx, ry, 0.08]); sim.setObjectOrientation(R, sim.handle_world, [0, 0, -math.pi / 2])
 sim.setStringProperty(L, 'customData.scanEveryN', str(a.n))
+if a.density:
+    sim.setStringProperty(L, 'customData.scanDensity', str(a.density))
 for _ in range(4): sim.step()
 p0 = sim.getObjectPosition(R, -1); times = []
 for _ in range(a.steps):
@@ -39,8 +41,8 @@ for _ in range(a.steps):
 p1 = sim.getObjectPosition(R, -1)
 d = sim.getFloatArrayProperty(R, 'signal.distSignal', {'noError': True}) or []
 sw = sim.getFloatSignal('laserSweepSeconds')
-print('N=%d kinect_%s: %.2f steps/s (median step %.3f s); sweep wall time %s s; moved %.3f m in %.2f s sim; distSignal len %d min %.2f max %.2f zeros %d' % (
-    a.n, 'explicit' if a.kinect_explicit else 'auto', len(times) / sum(times), statistics.median(times),
+print('N=%d density=%s kinect_%s: %.2f steps/s (median step %.3f s); sweep wall time %s s; moved %.3f m in %.2f s sim; distSignal len %d min %.2f max %.2f zeros %d' % (
+    a.n, a.density or 2.5, 'explicit' if a.kinect_explicit else 'auto', len(times) / sum(times), statistics.median(times),
     '%.3f' % sw if sw is not None else 'n/a', math.dist(p0[:2], p1[:2]), a.steps * 0.05, len(d), min(d, default=0), max(d, default=0),
     sum(1 for x in d if x == 0)), flush=True)
 if statistics.median(times) > 0.9:
