@@ -7,7 +7,7 @@ sys.path.insert(0, sys.argv[1] + '/vacuum_sim_bridge')
 from vacuum_sim_bridge.sim_client import ZmqSimClient
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 v, w, secs = float(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]); period = float(sys.argv[5]) if len(sys.argv) > 5 else 0.0
-c = ZmqSimClient(); sim = c._sim; robot = sim.getObject('/myRobot')
+c = ZmqSimClient(); c.get_sim_time(); sim = c._sim; robot = sim.getObject('/myRobot')
 gt = RemoteAPIClient().require('sim'); lj = gt.getObject('/myRobot/leftMotor'); rj = gt.getObject('/myRobot/rightMotor')
 rows = []; stop = threading.Event()
 def pose():
