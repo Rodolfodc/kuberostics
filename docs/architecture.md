@@ -85,7 +85,7 @@ flowchart TB
     MQB["MQTT bridge"]
   end
 
-  NAV["Nav2 controller_server<br/>enable_stamped_cmd_vel: false"]
+  NAV["Nav2: bt_navigator → controller_server<br/>enable_stamped_cmd_vel: false"]
   TEL["teleop_twist_keyboard"]
   SCHED["schedule (module 4)"]
   HMI["interface (module 6)"]

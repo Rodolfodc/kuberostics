@@ -55,6 +55,6 @@ stub for a real implementation without touching the rest.
 
 ## Definition of done
 
-- All automatic tests for 001-R01 to 001-R12, 001-R16 and 001-R18 to 001-R22 passing in CI, on Jazzy and Lyrical.
+- All automatic tests for 001-R01 to 001-R12, 001-R16, 001-R18 to 001-R22 and the unit part of 001-R23 passing in CI, on Jazzy and Lyrical.
 - Video of up to 1 minute showing scenarios 1 to 4 in CoppeliaSim.
 - D-11 recorded in `specs/000-system/spec.md` with the steps/s measurement.
