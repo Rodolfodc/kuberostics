@@ -103,15 +103,7 @@ Where it runs: the library and unit tests run in the default `colcon test`. The 
 
 ### Domain ID allocation
 
-Tests that bring up a graph use `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST` and a random `ROS_DOMAIN_ID` from a range reserved per package, so parallel `colcon test` runs do not see each other:
-
-| Package | Range |
-|---|---|
-| `vacuum_stubs` | 10-39 |
-| `vacuum_safety` | 40-69 |
-| `vacuum_supervisor` | 70-99 |
-| `vacuum_bringup` | 100-129 |
-| `vacuum_contract_tests` | 130-159 |
+Moved to `specs/000-system/spec.md` §7, the single allocation table for every package and tool (contract batch 2). The ranges of this plan are unchanged there; history: 130-159 was first reserved here for `vacuum_contract_tests`, the sequencer tests (T521) took it and the contract tests moved to 190-219.
 
 ## Steps/s measurement (D-11)
 

@@ -1,4 +1,4 @@
-"""T021: escape_server exits cleanly on SIGINT, also with an escape goal running.
+"""escape_server exits cleanly on SIGINT, also with an escape goal running.
 
 Regression of `RCLError: context is invalid` raised by the goal loop after SIGINT. Runs the real `main()` in a
 subprocess and sends SIGINT as `ros2 launch` does at teardown. Requirement: 001-R07 (the escape server must not
