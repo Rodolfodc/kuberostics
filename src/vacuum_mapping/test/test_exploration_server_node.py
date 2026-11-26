@@ -226,24 +226,30 @@ def test_R31_feedback_is_published_at_least_every_second_during_a_goal(make):
     handle.cancel_goal_async()
 
 
-def test_R32_cancel_and_resend_keeps_the_blacklist_and_counters(make):
-    # goals 0 and 1 abort (first frontier blacklisted), goal 2 hangs; the cancel and re-send must not revisit it
+def test_R32_cancel_and_resend_keeps_the_blacklist_counters_and_the_clock(make):
+    # goals 0 and 1 abort (first frontier blacklisted), later goals hang; the cancel and re-send must not
+    # revisit the blacklisted frontier and must not restart the 6 s explore clock
     def script(i, x, y):
-        return ABORT if i < 2 else (HANG if i == 2 else REACH)
-    s = make(script=script, cells=two_frontier_cells())
+        return ABORT if i < 2 else HANG
+    s = make(script=script, cells=two_frontier_cells(), params=[('explore_timeout_s', 6.0)])
     s.up()
+    t_start = time.monotonic()
     first = s.send()
     assert wait_for(lambda: len(s.nav.goals) >= 3 and s.nav.active, 10.0)
     first.cancel_goal_async()
     assert s.result(first).status == GoalStatus.STATUS_CANCELED
+    t_cancel = time.monotonic()
+    assert wait_for(lambda: time.monotonic() - t_cancel > 2.0, 3.0)      # a restarted clock would end 2 s later
     second = s.send()
     assert second.accepted
     assert wait_for(lambda: len(s.nav.goals) >= 4, 10.0)
     blacklisted = s.nav.goals[0]
     assert all(abs(g[0] - blacklisted[0]) > 0.5 for g in s.nav.goals[2:]), s.nav.goals
     assert wait_for(lambda: s.values().get('resumed') == '1', 5.0)
-    assert s.values()['blacklisted'] == '1.0' or s.values()['blacklisted'] == '1'
-    second.cancel_goal_async()
+    assert float(s.values()['blacklisted']) == 1.0
+    res = s.result(second, timeout=15.0)
+    assert not res.result.success and res.result.frontiers_blacklisted >= 1
+    assert time.monotonic() - t_start < 6.0 + 1.0, 'the explore_timeout_s clock was not restarted (003-R32)'
 
 
 def test_R26_telemetry_reports_state_and_counters_at_1hz(make):

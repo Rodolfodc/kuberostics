@@ -7,16 +7,14 @@ code 0 at teardown).
 The kill test (003-R31) is in test_exploration_kill.py: launch_testing treats the death of a launched
 process as a failure, so that test spawns the node as an independent process.
 
-Domain: a fixed random id from 220-232 (mapping range) taken at import; the conftest fixture of this package
-changes ROS_DOMAIN_ID per test, so this module never reads the environment after import.
+Domain: the rotating id of conftest.py (mapping range 220-232), read from the environment inside the test item.
 """
 import os
-import random
 import threading
 import unittest
 
-DOMAIN = random.SystemRandom().randrange(220, 233)
-os.environ['ROS_DOMAIN_ID'] = str(DOMAIN)
+# The id comes from the rotating counter of conftest.py (its autouse fixture runs before the launch test item
+# and sets ROS_DOMAIN_ID); it is read where it is used, inside the item.
 os.environ['ROS_AUTOMATIC_DISCOVERY_RANGE'] = 'LOCALHOST'
 os.environ.pop('ROS_LOCALHOST_ONLY', None)
 
@@ -45,7 +43,7 @@ from exploration_fixtures import (LATCHED, REACH, FakeNav, MapPublisher, known_c
 def generate_test_description():
     source = os.path.join(get_package_share_directory('vacuum_mapping'), 'launch', 'exploration.launch.py')
     return LaunchDescription([
-        SetEnvironmentVariable('ROS_DOMAIN_ID', str(DOMAIN)),
+        SetEnvironmentVariable('ROS_DOMAIN_ID', os.environ['ROS_DOMAIN_ID']),
         SetEnvironmentVariable('ROS_AUTOMATIC_DISCOVERY_RANGE', 'LOCALHOST'),
         SetEnvironmentVariable('ROS_LOCALHOST_ONLY', '0'),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(source)),
@@ -57,7 +55,7 @@ class TestExplorationAlone(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.context = rclpy.Context()
-        rclpy.init(context=cls.context, domain_id=DOMAIN)
+        rclpy.init(context=cls.context, domain_id=int(os.environ['ROS_DOMAIN_ID']))
         cls.nav = FakeNav(lambda i, x, y: REACH, context=cls.context, on_reach=cls._on_reach)
         cls.maps = MapPublisher(one_frontier_cells(), context=cls.context)
         cls.probe = rclpy.create_node('exploration_launch_probe', context=cls.context)

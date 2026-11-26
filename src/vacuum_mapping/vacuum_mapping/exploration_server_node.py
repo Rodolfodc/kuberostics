@@ -131,6 +131,8 @@ class ExplorationServerNode(LifecycleNode):
         self._server = ActionServer(
             self, Explore, '/myRobot/explore', execute_callback=self._execute,
             goal_callback=self._on_goal, cancel_callback=self._on_cancel, callback_group=self._group)
+        # 003-R13: false at startup. Every configure (also after cleanup) re-creates the publisher and
+        # publishes false again (true only with map_loaded), so a stale true is never served.
         self._set_explored(bool(self.get_parameter('map_loaded').value), 'map_loaded parameter')
         self._set_state('inactive')
         return TransitionCallbackReturn.SUCCESS
@@ -242,6 +244,7 @@ class ExplorationServerNode(LifecycleNode):
             self._counters['resumed'] += 1
         start = session.start_time
         next_feedback = 0.0
+        finished = False
         try:
             while rclpy.ok():
                 t = self._now()
@@ -251,6 +254,7 @@ class ExplorationServerNode(LifecycleNode):
                     self._counters['cancelled'] += 1
                     snap = session.snapshot()
                     goal_handle.canceled()
+                    finished = True
                     return self._result(False, snap['done'], snap['blacklisted'], start)
                 if not self._active or generation != self._generation:
                     self._cancel_nav()
@@ -259,6 +263,7 @@ class ExplorationServerNode(LifecycleNode):
                     self._counters['failed'] += 1
                     goal_handle.abort()
                     self.get_logger().warning('goal aborted: node deactivated')
+                    finished = True
                     return self._result(False, snap['done'], snap['blacklisted'], start)
                 with self._nav_lock:
                     outcome, self._nav_outcome = self._nav_outcome, None
@@ -275,6 +280,7 @@ class ExplorationServerNode(LifecycleNode):
                     elif step.kind is StepKind.DONE:
                         if step.cancel_goal:
                             self._cancel_nav()
+                        finished = True
                         return self._finish(goal_handle, step, start)
                 self._snapshot = session.snapshot()
                 if t >= next_feedback:
@@ -286,8 +292,12 @@ class ExplorationServerNode(LifecycleNode):
                 self._wake.clear()
             self._cancel_nav()
             goal_handle.abort()
+            finished = True
             return self._result(False, 0, 0, start)
         finally:
+            if not finished:                  # an exception escaped the loop: no orphan Nav2 goal, session kept
+                self._cancel_nav()
+                session.suspend(self._now())
             self._busy = False
             self._set_state('idle' if self._active else 'inactive')
 
@@ -406,6 +416,8 @@ def main(args=None) -> None:
     try:
         spin_resilient(executor, node)
     finally:
+        node._active = False
+        node._cancel_nav(wait=True)          # 003-R31: SIGINT/SIGTERM must not orphan a Nav2 goal
         node.destroy_node()
         rclpy.try_shutdown()
 

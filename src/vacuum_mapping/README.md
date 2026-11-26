@@ -105,8 +105,6 @@ stand-in for the supervisor watchdog (005-R34) until the supervisor handles `exp
 ## Not here yet
 
 The nodes `odom_tf_bridge`, `config/mapping.yaml`, `maps/` and the mapping launch file.
-The interfaces (`Room`, `RoomArray`, `Explore`, `SetRoomLabel`) are NOT in
-`contracts/topics.yaml` / `interfaces.md` yet (only proposed in `specs/003-mapping/plan.md`), so
-`vacuum_interfaces` does not have them and the nodes wait for the contract change. Until then `core/types.py`
-mirrors them as plain dataclasses. `GridView` lives in the shared package `src/vacuum_grid` (no ROS); the
+The interfaces (`Room`, `RoomArray`, `Explore`, `SetRoomLabel`) are imported from `vacuum_interfaces`
+(the nodes use them); `core/types.py` keeps plain-dataclass mirrors for the pure cores. `GridView` lives in the shared package `src/vacuum_grid` (no ROS); the
 duplicate cell arithmetic of `Raster` is pinned to it by `test/test_grid_conventions.py` and can be merged later.
