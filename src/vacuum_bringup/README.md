@@ -70,7 +70,8 @@ nodes; the whole goal sits under a `Timeout` of 180 s, 005-R34). One YAML serves
 (1.5.x): Nav2 ignores undeclared parameters, and the differences are listed in the launch file docstring.
 Arguments: `autostart` (default true; false when `lifecycle_sequencer` starts the manager), `with_manager`,
 `params_file`, `bt_xml`. `skeleton.launch.py` does not include it yet and `lifecycle_nav.yaml` still has an empty
-`node_names` (the sequencer wiring is a later task).
+`node_names` (the sequencer wiring is a later task). `nav.launch.py` sets `bond_timeout: 0.0` on its manager, so a
+crashed Nav2 node is not detected by the manager; the sequencer wiring follow-up must restore a bond timeout.
 
 - `test/test_nav_config.py`: YAML and BT checks, no ROS graph (005-R19, R23, R34).
 - `test/test_nav_graph.py`, `test/test_nav_timeout.py`: live graph with real Nav2, real `map_server` and

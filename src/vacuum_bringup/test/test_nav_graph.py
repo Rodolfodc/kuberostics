@@ -5,37 +5,12 @@ robot (fake_robot.py: odometry, TF, empty /scan, integrates /myRobot/mux/nav).
   controller_server on /myRobot/mux/nav.
 * 005-R34 (Nav2 part): cancelling the goal stops controller_server publishing on /myRobot/mux/nav.
 * 005-R23: Twist on mux/nav is unstamped geometry_msgs/Twist (the subscription would not receive it otherwise).
-* 005-R29: the whole thing runs on Jazzy and Lyrical.
+* 005-R29: the test runs on whichever distribution is in the container (CI runs it once per distro); it has no
+  distro-specific branches.
 
 NOT covered here (needs CoppeliaSim, left to the sim-operator: test_nav_sim_live.py, VACUUM_SIM_LIVE=1): the real wheel
 bridge, the real laser, and the House map.
 """
-import math
-import os
-import sys
-import tempfile
-import threading
-import time
-import unittest
-
-import pytest
-import rclpy
-from ament_index_python.packages import get_package_share_directory
-from geometry_msgs.msg import PoseStamped, Twist
-from launch import LaunchDescription
-from launch.actions import ExecuteProcess, IncludeLaunchDescription, SetEnvironmentVariable
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch_ros.actions import Node
-from launch_testing.actions import ReadyToTest
-from nav2_msgs.action import NavigateToPose
-from rclpy.action import ActionClient
-from rclpy.executors import SingleThreadedExecutor
-from std_srvs.srv import Trigger
-from action_msgs.msg import GoalStatus
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import graph_support as gs  # noqa: E402
-
 import math
 import os
 import sys

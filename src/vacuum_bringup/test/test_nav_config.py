@@ -80,6 +80,16 @@ def test_005_R19_the_tree_has_no_recovery_nodes_and_computes_and_follows(tree):
     assert tree.attrib['BTCPP_format'] == '4'
 
 
+def launch_name(node):
+    """Node name before execution: the public `node_name` property needs an executed action, so fall back to the
+    stored substitutions."""
+    from launch import LaunchContext
+    from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
+    raw = getattr(node, '_Node__node_name', None)
+    return perform_substitutions(LaunchContext(), normalize_to_list_of_substitutions(raw)) if raw is not None \
+        else node.node_name
+
+
 def test_005_R19_nav_launch_starts_exactly_the_three_nav2_nodes_and_their_manager():
     """That bt_navigator really reads nav_bt.xml through the bt_xml argument is proven live by test_nav_timeout.py."""
     spec = importlib.util.spec_from_file_location('nav_launch', PKG / 'launch' / 'nav.launch.py')
@@ -87,7 +97,7 @@ def test_005_R19_nav_launch_starts_exactly_the_three_nav2_nodes_and_their_manage
     spec.loader.exec_module(module)
     from launch_ros.actions import Node
     description = module.generate_launch_description()
-    nodes = {getattr(e, '_Node__node_name'): e for e in description.entities if isinstance(e, Node)}
+    nodes = {launch_name(e): e for e in description.entities if isinstance(e, Node)}
     assert set(nodes) == {'controller_server', 'planner_server', 'bt_navigator', 'lifecycle_manager_nav'}
 
 
@@ -99,8 +109,8 @@ def test_005_R23_controller_server_cmd_vel_is_remapped_to_mux_nav():
     from launch.utilities import perform_substitutions, normalize_to_list_of_substitutions
     from launch_ros.actions import Node
     controller = next(e for e in module.generate_launch_description().entities
-                      if isinstance(e, Node) and getattr(e, '_Node__node_name') == 'controller_server')
+                      if isinstance(e, Node) and launch_name(e) == 'controller_server')
     remaps = [(perform_substitutions(LaunchContext(), normalize_to_list_of_substitutions(a)),
                perform_substitutions(LaunchContext(), normalize_to_list_of_substitutions(b)))
-              for a, b in getattr(controller, '_Node__remappings')]
+              for a, b in (getattr(controller, '_Node__remappings', None) or controller.expanded_remapping_rules or [])]
     assert ('cmd_vel', '/myRobot/mux/nav') in remaps
