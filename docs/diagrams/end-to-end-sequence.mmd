@@ -38,7 +38,7 @@ sequenceDiagram
     MUX->>WB: /myRobot/cmd_vel (Twist, sole publisher)
     WB->>SIM: wheel speeds via ZeroMQ :23000
   end
-  Note over COV: real coverage and navigation are PLANNED, the stub drives forward at a constant speed
+  Note over COV: stub path shown. The real coverage_server (D-24) publishes no Twist, it sends NavigateToPose goals and Nav2 controller_server drives on mux/nav (60)
   end
 
   rect rgb(235,240,250)
