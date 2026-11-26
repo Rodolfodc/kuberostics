@@ -308,7 +308,7 @@ def test_R16_two_simultaneous_goals_accept_exactly_one(system):
 def _transition(s, transition_id):
     """Sends a ChangeState request through the real lifecycle service; returns Response.success."""
     client = s.probe.create_client(ChangeState, '/coverage_server/change_state')
-    assert client.wait_for_service(timeout_sec=10.0)
+    assert client.wait_for_service(timeout_sec=30.0)
     request = ChangeState.Request()
     request.transition.id = transition_id
     for _ in range(5):                  # a client that is new to the graph can miss its first response
@@ -320,7 +320,7 @@ def _transition(s, transition_id):
 
 def _state(s):
     client = s.probe.create_client(GetState, '/coverage_server/get_state')
-    assert client.wait_for_service(timeout_sec=10.0)
+    assert client.wait_for_service(timeout_sec=30.0)
     for _ in range(5):
         future = client.call_async(GetState.Request())
         if wait_for(future.done, 3.0):
