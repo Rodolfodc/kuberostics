@@ -1,4 +1,4 @@
-"""T521: 005-R38 (and 005-R35 to R37) on a live graph: the three REAL Nav2 lifecycle managers, the REAL
+"""Live-graph test of the sequencer: 005-R38 (and 005-R35 to R37) on a live graph: the three REAL Nav2 lifecycle managers, the REAL
 `lifecycle_sequencer` and dummy lifecycle nodes (`dummy_lifecycle_node`, test parameter `fail_on_activate`).
 
 Why processes started by the test and not one launch_testing description: the scenarios need several graphs

@@ -33,7 +33,8 @@ degraded, no automatic motion; optional failure: ignore), and on shutdown goes i
 | MQTT bridge and other cloud nodes | lifecycle, `lifecycle_manager_optional` | Network resources that may fail without affecting the robot (Art. VII) |
 | `behaviour_server`, `myrobot`, charging and docking servers | lifecycle, IA368II `lifecycle_manager` | Third-party, unchanged (Art. II) |
 | `lifecycle_sequencer` | **plain** | It only orchestrates the managers and has nothing to configure, activate or clean up. Making it a lifecycle node would need a manager for the manager |
-| `twist_mux`, `my_robot_cmd_vel_node` (wheel bridge), `teleop_twist_keyboard` | **plain**, third-party | Not ours to change (Art. II); started by the launch file |
+| `twist_mux`, stock 2025S2 `my_robot_cmd_vel_node` (wheel bridge of `my_robot_pkg`), `teleop_twist_keyboard` | **plain**, third-party | Not ours to change (Art. II); started by the launch file |
+| `my_robot_scan_node`, `my_robot_vision_node`, `my_robot_cmd_vel_node`, `my_robot_odometry_node` of `vacuum_sim_bridge` (our replacements; same names as the stock nodes, only one set runs) | **plain**, ours (D-27; exception proposed, awaiting the project owner) | Same-name drop-ins of the plain 2025S2 bridges: no manager configures the stock ones, and a lifecycle version would no longer be a drop-in. They hold a ZeroMQ connection, which D-26 would normally put under a manager; the exception is accepted because the connection is re-established on the next call after any error (`src/vacuum_sim_bridge/README.md`). `node_classification.yaml` still has to list the three names it does not have yet (ros-dev) |
 | one-shot bootstrap glue, tools | **plain** | No controllable state |
 
 Rule (D-26): a node is a lifecycle node when a manager must configure, activate, deactivate or clean up something it

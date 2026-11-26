@@ -1,4 +1,4 @@
-# lifecycle_manager_optional (T521, D-09, 005-R35): cloud and MQTT nodes (spec 009). Empty until then. Its failure
+# lifecycle_manager_optional (D-09, 005-R35): cloud and MQTT nodes (spec 009). Empty until then. Its failure
 # never affects the other managers (Art. VII). Started by lifecycle_sequencer after nav (autostart: false).
 lifecycle_manager_optional:
   ros__parameters:

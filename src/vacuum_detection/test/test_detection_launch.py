@@ -1,0 +1,63 @@
+"""009a-R01 / R03: structure of detection.launch.py for both values of `offload`, through public attributes only
+(the launch is never started here; the live graph is test_launch_offload_false.py / test_launch_offload_true.py)."""
+import importlib.util
+import pathlib
+
+import pytest
+
+pytest.importorskip('launch_ros')
+from launch import LaunchContext                                   # noqa: E402
+from launch.actions import SetLaunchConfiguration                  # noqa: E402
+from launch_ros.actions import Node                                # noqa: E402
+
+LAUNCH = pathlib.Path(__file__).resolve().parent.parent / 'launch' / 'detection.launch.py'
+
+
+def load():
+    spec = importlib.util.spec_from_file_location('detection_launch', LAUNCH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def executables(offload, **kw):
+    args = dict(local_weights='yolo11n.pt', backend='null', device='cpu', with_manager=True)
+    args.update(kw)
+    actions = load().detection_actions(offload, **args)
+    return sorted(a.node_executable for a in actions if isinstance(a, Node))
+
+
+def test_009a_R01_offload_false_runs_local_detector_and_selector_without_throttle():
+    # only detection_selector may publish the final topic (contract max_publishers 1)
+    assert executables(False) == ['detection_selector', 'detector', 'lifecycle_manager']
+
+
+def test_009a_R03_offload_false_sends_no_image_anywhere():
+    assert 'image_throttle' not in executables(False)
+
+
+def test_009a_R01_R04_offload_true_adds_the_throttle_and_keeps_the_local_detector():
+    assert executables(True) == ['detection_selector', 'detector', 'image_throttle', 'lifecycle_manager']
+
+
+def test_009a_R01_without_manager_no_manager_is_started():
+    assert 'lifecycle_manager' not in executables(True, with_manager=False)
+
+
+def build_with(offload):
+    ctx = LaunchContext()
+    for name, value in (('offload', offload), ('local_weights', 'yolo11n.pt'), ('backend', 'null'),
+                        ('device', 'cpu'), ('with_manager', 'true')):
+        SetLaunchConfiguration(name, value).visit(ctx)
+    return load()._build(ctx)
+
+
+@pytest.mark.parametrize('value,throttle', [('true', True), ('false', False)])
+def test_009a_R01_the_offload_argument_selects_the_chain(value, throttle):
+    found = {a.node_executable for a in build_with(value) if isinstance(a, Node)}
+    assert ('image_throttle' in found) is throttle and 'detection_selector' in found
+
+
+def test_009a_R01_a_bad_offload_value_is_rejected():
+    with pytest.raises(RuntimeError, match='offload'):
+        build_with('maybe')

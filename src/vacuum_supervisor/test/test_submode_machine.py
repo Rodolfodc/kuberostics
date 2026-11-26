@@ -1,4 +1,4 @@
-"""T006: SubmodeMachine tests, one row of the transition table per case.
+"""SubmodeMachine tests, one row of the transition table per case.
 
 Each test cites the requirement it verifies (Art. VIII). No ROS: the logic is pure Python.
 """
@@ -290,3 +290,155 @@ def test_001_R22_stuck_event_is_ignored_while_locked():
     assert m.submode == NONE and m.snapshot()['locked'] is True
     assert m.on_stuck() == []
     assert m.submode == NONE
+
+
+# --- spec 005, supervisor rows (005-R30): active only with dock_after_coverage -------------------------------
+def machine_dock(mode='CLEANING'):
+    m = SubmodeMachine(dock_after_coverage=True)
+    m.on_mode(mode)
+    return m
+
+
+def test_005_R30_cover_result_success_notifies_done_requests_docking_and_goes_none():
+    m = machine_dock()
+    effects = m.on_cover_result(success=True)
+    assert m.submode == NONE
+    assert m.coverage_blocked is True
+    assert Effect('notify', ('INFO', 'COVERAGE_DONE')) in effects
+    assert kinds(effects).count('request_dock') == 1
+    assert kinds(effects).count('start_dock_timer') == 1
+
+
+def test_005_R30_cover_result_failure_notifies_warn_and_still_requests_docking():
+    m = machine_dock()
+    effects = m.on_cover_result(success=False)
+    assert m.submode == NONE
+    assert m.coverage_blocked is True
+    assert Effect('notify', ('WARN', 'COVERAGE_FAILED')) in effects
+    assert 'request_dock' in kinds(effects)
+    assert 'start_dock_timer' in kinds(effects)
+
+
+def test_005_R30_cover_result_does_not_lock_the_robot():
+    m = machine_dock()
+    effects = m.on_cover_result(success=False)
+    assert m.locked is False
+    assert 'lock_stop' not in kinds(effects)
+
+
+def test_005_R30_no_new_cover_room_while_cleaning_stays_blocked():
+    m = machine_dock()
+    m.on_cover_result(success=True)
+    assert m.on_mode('CLEANING') == []          # the orchestrator republishes the mode every 0.2 s
+    assert m.on_mode('CLEANING') == []
+    assert m.submode == NONE
+    assert m.coverage_blocked is True
+
+
+def test_005_R30_stuck_event_while_blocked_is_ignored():
+    m = machine_dock()
+    m.on_cover_result(success=True)
+    assert m.on_stuck() == []
+    assert m.submode == NONE
+
+
+def test_005_R30_mode_autodocking_after_the_request_keeps_none_and_stops_the_timer():
+    m = machine_dock()
+    m.on_cover_result(success=True)
+    effects = m.on_mode('AUTODOCKING')
+    assert m.submode == NONE
+    assert kinds(effects) == ['cancel_dock_timer']      # docking is driven by the IA368II autodocking_server (D-05)
+    assert m.coverage_blocked is False                  # the mode left CLEANING
+
+
+@pytest.mark.parametrize('mode', ['AUTODOCKING', 'CHARGING', 'CHARGED', 'IDLE', ''])
+def test_005_R30_flag_is_cleared_when_the_mode_leaves_cleaning(mode):
+    m = machine_dock()
+    m.on_cover_result(success=True)
+    m.on_mode(mode)
+    assert m.coverage_blocked is False
+
+
+def test_005_R30_cleaning_covers_again_after_the_flag_was_cleared():
+    m = machine_dock()
+    m.on_cover_result(success=True)
+    m.on_mode('CHARGING')
+    effects = m.on_mode('CLEANING')                     # 001-R06 again: a new cleaning session
+    assert kinds(effects) == ['send_cover_room']
+    assert m.submode == COVERING
+
+
+def test_005_R30_dock_timer_expiry_in_cleaning_notifies_error_and_sends_no_goal():
+    m = machine_dock()
+    m.on_cover_result(success=True)
+    effects = m.on_dock_timeout()
+    assert effects == [Effect('notify', ('ERROR', 'DOCK_REQUEST_FAILED'))]
+    assert m.submode == NONE
+    assert m.coverage_blocked is True                   # bounded (Art. VI.3): still no new cover_room
+    assert m.on_mode('CLEANING') == []
+
+
+def test_005_R30_dock_timer_expiry_after_the_mode_changed_is_ignored():
+    m = machine_dock()
+    m.on_cover_result(success=True)
+    m.on_mode('AUTODOCKING')
+    assert m.on_dock_timeout() == []
+
+
+def test_005_R30_dock_timeout_is_reported_once():
+    m = machine_dock()
+    m.on_cover_result(success=True)
+    assert len(m.on_dock_timeout()) == 1
+    assert m.on_dock_timeout() == []
+
+
+def test_005_R30_cover_result_outside_covering_is_ignored():
+    m = machine_dock()
+    m.on_stuck()                                        # ESCAPING: the cover goal was cancelled, late result
+    assert m.on_cover_result(success=True) == []
+    assert m.submode == ESCAPING
+    assert m.coverage_blocked is False
+
+
+def test_005_R30_cover_result_after_the_mode_left_cleaning_is_ignored():
+    m = machine_dock()
+    m.on_mode('IDLE')
+    assert m.on_cover_result(success=True) == []
+    assert m.coverage_blocked is False
+
+
+def test_005_R30_escape_success_still_resumes_covering_with_the_rows_enabled():
+    m = machine_dock()
+    m.on_stuck()
+    assert kinds(m.on_escape_result(success=True)) == ['send_cover_room']
+    assert m.submode == COVERING
+
+
+def test_005_R30_with_the_flag_off_the_001_behaviour_is_unchanged():
+    m = SubmodeMachine()                                # dock_after_coverage defaults to false
+    m.on_mode('CLEANING')
+    assert m.on_cover_result(success=True) == []
+    assert m.submode == COVERING
+    assert m.coverage_blocked is False
+
+
+def test_005_R30_new_cleaning_session_clears_a_pending_dock_timer():
+    m = machine_dock()
+    m.on_cover_result(success=True)
+    effects = m.on_mode('CHARGED')
+    assert 'cancel_dock_timer' in kinds(effects)
+
+
+def test_D20_005_R30_metrics_and_logs_of_the_new_rows():
+    log = FakeLogger()
+    m = SubmodeMachine(logger=log, dock_after_coverage=True)
+    m.on_mode('CLEANING')
+    m.on_cover_result(success=True)
+    m.on_dock_timeout()
+    snap = m.snapshot()
+    assert snap['coverage_blocked'] is True
+    assert snap['coverage_results'] == 1
+    assert snap['dock_requests'] == 1
+    assert snap['dock_request_failures'] == 1
+    assert any('COVERING -> NONE' in msg for msg in log.messages('info'))
+    assert log.messages('error')                        # the dock request failure
