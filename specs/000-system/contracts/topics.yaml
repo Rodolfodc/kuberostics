@@ -261,7 +261,7 @@ parameters:
     angular_z: {type: double, default: 0.0, note: "stub only"}
     publish_rate_hz: {type: double, default: 10.0, note: "stub only"}
     lane_spacing_m: {type: double, default: 0.25, requirement: 005-R17}
-    robot_radius_m: {type: double, default: 0.18, requirement: 005-R17, note: "footprint radius about the /myRobot origin, measured (.sim/robot_report.txt: 0.18 m about the origin, 0.21 m about the wheel axle); code default still 0.16 (follow-up)"}
+    robot_radius_m: {type: double, default: 0.18, requirement: 005-R17, note: "footprint radius about the /myRobot origin, measured (.sim/robot_report.txt: 0.18 m about the origin, 0.21 m about the wheel axle)"}
     margin_m: {type: double, default: 0.05, requirement: 005-R17}
     min_segment_m: {type: double, default: 0.30, requirement: 005-R17}
     tool_radius_m: {type: double, default: 0.15, requirement: 005-R21}
@@ -274,8 +274,8 @@ parameters:
     max_region_area_m2: {type: double, default: 150.0, requirement: 005-R16}
     map_topic: {type: string, default: /map}
     nav_action: {type: string, default: /navigate_to_pose, requirement: 005-R19}
-    map_frame: {type: string, default: map, requirement: 005-R19, note: "contract batch 2: frame of the goals, the path and the covered grid; today a constant MAP_FRAME in coverage_server_node.py, to be declared (ros-dev)"}
-    base_frame: {type: string, default: base_link, requirement: 005-R21, note: "contract batch 2: robot frame of the map -> base_frame lookup that feeds the covered mask; today a constant BASE_FRAME, to be declared (ros-dev)"}
+    map_frame: {type: string, default: map, requirement: 005-R19, note: "frame of the goals, the path and the covered grid"}
+    base_frame: {type: string, default: base_link, requirement: 005-R21, note: "robot frame of the map -> base_frame lookup that feeds the covered mask"}
     # nav_goal_timeout_s (180 s, 005-R34) is a Timeout of nav_bt.xml, not a node parameter: not declared here.
   escape_server:
     telemetry_rate_hz: {type: double, default: 1.0}

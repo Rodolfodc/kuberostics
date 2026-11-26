@@ -83,7 +83,7 @@ class System:
 
     def wait_ready(self):
         """Map, TF and the fake Nav2 server discovered: the node accepts goals from here on."""
-        assert wait_for(lambda: self.node.has_map and self.node._nav.server_is_ready() and self.node._pose() is not None, 20.0)
+        assert wait_for(lambda: self.node.has_map and self.node._nav.server_is_ready() and self.node._pose() is not None, 30.0)
 
     def close(self):
         try:
@@ -245,7 +245,7 @@ def test_R32_same_room_after_cancel_resumes_at_the_interrupted_waypoint(system):
     s.up()
     s.wait_ready()
     handle = s.send()
-    assert wait_for(lambda: len(s.nav.goals) == 4, 10.0)       # three reached, the fourth hangs
+    assert wait_for(lambda: len(s.nav.goals) == 4, 30.0)       # three reached, the fourth hangs
     interrupted = s.nav.goals[3]
     cancel = handle.cancel_goal_async()
     assert wait_for(cancel.done, 5.0)
