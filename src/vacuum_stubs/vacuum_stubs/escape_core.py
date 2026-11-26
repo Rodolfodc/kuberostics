@@ -1,4 +1,4 @@
-"""Pure logic of the escape_server stub (T011, 001-R07, 001-R16). No ROS imports (D-18)."""
+"""Pure logic of the escape_server stub (001-R07, 001-R16). No ROS imports (D-18)."""
 from dataclasses import dataclass
 from typing import Optional, Tuple
 

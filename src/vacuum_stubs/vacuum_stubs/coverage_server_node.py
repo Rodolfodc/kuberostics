@@ -1,4 +1,4 @@
-"""`coverage_server` stub LifecycleNode (T010, 001-R06): CoverRoom action server on /myRobot/cover_room.
+"""`coverage_server` stub LifecycleNode (001-R06): CoverRoom action server on /myRobot/cover_room.
 
 While a goal is active it publishes a constant Twist on /myRobot/mux/coverage (its own mux input only); it runs
 until cancelled and publishes nothing when idle. Logic in `CoverageRamp` (pure Python, D-18).

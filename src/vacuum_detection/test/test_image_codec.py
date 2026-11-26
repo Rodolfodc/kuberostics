@@ -1,4 +1,4 @@
-"""T909: JPEG encoding of raw image buffers (009a-R03). No ROS; needs numpy and OpenCV (skipped otherwise)."""
+"""JPEG encoding of raw image buffers (009a-R03). No ROS; needs numpy and OpenCV (skipped otherwise)."""
 import pytest
 
 np = pytest.importorskip('numpy')
