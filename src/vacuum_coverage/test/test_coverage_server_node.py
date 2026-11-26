@@ -136,11 +136,11 @@ def test_R26_documented_defaults_match_the_contract():
     rclpy.init()
     try:
         node = CoverageServerNode()
-        expected = {'lane_spacing_m': 0.25, 'robot_radius_m': 0.16, 'margin_m': 0.05, 'min_segment_m': 0.30,
+        expected = {'lane_spacing_m': 0.25, 'robot_radius_m': 0.18, 'margin_m': 0.05, 'min_segment_m': 0.30,
                     'tool_radius_m': 0.15, 'target_ratio': 0.95, 'min_acceptable_ratio': 0.70,
                     'max_skip_ratio': 0.3, 'coverage_timeout_s': 1800.0, 'waypoint_timeout_s': 120.0,
                     'resume_window_s': 120.0, 'max_region_area_m2': 150.0, 'telemetry_rate_hz': 1.0,
-                    'map_topic': '/map', 'nav_action': '/navigate_to_pose'}
+                    'map_topic': '/map', 'nav_action': '/navigate_to_pose', 'map_frame': 'map', 'base_frame': 'base_link'}
         for name, value in expected.items():
             assert node.get_parameter(name).value == value, name
         assert not node.has_parameter('linear_x')          # stub only

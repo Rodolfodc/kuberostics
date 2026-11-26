@@ -48,6 +48,13 @@ def test_009a_R13_node_rejects_invalid_period_on_configure(ros):
     assert node.on_configure(None) == TransitionCallbackReturn.FAILURE
 
 
+def test_009a_R12_intrinsics_default_to_the_myrobot_model_camera(ros):
+    """009a-R12: fx = fy = 589.4 is camera_fx of the vacuum_sim_bridge profile (001-R23); cx, cy are the 640x480 centre."""
+    node = ProjectorNode()
+    assert [node.get_parameter(n).value for n in ('fx', 'fy', 'cx', 'cy')] == [589.4, 589.4, 319.5, 239.5]
+    node.destroy_node()
+
+
 def _detection(label, score, u, v, stamp_sec):
     msg = Detection2DArray()
     msg.header.stamp.sec = stamp_sec

@@ -2,12 +2,16 @@
 
     ros2 launch vacuum_bringup skeleton.launch.py [with_ia368ii:=false] [with_wheel_bridge:=false]
                                                   [with_teleop:=false] [with_sequencer:=true]
+                                                  [wheel_bridge:=vacuum]
 
 Blocks, each built by its own function:
   - IA368II nodes + their lifecycle manager   (with_ia368ii, default true: 001-R01 asks for them)
   - our nodes + lifecycle_manager_core        (always)
   - twist_mux                                 (always; the ONLY publisher of /myRobot/cmd_vel, Art. VI)
-  - 2025S2 wheel bridge                       (with_ia368ii and with_wheel_bridge; needs CoppeliaSim, D-06)
+  - wheel bridge                              (needs CoppeliaSim): wheel_bridge:=stock (default) is the 2025S2 node
+                                                of my_robot_pkg (D-06; with_ia368ii and with_wheel_bridge), wheel_bridge:=vacuum
+                                                is the same-name replacement of vacuum_sim_bridge for the combined model
+                                                (D-27; with_wheel_bridge only, it does not need the IA368II checkout)
   - teleop_twist_keyboard                     (with_teleop; needs a terminal on stdin)
   - lifecycle_sequencer + nav/optional managers (with_sequencer, default false): the three managers start
     in order core -> nav -> optional (005-R35); lifecycle_manager_core then runs with autostart false
@@ -60,6 +64,9 @@ def launch_arguments():
         DeclareLaunchArgument('with_wheel_bridge', default_value='true',
                               description='Start the 2025S2 wheel bridge (needs CoppeliaSim); '
                                           'ignored when with_ia368ii is false'),
+        DeclareLaunchArgument('wheel_bridge', default_value='stock', choices=['stock', 'vacuum'],
+                              description='Which wheel bridge with_wheel_bridge starts: the 2025S2 one (stock) or '
+                                          'vacuum_sim_bridge (vacuum, D-27); only one runs, they share the node name'),
         DeclareLaunchArgument('with_teleop', default_value='true',
                               description='Start teleop_twist_keyboard (needs a terminal)'),
         DeclareLaunchArgument('with_sequencer', default_value='false',
@@ -123,6 +130,14 @@ def wheel_bridge_node(condition):
                 output='screen', remappings=[('/cmd_vel', CMD_VEL)], condition=condition)
 
 
+def vacuum_wheel_bridge_node(condition):
+    # D-27: same executable and node name as the stock bridge, so only one of the two may run.
+    return Node(package='vacuum_sim_bridge', executable='my_robot_cmd_vel_node', name='my_robot_cmd_vel_node',
+                output='screen', remappings=[('/cmd_vel', CMD_VEL)], condition=condition,
+                parameters=[PathJoinSubstitution([FindPackageShare('vacuum_sim_bridge'), 'config',
+                                                  'sim_bridge.yaml'])])
+
+
 def teleop_node(condition):
     # D-13: stamped is set explicitly; its default has changed between teleop_twist_keyboard releases.
     return Node(package='teleop_twist_keyboard', executable='teleop_twist_keyboard', name='teleop_keyboard',
@@ -135,7 +150,11 @@ def generate_launch_description():
     # IfCondition has no `and`: evaluate both flags in one expression
     with_bridge = IfCondition(PythonExpression(
         ["'", LaunchConfiguration('with_ia368ii'), "' == 'true' and '",
-         LaunchConfiguration('with_wheel_bridge'), "' == 'true'"]))
+         LaunchConfiguration('with_wheel_bridge'), "' == 'true' and '",
+         LaunchConfiguration('wheel_bridge'), "' == 'stock'"]))
+    with_vacuum_bridge = IfCondition(PythonExpression(
+        ["'", LaunchConfiguration('with_wheel_bridge'), "' == 'true' and '",
+         LaunchConfiguration('wheel_bridge'), "' == 'vacuum'"]))
     with_teleop = IfCondition(LaunchConfiguration('with_teleop'))
     with_sequencer = IfCondition(LaunchConfiguration('with_sequencer'))
     return LaunchDescription([
@@ -145,5 +164,6 @@ def generate_launch_description():
         *sequencer_nodes(with_sequencer),
         twist_mux_node(),
         wheel_bridge_node(with_bridge),
+        vacuum_wheel_bridge_node(with_vacuum_bridge),
         teleop_node(with_teleop),
     ])

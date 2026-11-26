@@ -60,7 +60,7 @@ class ExplorationConfig:
     max_reaches: int = 3
     min_frontier_cells: int = 8
     gain_weight: float = 0.05
-    robot_radius_m: float = 0.16
+    robot_radius_m: float = 0.18
     blacklist_tolerance_m: float = 0.3
 
     def validate(self) -> None:

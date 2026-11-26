@@ -346,8 +346,8 @@ parameters:
     output_topic: {type: string, default: /detections_markers}
     target_frame: {type: string, default: map, requirement: 009a-R13}
     camera_frame: {type: string, default: "", note: "empty: frame_id of the detection header"}
-    fx: {type: double, default: 525.0, note: "pinhole intrinsics of the RGB camera; confirm against the scene sensor"}
-    fy: {type: double, default: 525.0}
+    fx: {type: double, default: 589.4, note: "pinhole intrinsics of the RGB camera; equal to camera_fx of the myRobot model (sim_bridge profile)"}
+    fy: {type: double, default: 589.4}
     cx: {type: double, default: 319.5}
     cy: {type: double, default: 239.5}
     tf_timeout_s: {type: double, default: 0.1, requirement: 009a-R12}
@@ -436,7 +436,7 @@ parameters:
     laser_xyz: {type: double_array, default: [0.0, 0.0, 0.16], note: "base_link -> laser_frame, no rotation"}
     camera_width: {type: int, default: 640}
     camera_height: {type: int, default: 480}
-    camera_fx: {type: double, default: 589.4, note: "fx = fy, cx = 319.5, cy = 239.5; the projector defaults (fx 525) differ, to be aligned when the projector runs on this model"}
+    camera_fx: {type: double, default: 589.4, note: "fx = fy, cx = 319.5, cy = 239.5; the projector fx and fy defaults are the same value"}
     camera_near: {type: double, default: 0.01}
     camera_far: {type: double, default: 3.5}
     camera_xyz: {type: double_array, default: [0.0983, 0.0141, 0.077]}

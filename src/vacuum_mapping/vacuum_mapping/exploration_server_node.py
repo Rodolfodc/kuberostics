@@ -67,7 +67,7 @@ class ExplorationServerNode(LifecycleNode):
         # Defaults and meaning: specs/000-system/contracts/topics.yaml (parameters: exploration_server).
         self.declare_parameter('min_frontier_cells', 8)
         self.declare_parameter('gain_weight', 0.05)
-        self.declare_parameter('robot_radius_m', 0.16)
+        self.declare_parameter('robot_radius_m', 0.18)
         self.declare_parameter('frontier_timeout_s', 60.0)
         self.declare_parameter('explore_timeout_s', 900.0)
         self.declare_parameter('map_loaded', False)

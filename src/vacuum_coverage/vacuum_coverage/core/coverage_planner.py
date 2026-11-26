@@ -36,7 +36,7 @@ def _runs(row: np.ndarray) -> List[Tuple[int, int]]:
 class CoveragePlanner:
     """Defaults are those of spec 005 (R17); the node passes its parameters, nothing is hard-coded there."""
 
-    def __init__(self, lane_spacing_m: float = 0.25, robot_radius_m: float = 0.16, margin_m: float = 0.05,
+    def __init__(self, lane_spacing_m: float = 0.25, robot_radius_m: float = 0.18, margin_m: float = 0.05,
                  min_segment_m: float = 0.30) -> None:
         if lane_spacing_m <= 0:
             raise ValueError('lane_spacing_m must be positive')

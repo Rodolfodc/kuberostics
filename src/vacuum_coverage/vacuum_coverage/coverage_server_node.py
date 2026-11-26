@@ -36,8 +36,6 @@ from vacuum_coverage.core.coverage_session import StepKind
 from vacuum_coverage.core.region_builder import NoRegion, UnknownRoom
 from vacuum_mapping.core.types import Raster, classify_occupancy
 
-MAP_FRAME = 'map'
-BASE_FRAME = 'base_link'
 POSE_PERIOD_S = 0.02            # pose sampler timer, independent of the decision loop (a stalled loop must not
                                 # leave holes in the covered mask)
 LOOP_PERIOD_S = 0.05            # decision loop of a goal; bounds the reaction time of cancel and timeouts
@@ -48,7 +46,7 @@ NAV_CANCEL_WAIT_S = 0.5
 LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
 
 CONFIG_PARAMS = {
-    'lane_spacing_m': 0.25, 'robot_radius_m': 0.16, 'margin_m': 0.05, 'min_segment_m': 0.30,
+    'lane_spacing_m': 0.25, 'robot_radius_m': 0.18, 'margin_m': 0.05, 'min_segment_m': 0.30,
     'tool_radius_m': 0.15, 'target_ratio': 0.95, 'min_acceptable_ratio': 0.70, 'max_skip_ratio': 0.3,
     'coverage_timeout_s': 1800.0, 'waypoint_timeout_s': 120.0, 'resume_window_s': 120.0,
     'max_region_area_m2': 150.0,
@@ -60,9 +58,9 @@ def grid_to_raster(msg: OccupancyGrid) -> Raster:
     return Raster(cells, msg.info.resolution, msg.info.origin.position.x, msg.info.origin.position.y)
 
 
-def covered_to_grid(raster: Raster, data: np.ndarray, stamp) -> OccupancyGrid:
+def covered_to_grid(raster: Raster, data: np.ndarray, stamp, frame_id: str = 'map') -> OccupancyGrid:
     msg = OccupancyGrid()
-    msg.header.frame_id = MAP_FRAME
+    msg.header.frame_id = frame_id
     msg.header.stamp = stamp
     msg.info.resolution = raster.resolution
     msg.info.width, msg.info.height = raster.width, raster.height
@@ -84,6 +82,10 @@ class CoverageServerNode(LifecycleNode):
         self.declare_parameter('telemetry_rate_hz', 1.0)
         self.declare_parameter('map_topic', '/map')
         self.declare_parameter('nav_action', '/navigate_to_pose')
+        self.declare_parameter('map_frame', 'map')           # 005-R19: frame of goals, path and covered grid
+        self.declare_parameter('base_frame', 'base_link')    # 005-R21: robot frame of the map -> base lookup
+        self._map_frame = str(self.get_parameter('map_frame').value)
+        self._base_frame = str(self.get_parameter('base_frame').value)
         self._group = ReentrantCallbackGroup()
         self._raster: Optional[Raster] = None
         self._active = False
@@ -234,7 +236,7 @@ class CoverageServerNode(LifecycleNode):
 
     def _pose(self):
         try:
-            tf = self._tf_buffer.lookup_transform(MAP_FRAME, BASE_FRAME, Time(), Duration(seconds=0.0))
+            tf = self._tf_buffer.lookup_transform(self._map_frame, self._base_frame, Time(), Duration(seconds=0.0))
         except Exception:
             return None
         return tf.transform.translation.x, tf.transform.translation.y
@@ -259,7 +261,7 @@ class CoverageServerNode(LifecycleNode):
                 raise _Rejected(f'{self.get_parameter("nav_action").value} is not available (005-R36)')
             pose = self._pose()
             if pose is None:
-                raise _Rejected(f'no TF {MAP_FRAME} -> {BASE_FRAME}')
+                raise _Rejected(f'no TF {self._map_frame} -> {self._base_frame}')
             # begin() consumes the saved session only when this goal is accepted (it validates first)
             resumed = self._run.begin(self._now(), self._raster, pose, goal.room_id, max(1, int(goal.passes)))
         except (_Rejected, UnknownRoom, NoRegion) as exc:
@@ -377,7 +379,7 @@ class CoverageServerNode(LifecycleNode):
     def _send_nav(self, wp) -> None:
         goal = NavigateToPose.Goal()
         goal.pose = PoseStamped()
-        goal.pose.header.frame_id = MAP_FRAME
+        goal.pose.header.frame_id = self._map_frame
         goal.pose.header.stamp = self.get_clock().now().to_msg()
         goal.pose.pose.position.x, goal.pose.pose.position.y = float(wp.x), float(wp.y)
         goal.pose.pose.orientation.z = math.sin(wp.yaw / 2.0)
@@ -430,7 +432,7 @@ class CoverageServerNode(LifecycleNode):
     # ---- outputs ----------------------------------------------------------------------------------------
     def _publish_path(self, pass_index: int) -> None:
         path = Path()
-        path.header.frame_id = MAP_FRAME
+        path.header.frame_id = self._map_frame
         path.header.stamp = self.get_clock().now().to_msg()
         for wp in self._run.session.waypoints:
             if wp.pass_index != pass_index:
@@ -444,7 +446,7 @@ class CoverageServerNode(LifecycleNode):
 
     def _publish_covered(self, run) -> None:
         self._pub_covered.publish(covered_to_grid(run.session.tracker.raster, run.covered_grid(),
-                                                  self.get_clock().now().to_msg()))
+                                                  self.get_clock().now().to_msg(), self._map_frame))
 
     def _telemetry(self) -> None:
         """D-20: state and counters at telemetry_rate_hz."""

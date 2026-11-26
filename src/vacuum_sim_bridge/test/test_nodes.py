@@ -1,4 +1,4 @@
-"""Bridge nodes against a fake simulator client (no ZMQ, no CoppeliaSim).
+"""Bridge nodes against a fake simulator client (no ZMQ, no CoppeliaSim). Requirement: 001-R23.
 Basis: spec 000 section 4 and D-06/D-07 (topic names and types stay as in topics.yaml), Art. II (same-name
 replacement nodes), robot_report.txt (frames, drive path)."""
 import math

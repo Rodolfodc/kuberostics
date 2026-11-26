@@ -1,4 +1,5 @@
-"""ZmqSimClient atomic wheel write: degrade only on API errors, retry on transient ones. Basis: D-06, Art. II."""
+"""ZmqSimClient atomic wheel write: degrade only on API errors, retry on transient ones. Basis: D-06, Art. II.
+Requirement: 001-R23."""
 import pytest
 
 from vacuum_sim_bridge.sim_client import ZmqSimClient, is_api_error

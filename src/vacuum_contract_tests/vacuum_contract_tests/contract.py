@@ -13,8 +13,8 @@ import yaml
 
 CONTRACT_RELATIVE = Path('specs') / '000-system' / 'contracts' / 'topics.yaml'
 
-# Owners that only exist with CoppeliaSim running (2025S2 sensor bridges); skipped unless asked for (Art. V).
-SIM_OWNERS = frozenset({'my_robot_scan_node', 'my_robot_vision_node'})
+# Owners that only exist with CoppeliaSim running (2025S2 or vacuum_sim_bridge sensor bridges); skipped unless asked for (Art. V).
+SIM_OWNERS = frozenset({'my_robot_scan_node', 'my_robot_vision_node', 'my_robot_odometry_node'})
 
 
 @dataclass(frozen=True)

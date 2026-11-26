@@ -1,4 +1,5 @@
-"""Scan conversion. Requirement basis: spec 000 section 4 (frozen /scan), D-07; robot_report.txt section 3."""
+"""Scan conversion. Requirement basis: spec 000 section 4 (frozen /scan), D-07; robot_report.txt section 3.
+Requirement: 001-R23."""
 import math
 
 from vacuum_sim_bridge.profile import RobotProfile
