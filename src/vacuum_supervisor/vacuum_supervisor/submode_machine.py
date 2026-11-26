@@ -1,7 +1,8 @@
 """Submode state machine of the supervisor (D-01). Pure Python, no ROS (spec 001, plan).
 
-Inputs: orchestrator mode, StuckEvent, escape action result.
-Outputs: list of `Effect` that the ROS node executes (cancel actions, send goals, lock, notification).
+Inputs: orchestrator mode, StuckEvent, escape action result, cover_room result, dock timer expiry.
+Outputs: list of `Effect` that the ROS node executes (cancel actions, send goals, lock, notification, docking
+request, dock timer).
 
 Logs and telemetry (D-20): the caller injects a `logger` (anything with debug/info/warning/error taking one
 string, such as `logging.Logger` or an rclpy logger) and reads `snapshot()` for periodic metrics.
@@ -21,11 +22,17 @@ ACTIVE_MODES = ('CLEANING', 'AUTODOCKING')
 @dataclass(frozen=True)
 class Effect:
     kind: str            # cancel_actions | send_cover_room | send_escape | lock_stop | notify
+                         # | request_dock | start_dock_timer | cancel_dock_timer
     value: Any = None    # lock_stop: bool; notify: (severity, code)
 
 
 class SubmodeMachine:
-    def __init__(self, logger: Optional[Any] = None):
+    def __init__(self, logger: Optional[Any] = None, dock_after_coverage: bool = False):
+        # dock_after_coverage enables the rows of spec 005-R30 (cover_room result -> docking request). While
+        # amendment A2 of spec 001 is not applied it stays false and the 001 behaviour holds unchanged.
+        self.dock_after_coverage = dock_after_coverage
+        self.coverage_blocked = False   # true after the cover_room result until the mode leaves CLEANING
+        self._dock_timer_active = False
         self._log = logger if logger is not None else logging.getLogger(__name__)
         self.submode = NONE
         self.mode = ''
@@ -35,15 +42,20 @@ class SubmodeMachine:
         self._metrics = {
             'transitions': 0, 'stuck_events': 0, 'escapes_succeeded': 0,
             'escapes_failed': 0, 'escape_timeouts': 0, 'resets': 0,
+            'coverage_results': 0, 'dock_requests': 0, 'dock_request_failures': 0,
         }
 
     def snapshot(self) -> Dict[str, Any]:
         """Current state plus counters, for the periodic telemetry."""
         return {'mode': self.mode, 'submode': self.submode, 'reason': self.reason,
-                'locked': self.locked, **self._metrics}
+                'locked': self.locked, 'coverage_blocked': self.coverage_blocked, **self._metrics}
 
     def on_mode(self, mode: str) -> List[Effect]:
         self.mode = mode
+        pre = self._leave_cleaning() if mode != 'CLEANING' else []     # 005-R30: clears coverage_blocked
+        return pre + self._on_mode(mode)
+
+    def _on_mode(self, mode: str) -> List[Effect]:
         if self.submode == ESCAPING:
             # 001-R21: the escape keeps running, but what comes after it depends on the new mode.
             self.resume_submode = COVERING if mode == 'CLEANING' else NONE
@@ -63,8 +75,49 @@ class SubmodeMachine:
             if self.locked:                                   # 001-R22
                 self._log.debug('CLEANING ignored: stop lock is on, waiting for reset')
                 return []
+            if self.coverage_blocked:                         # 005-R30: coverage already ended, docking asked
+                self._log.debug('CLEANING ignored: coverage ended, waiting for the docking request')
+                return []
             self._go(COVERING, 'mode CLEANING')               # 001-R06
             return [Effect('send_cover_room')]
+        return []
+
+    def on_cover_result(self, success: bool) -> List[Effect]:
+        """The `cover_room` goal ended on its own, successfully or not (005-R30)."""
+        if not self.dock_after_coverage:
+            self._log.debug('cover_room result ignored (dock_after_coverage is off)')
+            return []
+        if self.submode != COVERING or self.mode != 'CLEANING':   # late result after a cancellation
+            self._log.debug(f'cover_room result ignored (submode {self.submode}, mode {self.mode or "<empty>"})')
+            return []
+        self._metrics['coverage_results'] += 1
+        self._metrics['dock_requests'] += 1
+        self.coverage_blocked = True
+        self._dock_timer_active = True
+        self._go(NONE, 'cover_room succeeded' if success else 'cover_room failed')
+        self.resume_submode = NONE
+        notify = (Effect('notify', ('INFO', 'COVERAGE_DONE')) if success
+                  else Effect('notify', ('WARN', 'COVERAGE_FAILED')))
+        return [notify, Effect('request_dock'), Effect('start_dock_timer')]
+
+    def on_dock_timeout(self) -> List[Effect]:
+        """`dock_request_timeout_s` elapsed and the mode is still CLEANING (005-R30, Art. VI.3)."""
+        if not self._dock_timer_active or self.mode != 'CLEANING' or not self.coverage_blocked:
+            self._log.debug('dock timeout ignored')
+            return []
+        self._dock_timer_active = False
+        self._metrics['dock_request_failures'] += 1
+        self._log.error('docking was not reached within dock_request_timeout_s: no new cover_room goal')
+        return [Effect('notify', ('ERROR', 'DOCK_REQUEST_FAILED'))]
+
+    def _leave_cleaning(self) -> List[Effect]:
+        if not self.coverage_blocked and not self._dock_timer_active:
+            return []
+        self.coverage_blocked = False
+        self._log.info(f'coverage_blocked cleared (mode {self.mode or "<empty>"})')
+        if self._dock_timer_active:
+            self._dock_timer_active = False
+            return [Effect('cancel_dock_timer')]
         return []
 
     def on_stuck(self) -> List[Effect]:

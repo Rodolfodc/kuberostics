@@ -1,51 +1,70 @@
 #!/usr/bin/env bash
 # Builds and tests every package of src/ inside a throwaway Docker container, so nothing depends on what is
 # installed on the host (Docker-first). Dependencies are installed by rosdep from the package.xml files,
-# which is where they are tracked (twist_mux, python3-pytest, python3-yaml, ...).
-# Usage: scripts/test-docker.sh [jazzy|lyrical|both]        (default both)
+# which is where they are tracked (twist_mux, python3-pytest, python3-yaml, ...). The in-container work is
+# scripts/container-test.sh.
+# Usage: scripts/test-docker.sh [jazzy|lyrical|both] [--cpus=N]       (default both)
 #        ROS_IMAGE=<image> scripts/test-docker.sh lyrical    overrides the image
-#        TEST_OUT=<dir> scripts/test-docker.sh lyrical       also copies the XML results and logs to <dir>/<distro>/
-# Exit code 0 only if every selected distro passes.
+#        TEST_OUT=<dir> scripts/test-docker.sh lyrical       also copies diagnostics to <dir>/<distro>/:
+#          summary.txt, console.log, environment.txt, xml/, colcon_log/, ros_log/ (all redacted: no home, host or user names)
+#        REPO_DIR=<dir> tests that tree instead of this checkout; CONTAINER_NAME=<name> names the container
+#          (used by scripts/ci-local.sh; the distro is appended: <name>-<distro>)
+#        scripts/test-docker.sh lyrical --cpus=1             CPU-starved run (reproduces CI-like flakiness)
+# CI uploads TEST_OUT as an artifact on failure. Exit code 0 only if every selected distro passes.
 set -euo pipefail
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO="$(cd "${REPO_DIR:-$(dirname "${BASH_SOURCE[0]}")/..}" && pwd)"
 WHICH="${1:-both}"
-case "$WHICH" in jazzy|lyrical|both) ;; *) echo "usage: $0 [jazzy|lyrical|both]" >&2; exit 2;; esac
+case "$WHICH" in jazzy|lyrical|both) ;; *) echo "usage: $0 [jazzy|lyrical|both] [--cpus=N]" >&2; exit 2;; esac
+CPUS="${2:-}"   # optional docker flag, e.g. --cpus=1
+case "$CPUS" in ''|--cpus=[0-9]*) ;; *) echo "second argument must be --cpus=N" >&2; exit 2;; esac
 fail=0
+
+redact_host() { sed -e "s|$HOME|<HOME>|g" -e "s|$(hostname)|<HOST>|g" -e "s|/home/$(id -un)|/home/<USER>|g"; }
+
+repro_hint() {  # repro_hint <distro> <image>
+  cat <<HINT
+== REPRODUCE LOCALLY (needs only Docker) ==
+  scripts/test-docker.sh $1                                          # same build + test as CI
+  scripts/test-docker.sh $1 --cpus=1                                 # starved CPU: flaky graph tests show up here
+  scripts/repeat-test-docker.sh $1 <package> '<pytest -k expr>' 20   # one test x20 at --cpus=1, logs in local-logs/
+  (image: $2; CI artifact: test-results-$1)
+HINT
+}
 
 run() {
   local distro="$1" image="$2"
   echo ">> $distro ($image)"
-  # The repo is mounted read-only; the container works on a copy without the third-party checkout,
-  # build outputs and .git.
-  local outargs=()
+  # The repo is mounted read-only; the container works on a copy.
+  local outargs=() out="" t0 rc=0
   if [ -n "${TEST_OUT:-}" ]; then
     mkdir -p "$TEST_OUT/$distro"
-    outargs=(-v "$(cd "$TEST_OUT/$distro" && pwd)":/out)
+    out="$(cd "$TEST_OUT/$distro" && pwd)"
+    outargs=(-v "$out":/out)
   fi
-  docker run --rm -e DISTRO="$distro" -v "$REPO":/repo:ro ${outargs[@]+"${outargs[@]}"} "$image" bash -c '
-    set -e
-    mkdir -p /ws && cd /repo && tar --exclude=./src/deps --exclude=./build --exclude=./install --exclude=./log \
-      --exclude=./.git --exclude=./.sim --exclude=./.venv -cf - . | tar -xf - -C /ws
-    cd /ws
-    apt-get update -qq
-    [ -f /etc/ros/rosdep/sources.list.d/20-default.list ] || rosdep init >/dev/null
-    rosdep update --rosdistro "$DISTRO" >/dev/null
-    rosdep install --from-paths src --ignore-src -r -y >/tmp/rosdep.log 2>&1 || { tail -20 /tmp/rosdep.log; [ -d /out ] && cp /tmp/*.log /out/ && chmod -R a+rwX /out; exit 3; }
-    source /opt/ros/"$DISTRO"/setup.bash
-    colcon build --base-paths src --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3 >/tmp/build.log 2>&1 || { tail -30 /tmp/build.log; [ -d /out ] && cp /tmp/*.log /out/ && chmod -R a+rwX /out; exit 4; }
-    colcon test --base-paths src >/tmp/test.log 2>&1 || true
-    rc=0
-    colcon test-result --all --verbose >/tmp/result.log 2>&1 || rc=$?
-    python3 -I /ws/scripts/show-test-failures.py build || true
-    grep -E "^Summary" /tmp/result.log || tail -3 /tmp/result.log
-    if [ -d /out ]; then
-      mkdir -p /out/xml && cp /tmp/*.log /tmp/result.log /out/ 2>/dev/null || true
-      (cd build && find . \( -name pytest.xml -o -path "*/test_results/*.xml" \) -exec cp --parents {} /out/xml/ \;) || true
-      cp -rL log/latest_test /out/colcon_test_log 2>/dev/null || true
-      chmod -R a+rwX /out || true
-    fi
-    exit $rc'
+  t0=$(date -u +%FT%TZ)
+  set +e
+  # shellcheck disable=SC2086
+  docker run --rm ${CONTAINER_NAME:+--name "${CONTAINER_NAME}-$distro"} ${CPUS:+$CPUS} -e DISTRO="$distro" -v "$REPO":/repo:ro ${outargs[@]+"${outargs[@]}"} "$image" \
+    bash /repo/scripts/container-test.sh 2>&1 | redact_host | { if [ -n "$out" ]; then tee "$out/console.log"; else cat; fi; }
+  rc=${PIPESTATUS[0]}
+  set -e
+  if [ -n "$out" ]; then
+    {
+      echo "start_utc: $t0"; echo "end_utc: $(date -u +%FT%TZ)"
+      echo "distro: $distro"; echo "image: $image"
+      echo "image_id: $(docker image inspect --format '{{.Id}} {{join .RepoDigests ","}}' "$image" 2>/dev/null)"
+      echo "exit_code: $rc"
+      echo "host_cpus: $(nproc)  docker_cpu_limit: ${CPUS:-none}  host_load: $(cut -d' ' -f1-3 /proc/loadavg)"
+      echo "docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null)"
+      echo "git_head: $(git -C "$REPO" rev-parse HEAD 2>/dev/null)"
+    } | redact_host >"$out/summary.txt"
+  fi
+  if [ "$rc" -ne 0 ]; then
+    echo "!! $distro FAILED (exit $rc)"
+    repro_hint "$distro" "$image"
+    return 1
+  fi
 }
 
 case "$WHICH" in
