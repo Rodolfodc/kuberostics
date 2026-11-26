@@ -207,7 +207,7 @@ actions:
 # (003-R02). Frame names are parameters of the broadcaster; the values below are the ones the launch must use.
 tf:
   - {parent: map,            child: odom,           owner: [slam_toolbox, static_transform_publisher], since: "003", note: "003-R05; static from the recorded start pose with map_file (003-R06, R30)"}
-  - {parent: odom,           child: base_footprint, owner: my_robot_odometry_node, since: "003", note: "D-27: the bridge parameter odom_frame (default my_robot_odom, the 2025S2 name) shall be set to odom by our launch; with these bridges odom_tf_bridge is not started (003-R02: one broadcaster); proposal, see Q-14 in spec 003"}
+  - {parent: odom,           child: base_footprint, owner: my_robot_odometry_node, since: "003", note: "D-27: the bridge parameter odom_frame (default my_robot_odom, the 2025S2 name; sim_bridges.launch.py and config/sim_bridge.yaml still use it) is to be set to odom by the bridge launch/profile (code follow-up); with these bridges odom_tf_bridge is not started (003-R02: one broadcaster); proposal, see Q-14 in spec 003"}
   - {parent: base_footprint, child: base_link,      owner: my_robot_odometry_node, static: true, since: "003", note: "z = footprint_to_base_z (0.08 m)"}
   - {parent: base_link,      child: laser_link,     owner: my_robot_scan_node,     static: true, since: "003", note: "laser_xyz of the profile; the mapping launch shall not publish it a second time (003-R03)"}
   - {parent: base_link,      child: camera_link,    owner: my_robot_vision_node,   static: true, since: "003", note: "camera_xyz + camera_quat; optical frame (x right, y down, z forward); same caveat as laser_link"}
@@ -217,7 +217,7 @@ lifecycle:
   # spec 003 adds odom_tf_bridge, exploration_server and room_segmenter here when its nodes land (003-R26)
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]
   lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # when the nav nodes land (T510); Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
-  # not managed (plain, D-26): the four vacuum_sim_bridge nodes (my_robot_scan_node, my_robot_vision_node,
+  # not managed (plain; D-26 exception PROPOSED in D-27, awaiting the project owner): the four vacuum_sim_bridge nodes (my_robot_scan_node, my_robot_vision_node,
   # my_robot_cmd_vel_node, my_robot_odometry_node), same-name drop-ins of the plain 2025S2 bridges (D-27)
   lifecycle_manager_optional: []      # detection chain of 009a (detector_local, image_throttle, detection_selector) when the sequencer launch includes it; MQTT bridge in spec 009; detector_cloud runs in K3s, outside the robot managers
 
@@ -261,7 +261,7 @@ parameters:
     angular_z: {type: double, default: 0.0, note: "stub only"}
     publish_rate_hz: {type: double, default: 10.0, note: "stub only"}
     lane_spacing_m: {type: double, default: 0.25, requirement: 005-R17}
-    robot_radius_m: {type: double, default: 0.16, requirement: 005-R17}
+    robot_radius_m: {type: double, default: 0.18, requirement: 005-R17, note: "footprint radius about the /myRobot origin, measured (.sim/robot_report.txt: 0.18 m about the origin, 0.21 m about the wheel axle); code default still 0.16 (follow-up)"}
     margin_m: {type: double, default: 0.05, requirement: 005-R17}
     min_segment_m: {type: double, default: 0.30, requirement: 005-R17}
     tool_radius_m: {type: double, default: 0.15, requirement: 005-R21}
@@ -395,7 +395,7 @@ parameters:
   exploration_server:
     min_frontier_cells: {type: int, default: 8, requirement: 003-R09}
     gain_weight: {type: double, default: 0.05}
-    robot_radius_m: {type: double, default: 0.16}
+    robot_radius_m: {type: double, default: 0.18, note: "measured footprint, as coverage_server"}
     frontier_timeout_s: {type: double, default: 60.0, requirement: 003-R10}
     explore_timeout_s: {type: double, default: 900.0, requirement: 003-R11}
     map_loaded: {type: bool, default: false, requirement: 003-R06, note: "set by the launch with map_file; explored = true"}

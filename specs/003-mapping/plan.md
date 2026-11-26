@@ -182,7 +182,7 @@ parameters:
   exploration_server:
     min_frontier_cells: {type: int, default: 8, requirement: 003-R09}
     gain_weight: {type: double, default: 0.05}
-    robot_radius_m: {type: double, default: 0.16}
+    robot_radius_m: {type: double, default: 0.18}   # measured footprint, .sim/robot_report.txt
     frontier_timeout_s: {type: double, default: 60.0, requirement: 003-R10}
     explore_timeout_s: {type: double, default: 900.0, requirement: 003-R11}
     map_loaded: {type: bool, default: false, requirement: 003-R06, note: "set by the launch with map_file; explored = true"}

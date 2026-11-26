@@ -52,7 +52,7 @@ Shutdown and failure handling (005-R31, R34): on `on_deactivate` and `on_shutdow
 
 Nav2 minimal configuration (initial values, to tune in the simulator):
 
-- Planner `nav2_navfn_planner::NavfnPlanner`; controller `nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController`, `desired_linear_vel: 0.25` (below the 0.30 m/s limit of spec 009a), `robot_radius: 0.16`, inflation 0.30 m. Plugin names unverified here: T510 checks them on both distros.
+- Planner `nav2_navfn_planner::NavfnPlanner`; controller `nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController`, `desired_linear_vel: 0.25` (below the 0.30 m/s limit of spec 009a), `robot_radius: 0.18` (measured about the `/myRobot` origin, `.sim/robot_report.txt`; 0.21 m about the wheel axle), `inflation_radius: 0.35` (as `nav2_params.yaml`, PR #56). Plugin names unverified here: T510 checks them on both distros.
 - `bt_navigator` with an own tree `nav_bt.xml`: `ComputePathToPose` + `FollowPath`, replanning at 1 Hz, **no recovery nodes**. `behavior_server`, `velocity_smoother` and `collision_monitor` are not launched, so `controller_server` is the only Nav2 node that publishes velocity.
 - `controller_server` and `bt_navigator` take odometry from `/myrobot/odom` (`odom_topic`); T510 checks that it is `nav_msgs/Odometry` with a usable twist (Q-14).
 - `enable_stamped_cmd_vel: false` on `controller_server` (and on any other velocity publisher; D-13). A config test checks it (005-R23); the parameter may not exist in Nav2 1.3.x (Jazzy), where declaring it is harmless: the test accepts both (unverified, T510 records it).
@@ -178,7 +178,7 @@ parameters:
     scan_topic: {type: string, default: /scan}
   coverage_server:
     lane_spacing_m: {type: double, default: 0.25, requirement: 005-R17}
-    robot_radius_m: {type: double, default: 0.16}
+    robot_radius_m: {type: double, default: 0.18}   # measured, .sim/robot_report.txt
     margin_m: {type: double, default: 0.05}
     min_segment_m: {type: double, default: 0.30}
     tool_radius_m: {type: double, default: 0.15}
