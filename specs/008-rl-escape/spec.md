@@ -139,7 +139,7 @@ go/no-go fails, they are dropped.
 
 ## Open questions
 
-Numbers Q-18 to Q-22 were free on every local branch on 2026-11-25; renumber them at merge if they collide.
+Numbers Q-18 to Q-22 were free on every local and remote branch on 2026-11-25, including the contract batch 2 (#54, which uses no Q above Q-17 and takes D-27 and D-28); renumber them at merge if they collide.
 
 - Q-18: footprint. Is the 0.18 m radius centred on the axle centre or on `base_link`, and is the body a disc at all?
   This decides whether turning in place can touch an obstacle, which is what makes corners hard. T503 and T807
