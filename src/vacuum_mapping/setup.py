@@ -10,6 +10,7 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/config', ['config/room_rules.yaml']),
+        ('share/' + package_name + '/launch', ['launch/exploration.launch.py']),
     ],
     install_requires=['setuptools'],
     tests_require=['pytest'],
@@ -23,6 +24,7 @@ setup(
         'console_scripts': [
             'map_diff = vacuum_mapping.map_diff_cli:main',
             'room_segmenter = vacuum_mapping.room_segmenter_node:main',
+            'exploration_server = vacuum_mapping.exploration_server_node:main',
         ],
     },
 )

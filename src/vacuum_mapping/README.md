@@ -92,10 +92,20 @@ Test names carry the requirement id (`test_003_R17_...`). Test grids are tiny sy
   and vote inflation when the same object is detected repeatedly across frames (no de-duplication).
 - `MapDiff`: which resolution to compare at when the two resolutions differ (now: the finer one).
 
+## Exploration (optional and late)
+
+`exploration_server` (`exploration_server_node.py`, core `ExplorationSession`) serves `/myRobot/explore` and
+sends frontiers to Nav2 as `NavigateToPose` goals. It is NOT in any default launch; run it alone with
+`ros2 launch vacuum_mapping exploration.launch.py [autostart:=true] [map_loaded:=false]`.
+Assumptions not in the spec text: "frontiers seen" counts distinct frontiers (merged within 0.3 m), blacklisted
+ones included; a frontier that Nav2 reaches but that is still a frontier is blacklisted after 3 reaches
+(`max_reaches`, constructor argument, not a node parameter). The kill test (`test_exploration_kill.py`) uses a
+stand-in for the supervisor watchdog (005-R34) until the supervisor handles `explore`.
+
 ## Not here yet
 
-The nodes (`room_segmenter`, `exploration_server`, `odom_tf_bridge`), `config/mapping.yaml`, `maps/` and
-the launch file. The interfaces (`Room`, `RoomArray`, `Explore`, `SetRoomLabel`) are NOT in
+The nodes `odom_tf_bridge`, `config/mapping.yaml`, `maps/` and the mapping launch file.
+The interfaces (`Room`, `RoomArray`, `Explore`, `SetRoomLabel`) are NOT in
 `contracts/topics.yaml` / `interfaces.md` yet (only proposed in `specs/003-mapping/plan.md`), so
 `vacuum_interfaces` does not have them and the nodes wait for the contract change. Until then `core/types.py`
 mirrors them as plain dataclasses. `GridView` lives in the shared package `src/vacuum_grid` (no ROS); the
