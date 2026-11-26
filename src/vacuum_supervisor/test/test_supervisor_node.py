@@ -1,4 +1,4 @@
-"""T009: tests of the `supervisor` LifecycleNode against stub action servers (001-R05 to 001-R09).
+"""Tests of the `supervisor` LifecycleNode against stub action servers (001-R05 to 001-R09).
 
 Runs the real node in-process with rclpy: no simulator, no launch file. The transition logic itself is
 covered without ROS by test_submode_machine.py; here we check the wiring (topics, actions, service, lock,

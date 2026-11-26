@@ -1,4 +1,4 @@
-"""T021: shutdown hardening of stop_guard: it exits cleanly on SIGINT while active (locked or not).
+"""Shutdown hardening of stop_guard: it exits cleanly on SIGINT while active (locked or not).
 
 The `RCLError: context is not valid` reported for this node was not reproduced; this test guards the hardened
 `main()` and timers. Runs the real `main()` in a subprocess, drives it to ACTIVE through its lifecycle service

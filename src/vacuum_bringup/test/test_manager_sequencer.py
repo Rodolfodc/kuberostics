@@ -1,4 +1,4 @@
-"""Unit tests of ManagerSequencer (T521, spec 005, D-26): pure Python, simulated clock, fake managers.
+"""Unit tests of ManagerSequencer (spec 005, D-26): pure Python, simulated clock, fake managers.
 
 Every test name cites the requirement it verifies (Art. VIII).
 """

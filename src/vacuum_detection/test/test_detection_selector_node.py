@@ -1,4 +1,4 @@
-"""T907: smoke tests of the detection_selector node glue (the logic is tested in test_selector_core.py).
+"""Smoke tests of the detection_selector node glue (the logic is tested in test_selector_core.py).
 
 Needs rclpy (skipped otherwise). In-process, system clock, no launch.
 """

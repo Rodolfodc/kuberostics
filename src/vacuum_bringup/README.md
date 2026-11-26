@@ -1,6 +1,6 @@
 # vacuum_bringup
 
-Launch files and configuration of the system, plus the lifecycle sequencer (T521, spec 005, D-26).
+Launch files and configuration of the system, plus the lifecycle sequencer (spec 005, D-26).
 
 ## The lifecycle sequencer
 
@@ -36,7 +36,7 @@ ros2 launch vacuum_bringup skeleton.launch.py with_sequencer:=true   # default f
 ```
 
 With `with_sequencer:=true` the launch adds `lifecycle_manager_nav`, `lifecycle_manager_optional` (both
-`autostart: false`, empty node lists until specs 005/T510 and 009 fill them in) and the sequencer, and
+`autostart: false`, empty node lists until the Nav2 nodes (spec 005) and the cloud/MQTT nodes (spec 009) fill them in) and the sequencer, and
 `lifecycle_manager_core` starts with `autostart: false`.
 
 ### How to add a manager
