@@ -1,12 +1,13 @@
 flowchart TB
   classDef plain fill:#fff3cd,stroke:#b58900,color:#000
   classDef life fill:#d4edda,stroke:#2e7d32,color:#000
+  classDef planned fill:#eeeeee,stroke:#777,color:#555
   classDef third fill:#eeeeee,stroke:#777,color:#000,stroke-dasharray: 4 3
 
   LAUNCH(["skeleton.launch.py<br/>starts everything, then the sequencer takes over"])
 
   subgraph PLAIN["Plain nodes (no state for a manager to control)"]
-    SEQ["lifecycle_sequencer<br/>orchestrates the managers"]:::plain
+    SEQ["lifecycle_sequencer<br/>orchestrates the managers (merged, #25)<br/>opt-in: with_sequencer, default false"]:::plain
     MUX["twist_mux · wheel bridge · teleop<br/>third-party, Art. II"]:::third
   end
 
@@ -18,17 +19,17 @@ flowchart TB
     SG["stop_guard (first)"]:::life
     ACT["coverage_server · escape_server · stuck_detector"]:::life
     SUP["supervisor (last)"]:::life
-    MAPN["room_segmenter · odom_tf_bridge · exploration_server"]:::life
+    MAPN["room_segmenter · odom_tf_bridge · exploration_server<br/>planned, not yet in lifecycle_core.yaml"]:::planned
   end
 
-  subgraph NAV["2. lifecycle_manager_nav · autostart false"]
-    PL["planner_server"]:::life
-    CT["controller_server"]:::life
-    BT["bt_navigator"]:::life
+  subgraph NAV["2. lifecycle_manager_nav · autostart false · node list empty today"]
+    PL["planner_server<br/>planned"]:::planned
+    CT["controller_server<br/>planned"]:::planned
+    BT["bt_navigator<br/>planned"]:::planned
   end
 
   subgraph OPT["3. lifecycle_manager_optional · autostart false"]
-    MQ["MQTT bridge etc. (spec 009, empty for now)"]:::life
+    MQ["MQTT bridge etc. (spec 009b, planned, list empty for now)"]:::planned
   end
 
   LAUNCH --> MUX

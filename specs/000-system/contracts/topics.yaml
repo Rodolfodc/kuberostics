@@ -11,6 +11,12 @@
 #     A missing `since` means "001" (inherited and present from the skeleton on). A frozen
 #     entry with a later `since` (e.g. /detections_markers, "009a") is required only from that
 #     spec onward; before that, the contract tests must skip it. Frozen and `since` are independent.
+#   owner may be a list when exactly one of several nodes runs at a time (e.g. /map: slam_toolbox or
+#     map_server); the contract test accepts any of them (contract batch 1; owner_names() in
+#     vacuum_contract_tests/contract.py, PR #43).
+#   max_publishers: 1 also restricts WHO publishes: only the owner (001-R03; D-28 for lock_stop).
+#   reserved: true = the entry keeps its name, type and twist_mux subscription but has no owner in the
+#     default launch (e.g. /myRobot/mux/coverage after D-24); the contract test tolerates no publisher.
 #
 # IA368II QoS: QoSProfile(depth=1) => reliable, volatile, keep_last 1.
 
@@ -54,6 +60,11 @@ topics:
   - {name: /scan,         type: sensor_msgs/msg/LaserScan, qos: default, owner: my_robot_scan_node,   frozen: true}
   - {name: /camera,       type: sensor_msgs/msg/Image,     qos: default, owner: my_robot_vision_node, frozen: true}
   - {name: /camera_depth, type: sensor_msgs/msg/Image,     qos: default, owner: my_robot_vision_node, frozen: true}
+  # Contract batch 2: the 2025S2 odometry topic, consumed by odom_tf_bridge (003-R02), stuck_detector and escape_server
+  # (D-07). Name and type are inherited (frozen); `since` is 003 because no 001 node needs it and the skeleton graph
+  # runs without the simulator (the contract test would report it "not in the graph"). The publisher is the
+  # same-name replacement in vacuum_sim_bridge (D-27): reliable, volatile, depth 10 = profile `default`.
+  - {name: /myrobot/odom, type: nav_msgs/msg/Odometry, qos: default, owner: my_robot_odometry_node, frozen: true, since: "003", note: "D-23: simulator pose relative to the first sample (odom_source ground_truth); header.frame_id = odom_frame, child_frame_id = footprint_frame of the bridge profile"}
 
   # ---- new (spec 001) ----
   - name: /myRobot/behaviour/submode
@@ -70,20 +81,22 @@ topics:
   - name: /myRobot/notifications
     type: vacuum_interfaces/msg/Notification
     qos: default
-    owner: "*"                # any node may notify
+    owner: "*"                # any node may notify; exploration_server notifies EXPLORATION_INCOMPLETE (WARN, 003-R11)
     since: "001"
   - name: /myRobot/mux/lock_stop
     type: std_msgs/msg/Bool
     qos: ia368ii
     owner: supervisor
+    max_publishers: 1         # D-28: only the supervisor may lock or release (Art. VI)
     since: "001"
+    note: "D-28: not latched (volatile); the supervisor republishes the current value, true or false, at publish_rate_hz (5 Hz); the twist_mux lock has timeout 0 and holds the last value"
 
   - name: /myRobot/telemetry/supervisor
     type: diagnostic_msgs/msg/DiagnosticArray
     qos: default
     owner: supervisor
     since: "001"
-    note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz"
+    note: "D-20: state and counters (transitions, stuck events, escapes) at 1 Hz; 005-R34 watchdog keys watchdog_armed, watchdog_* (counters of FeedbackWatchdog) and nav_cancels"
 
   - name: /myRobot/telemetry/lifecycle_sequencer
     type: diagnostic_msgs/msg/DiagnosticArray
@@ -125,7 +138,7 @@ topics:
   - {name: /myRobot/mux/stop,     type: geometry_msgs/msg/Twist, qos: ia368ii, owner: stop_guard,         priority: 250, since: "001", note: "D-22: zero velocity, published only while lock_stop is true"}
   - {name: /myRobot/mux/escape,   type: geometry_msgs/msg/Twist, qos: ia368ii, owner: escape_server,      priority: 80,  since: "001"}
   - {name: /myRobot/mux/nav,      type: geometry_msgs/msg/Twist, qos: ia368ii, owner: controller_server,  priority: 60,  since: "005"}
-  - {name: /myRobot/mux/coverage, type: geometry_msgs/msg/Twist, qos: ia368ii, owner: coverage_server,    priority: 50,  since: "001"}
+  - {name: /myRobot/mux/coverage, type: geometry_msgs/msg/Twist, qos: ia368ii, reserved: true,             priority: 50,  since: "001", note: "D-24, Q-10: no owner; the real coverage_server publishes no Twist (Nav2 drives on mux/nav); only the vacuum_stubs coverage_server publishes here (started by skeleton.launch.py; no with_stubs argument exists yet)"}
   - {name: /myRobot/mux/docking,  type: geometry_msgs/msg/Twist, qos: ia368ii, owner: autodocking_server, priority: 40,  since: "001"}
   - {name: /myRobot/legacy/cleaning_cmd_vel, type: geometry_msgs/msg/Twist, qos: ia368ii, owner: cleaning_server, sink: true, since: "001", note: "D-04: nobody subscribes"}
 
@@ -137,7 +150,23 @@ topics:
   - {name: /myRobot/perception/offload_status, type: vacuum_interfaces/msg/OffloadStatus, qos: ia368ii, owner: detection_selector, since: "009a", note: "R14: published at 1 Hz (parameter status_rate_hz)"}
   - {name: /myRobot/telemetry/detection_selector, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detection_selector, since: "009a", note: "D-20: breaker state, counters and watermark at status_rate_hz"}
   - {name: /myRobot/telemetry/image_throttle, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: image_throttle, since: "009a", note: "D-20: passed, dropped_rate, restarts, encode_errors at telemetry_rate_hz"}
+  - {name: /myRobot/telemetry/projector, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: projector, since: "009a", note: "D-20: projected, dropped_tf, dropped_depth, dropped_label/confidence/area/nan, accepted, merged, detections at telemetry_rate_hz"}
   - {name: /detections_markers, type: visualization_msgs/msg/MarkerArray, qos: default, owner: projector, frozen: true, since: "009a", note: "format consumed by the 2025S2 semantic node"}
+  - {name: /myRobot/telemetry/detector_local, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detector_local, since: "009a", note: "D-20: processed count and inference timing at telemetry_rate_hz; topic is /myRobot/telemetry/<node name>"}
+  - {name: /myRobot/telemetry/detector_cloud, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: detector_cloud, since: "009a", note: "same executable as detector_local, run in K3s under the node name detector_cloud"}
+
+  # ---- coverage (spec 005) ----
+  - {name: /myRobot/coverage/path,    type: nav_msgs/msg/Path,          qos: default, owner: coverage_server, since: "005", note: "lane waypoints of the current pass, for the interface (spec 007); published once per pass"}
+  - {name: /myRobot/coverage/covered, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: coverage_server, since: "005", note: "100 = covered, 0 = not covered, -1 = outside the coverable region (005-R21); 1 Hz"}
+
+  # ---- mapping and rooms (spec 003) ----
+  - {name: /map, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: [slam_toolbox, map_server], since: "003", note: "exactly one of them runs (map_file selects map_server); the contract test shall accept either owner"}
+  - {name: /myRobot/map/explored,    type: std_msgs/msg/Bool, qos: latched, owner: exploration_server, max_publishers: 1, since: "003", note: "003-R13; published by exploration_server (false, or true with map_loaded)"}
+  - {name: /myRobot/map/room_labels, type: nav_msgs/msg/OccupancyGrid, qos: latched, owner: room_segmenter, since: "003", note: "003-R18: value = Room.index from 1, 0 = no room, -1 = unknown; same geometry as /map"}
+  - {name: /myRobot/map/rooms,       type: vacuum_interfaces/msg/RoomArray, qos: latched, owner: room_segmenter, since: "003"}
+  - {name: /myRobot/telemetry/odom_tf_bridge,     type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: odom_tf_bridge, since: "003"}
+  - {name: /myRobot/telemetry/exploration_server, type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: exploration_server, since: "003"}
+  - {name: /myRobot/telemetry/room_segmenter,     type: diagnostic_msgs/msg/DiagnosticArray, qos: default, owner: room_segmenter, since: "003"}
 
 services:
   - name: /myRobot/start_stop
@@ -155,7 +184,11 @@ services:
     type: std_srvs/srv/Trigger
     owner: stuck_detector
     since: "001"
-    note: "stub (T012): publishes one StuckEvent per call; real detection is spec 005"
+    note: "stub (T012): publishes one StuckEvent per call; kept by the real node as a test hook (005-R06)"
+
+  - {name: /myRobot/map/save,        type: std_srvs/srv/Trigger,               owner: room_segmenter, since: "003", note: "003-R07"}
+  - {name: /myRobot/map/segment,     type: std_srvs/srv/Trigger,               owner: room_segmenter, since: "003", note: "003-R18"}
+  - {name: /myRobot/rooms/set_label, type: vacuum_interfaces/srv/SetRoomLabel, owner: room_segmenter, since: "003", note: "003-R23"}
 
 actions:
   - name: /myRobot/escape
@@ -166,13 +199,32 @@ actions:
     type: vacuum_interfaces/action/CoverRoom
     owner: coverage_server
     since: "001"
+  - {name: /myRobot/explore,  type: vacuum_interfaces/action/Explore,     owner: exploration_server, since: "003", note: "003-R10; optional and late (cut candidate)"}
+  # consumed Nav2 interface, declared so the contract tests see it (third party, Art. II)
+  - {name: /navigate_to_pose, type: nav2_msgs/action/NavigateToPose,      owner: bt_navigator, frozen: true, since: "005"}
+
+# TF broadcasters (contract batch 2). Not read by the contract tests yet. One broadcaster per child frame
+# (003-R02). Frame names are parameters of the broadcaster; the values below are the ones the launch must use.
+tf:
+  - {parent: map,            child: my_robot_odom,           owner: [slam_toolbox, static_transform_publisher], since: "003", note: "003-R05; static from the recorded start pose with map_file (003-R06, R30)"}
+  - {parent: my_robot_odom,  child: base_footprint, owner: my_robot_odometry_node, since: "003", note: "D-27: the bridge parameter odom_frame keeps its default my_robot_odom (the 2025S2 name, also used by nav2_params.yaml); with these bridges odom_tf_bridge is not started (003-R02: one broadcaster); proposal, see Q-14 in spec 003"}
+  - {parent: base_footprint, child: base_link,      owner: my_robot_odometry_node, static: true, since: "003", note: "z = footprint_to_base_z (0.08 m)"}
+  - {parent: base_link,      child: laser_link,     owner: my_robot_scan_node,     static: true, since: "003", note: "laser_xyz of the profile; the mapping launch shall not publish it a second time (003-R03)"}
+  - {parent: base_link,      child: camera_link,    owner: my_robot_vision_node,   static: true, since: "003", note: "camera_xyz + camera_quat; optical frame (x right, y down, z forward); same caveat as laser_link"}
 
 lifecycle:
   ia368ii_manager: [myrobot, behaviour_server, cleaning_server, autodocking_server, charging_server, charged_server]
+  # spec 003 adds odom_tf_bridge, exploration_server and room_segmenter here when its nodes land (003-R26)
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]
-  lifecycle_manager_optional: []      # MQTT bridge enters in spec 009
+  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # nav.launch.py (T510) has its own lifecycle_manager_nav (params autostart, bond_timeout); wiring into the sequencer pending; Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
+  # not managed (plain; D-26 exception PROPOSED in D-27, awaiting the project owner): the four vacuum_sim_bridge nodes (my_robot_scan_node, my_robot_vision_node,
+  # my_robot_cmd_vel_node, my_robot_odometry_node), same-name drop-ins of the plain 2025S2 bridges (D-27)
+  lifecycle_manager_optional: []      # detection chain of 009a (detector_local, image_throttle, detection_selector) when the sequencer launch includes it; MQTT bridge in spec 009; detector_cloud runs in K3s, outside the robot managers
 
 # Public parameters (Art. I.1). Values are the defaults; the launch file may override them.
+# Blocks are keyed by node name, except `detector` (keyed by executable: it runs as detector_local and
+# detector_cloud), `sim_bridge` (parameters shared by the four nodes of vacuum_sim_bridge) and the blocks whose
+# name ends in `_launch` or is `mapping` (launch arguments of a launch file, not a node).
 parameters:
   lifecycle_sequencer:
     manager_startup_timeout_s: {type: double, default: 30.0, requirement: 005-R35}
@@ -189,24 +241,88 @@ parameters:
     mode_topic: {type: string, default: /myRobot/behaviour/mode}
     cover_room_action: {type: string, default: /myRobot/cover_room}
     escape_action: {type: string, default: /myRobot/escape}
+    dock_after_coverage: {type: bool, default: false, requirement: 005-R30, note: "true needs amendment A2 of spec 001"}
+    dock_request_timeout_s: {type: double, default: 30.0, requirement: 005-R30}
+    start_stop_service: {type: string, default: /myRobot/start_stop, requirement: 005-R30, note: "docking request mechanism, candidate until T520 confirms it"}
+    dock_command: {type: string, default: stop, requirement: 005-R30, note: "command sent on start_stop_service to request docking (unverified, T520)"}
+    feedback_stale_s: {type: double, default: 2.5, requirement: 005-R34}
+    nav_cancel_s: {type: double, default: 1.0, requirement: 005-R34}
+    nav_action: {type: string, default: /navigate_to_pose, requirement: 005-R34, note: "the watchdog sends a CancelGoal request (zero goal id and stamp: cancel all) to <nav_action>/_action/cancel_goal (action_msgs/srv/CancelGoal, Nav2 interface, client of the supervisor)"}
+    explore_on_start: {type: bool, default: false, requirement: 003-R14, note: "true needs amendment A1 of spec 001; false until exploration exists"}
+    explore_action: {type: string, default: /myRobot/explore}
   stop_guard:
     publish_rate_hz: {type: double, default: 10.0, note: "must stay above 1 / timeout of the mux stop input (0.5 s)"}
     telemetry_rate_hz: {type: double, default: 1.0}
+  # coverage_server, escape_server, stuck_detector: the stub (vacuum_stubs, started by skeleton.launch.py) and the real node
+  # (vacuum_coverage) share the node name (005-R26); parameters marked "stub only" are ignored by the real node.
   coverage_server:
     telemetry_rate_hz: {type: double, default: 1.0}
-    linear_x: {type: double, default: 0.15, note: "constant forward speed while a CoverRoom goal is active (stub, T010)"}
-    angular_z: {type: double, default: 0.0}
-    publish_rate_hz: {type: double, default: 10.0}
+    linear_x: {type: double, default: 0.15, note: "stub only: constant forward speed while a CoverRoom goal is active (T010)"}
+    angular_z: {type: double, default: 0.0, note: "stub only"}
+    publish_rate_hz: {type: double, default: 10.0, note: "stub only"}
+    lane_spacing_m: {type: double, default: 0.25, requirement: 005-R17}
+    robot_radius_m: {type: double, default: 0.18, requirement: 005-R17, note: "footprint radius about the /myRobot origin, measured (.sim/robot_report.txt: 0.18 m about the origin, 0.21 m about the wheel axle)"}
+    margin_m: {type: double, default: 0.05, requirement: 005-R17}
+    min_segment_m: {type: double, default: 0.30, requirement: 005-R17}
+    tool_radius_m: {type: double, default: 0.15, requirement: 005-R21}
+    target_ratio: {type: double, default: 0.95, requirement: 005-R21, note: "success threshold of covered / coverable"}
+    min_acceptable_ratio: {type: double, default: 0.70, requirement: 005-R21, note: "degraded success (success=true, covered_ratio reported) when the session ends below target_ratio; below it, failure; must be <= target_ratio"}
+    max_skip_ratio: {type: double, default: 0.3, requirement: 005-R20}
+    coverage_timeout_s: {type: double, default: 1800.0, requirement: 005-R20}
+    waypoint_timeout_s: {type: double, default: 120.0, requirement: 005-R20}
+    resume_window_s: {type: double, default: 120.0, requirement: 005-R32}
+    max_region_area_m2: {type: double, default: 150.0, requirement: 005-R16}
+    map_topic: {type: string, default: /map}
+    nav_action: {type: string, default: /navigate_to_pose, requirement: 005-R19}
+    map_frame: {type: string, default: map, requirement: 005-R19, note: "frame of the goals, the path and the covered grid"}
+    base_frame: {type: string, default: base_link, requirement: 005-R21, note: "robot frame of the map -> base_frame lookup that feeds the covered mask"}
+    # nav_goal_timeout_s (180 s, 005-R34) is a Timeout of nav_bt.xml, not a node parameter: not declared here.
   escape_server:
     telemetry_rate_hz: {type: double, default: 1.0}
-    outcome: {type: string, default: succeed, values: [succeed, fail, hang], requirement: 001-R16}
-    reverse_s: {type: double, default: 1.0, note: "stub script: reverse for reverse_s, then turn for turn_s (T011)"}
-    turn_s: {type: double, default: 1.0}
-    reverse_linear_x: {type: double, default: -0.1}
-    turn_angular_z: {type: double, default: 0.8}
-    publish_rate_hz: {type: double, default: 10.0}
+    outcome: {type: string, default: auto, values: [auto, succeed, fail, hang], requirement: 005-R14, note: "extends the 001 values (001-R16); the launch sets succeed for the stub and auto for the real node (005-R33)"}
+    reverse_s: {type: double, default: 1.0, note: "stub only: reverse for reverse_s, then turn for turn_s (T011)"}
+    turn_s: {type: double, default: 1.0, note: "stub only"}
+    reverse_linear_x: {type: double, default: -0.1, note: "stub only"}
+    turn_angular_z: {type: double, default: 0.8, note: "stub only"}
+    publish_rate_hz: {type: double, default: 10.0, note: "mux/escape rate while a goal runs (stub and real, 005-R12)"}
+    reverse_m: {type: double, default: 0.20, requirement: 005-R08}
+    rear_clearance_m: {type: double, default: 0.15, requirement: 005-R08}
+    turn_deg_base: {type: double, default: 90.0, requirement: 005-R08}
+    turn_deg_step: {type: double, default: 45.0, requirement: 005-R08}
+    front_clearance_m: {type: double, default: 0.40, requirement: 005-R10}
+    max_attempts: {type: int, default: 3, requirement: 005-R10}
+    fallback_forward_m: {type: double, default: 0.30, requirement: 005-R11}
+    default_timeout_s: {type: double, default: 17.0, requirement: 005-R12}
+    reverse_speed_m_s: {type: double, default: 0.15, requirement: 005-R08, note: "stub script used 0.1; limit from T503"}
+    turn_speed_rad_s: {type: double, default: 1.0, requirement: 005-R08, note: "stub script used 0.8; limit from T503"}
+    primary_budget_s: {type: double, default: 5.0, requirement: 005-R10}
+    fallback_budget_s: {type: double, default: 11.5, requirement: 005-R11}
+    front_stop_m: {type: double, default: 0.15, requirement: 005-R11, note: "the fallback advance stops, and fails, below this front range"}
+    angle_tolerance_rad: {type: double, default: 0.05, note: "a turn ends within this of its target"}
+    distance_tolerance_m: {type: double, default: 0.01, note: "a reverse or advance ends within this of its target"}
+    range_cap_m: {type: double, default: 5.0, requirement: 005-R08, note: "ranges (inf included) are capped at this when the side means of the event scan are compared"}
+    max_linear_speed_m_s: {type: double, default: 0.30, requirement: 005-R11, note: "wheel-bridge limit, PLACEHOLDER until T503 (0.30 = limit of spec 009a); configure fails when reverse_speed_m_s exceeds it"}
+    max_angular_speed_rad_s: {type: double, default: 1.0, requirement: 005-R11, note: "wheel-bridge limit, PLACEHOLDER until T503; configure fails when turn_speed_rad_s exceeds it"}
+    front_sector_half_width_rad: {type: double, default: 0.35, requirement: 005-R10, note: "front clearance = minimum valid range within +-this of 0 rad (about 20 deg, the value of the scan_utils tests; unverified, tune in T503/T514)"}
+    rear_sector_half_width_rad: {type: double, default: 0.35, requirement: 005-R08, note: "rear clearance = minimum within +-this of pi; no valid reading there = rear check skipped (front-only laser)"}
+    odom_topic: {type: string, default: /myrobot/odom, note: "D-07"}
+    scan_topic: {type: string, default: /scan}
   stuck_detector:
     telemetry_rate_hz: {type: double, default: 1.0}
+    cmd_linear_min_m_s: {type: double, default: 0.05, requirement: 005-R01}
+    cmd_angular_min_rad_s: {type: double, default: 0.20, requirement: 005-R01}
+    window_s: {type: double, default: 3.0, requirement: 005-R01}
+    min_translation_m: {type: double, default: 0.03, requirement: 005-R01}
+    min_rotation_rad: {type: double, default: 0.10, requirement: 005-R01}
+    cooldown_s: {type: double, default: 5.0, requirement: 005-R03}
+    cmd_timeout_s: {type: double, default: 0.5, requirement: 005-R02, note: "a command older than this counts as zero (twist_mux goes silent on an input timeout instead of sending zero)"}
+    max_sample_gap_s: {type: double, default: 0.5, requirement: 005-R01, note: "a larger gap between pose samples resets the window"}
+    scan_max_age_s: {type: double, default: 0.5, requirement: 005-R04, note: "scan_ranges of the event come from a /scan younger than this, else empty"}
+    map_frame: {type: string, default: map, requirement: 005-R04}
+    base_frame: {type: string, default: base_link, requirement: 005-R04}
+    odom_topic: {type: string, default: /myrobot/odom, note: "D-07"}
+    scan_topic: {type: string, default: /scan}
+    bumper_topic: {type: string, default: "", requirement: 005-R05, note: "std_msgs/msg/Bool, a rising edge (false -> true) is one press (Q-11 decided); empty = BUMPER disabled"}
   detection_selector:
     max_age_s: {type: double, default: 0.67, requirement: 009a-R05, note: "= position_tolerance_m / v_max_m_s (0.20 / 0.30)"}
     open_threshold_s: {type: double, default: 1.5, requirement: 009a-R08, note: "never below max_age_s"}
@@ -223,3 +339,147 @@ parameters:
     telemetry_rate_hz: {type: double, default: 1.0}
     input_topic: {type: string, default: /camera, note: "RGB only; depth never leaves the robot"}
     output_topic: {type: string, default: /myRobot/perception/rgb_throttled/compressed}
+  projector:
+    detections_topic: {type: string, default: /myRobot/perception/detections, note: "selector output"}
+    depth_topic: {type: string, default: /camera_depth, note: "depth stays on the robot"}
+    map_topic: {type: string, default: /topologic_map, note: "input of the mapped-area check; same grid the semantic node reads"}
+    output_topic: {type: string, default: /detections_markers}
+    target_frame: {type: string, default: map, requirement: 009a-R13}
+    camera_frame: {type: string, default: "", note: "empty: frame_id of the detection header"}
+    fx: {type: double, default: 589.4, note: "pinhole intrinsics of the RGB camera; equal to camera_fx of the myRobot model (sim_bridge profile)"}
+    fy: {type: double, default: 589.4}
+    cx: {type: double, default: 319.5}
+    cy: {type: double, default: 239.5}
+    tf_timeout_s: {type: double, default: 0.1, requirement: 009a-R12}
+    republish_period_s: {type: double, default: 2.0, requirement: 009a-R13, note: "whole set republished; must be > 0"}
+    min_confidence: {type: double, default: 0.7, requirement: 009a-R13}
+    allowed_labels: {type: string_array, default: [""], note: "no non-empty entry: every label"}
+    check_mapped_area: {type: bool, default: true, requirement: 009a-R13, note: "drop detections outside a mapped room of map_topic; no map yet means drop"}
+    merge_distance_m: {type: double, default: 0.5, requirement: 009a-R13, note: "same label closer than this is one object"}
+    depth_cache_size: {type: int, default: 8}
+    depth_cache_max_age_s: {type: double, default: 2.0}
+    depth_tolerance_s: {type: double, default: 0.05, note: "max stamp difference between a detection and its depth image"}
+    depth_window_px: {type: int, default: 2, note: "median over a (2n+1)^2 window around the box centre"}
+    telemetry_rate_hz: {type: double, default: 1.0, note: "must be > 0"}
+  # Defaults of the `detector` executable (vacuum_detection). It runs under two node names, with launch overrides:
+  #   detector_local (robot, hot standby, 009a-R04): weights yolo11n.pt, input_type image, input_topic /camera,
+  #     output_topic ALWAYS /myRobot/perception/detections/local; with offload:=false detection_selector still runs, as a
+  #     passthrough of the local source, and stays the only publisher of /myRobot/perception/detections (009a-R01);
+  #   detector_cloud (K3s): weights yolo11x.pt, input_type compressed,
+  #     input_topic /myRobot/perception/rgb_throttled/compressed, output_topic /myRobot/perception/detections/cloud.
+  detector:
+    backend: {type: string, default: ultralytics, values: [ultralytics, "null"], note: "\"null\" detects nothing (bring-up and graph tests without weights); ultralytics is an optional pip dependency"}
+    weights: {type: string, default: yolo11n.pt, note: "the model is chosen by its weights file: yolo11n.pt on the robot, yolo11x.pt in K3s"}
+    device: {type: string, default: cpu, note: "cpu, cuda:0, ..."}
+    score_threshold: {type: double, default: 0.25}
+    iou_threshold: {type: double, default: 0.45}
+    image_size: {type: int, default: 640}
+    max_detections: {type: int, default: 100}
+    input_type: {type: string, default: image, values: [image, compressed], note: "image = sensor_msgs/Image (local), compressed = sensor_msgs/CompressedImage (cloud)"}
+    input_topic: {type: string, default: /camera}
+    output_topic: {type: string, default: /myRobot/perception/detections/local, requirement: 009a-R02, note: "Detection2DArray with the header of the input image; an empty array when nothing is detected"}
+    telemetry_rate_hz: {type: double, default: 1.0, note: "/myRobot/telemetry/<node name>"}
+  odom_tf_bridge:
+    odom_topic: {type: string, default: /myrobot/odom, note: "D-07"}
+    odom_frame: {type: string, default: odom}
+    base_frame: {type: string, default: base_link}
+    zero_at_first_message: {type: bool, default: false, note: "true if /myrobot/odom is in the world frame (Q-14)"}
+  mapping:                          # launch arguments and static TF parameters of mapping.launch.py, not a node
+    odom_source: {type: string, default: sim, values: [sim, laser], requirement: 003-R01}
+    map_file: {type: string, default: "", requirement: 003-R06}
+    map_name: {type: string, default: house}
+    start_pose_xyyaw: {type: double_array, default: [0.0, 0.0, 0.0], requirement: 003-R30, note: "read from maps/<map_name>_rooms.yaml with map_file"}
+    scan_frame: {type: string, default: laser_link, note: "to be measured, T301"}
+    laser_to_base_xyz_rpy: {type: double_array, default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], note: "to be measured, T301"}
+    camera_to_base_xyz_rpy: {type: double_array, default: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], note: "to be measured, T301"}
+  exploration_server:
+    min_frontier_cells: {type: int, default: 8, requirement: 003-R09}
+    gain_weight: {type: double, default: 0.05}
+    robot_radius_m: {type: double, default: 0.18, note: "measured footprint, as coverage_server"}
+    frontier_timeout_s: {type: double, default: 60.0, requirement: 003-R10}
+    explore_timeout_s: {type: double, default: 900.0, requirement: 003-R11}
+    map_loaded: {type: bool, default: false, requirement: 003-R06, note: "set by the launch with map_file; explored = true"}
+    max_blacklist_ratio: {type: double, default: 0.5, requirement: 003-R11}
+    nav_action: {type: string, default: /navigate_to_pose}
+  room_segmenter:
+    door_width_m: {type: double, default: 0.9, requirement: 003-R16, note: "to be measured, T301"}
+    min_room_area_m2: {type: double, default: 2.0, requirement: 003-R16}
+    min_votes: {type: int, default: 2, requirement: 003-R21}
+    observations_topic: {type: string, default: /detections_markers, requirement: 003-R22}
+    rules_file: {type: string, default: config/room_rules.yaml}
+    # contract batch 2: declared by the node (room_segmenter_node.py); mapping.launch.py passes its launch arguments
+    # of the same name. The rooms file is <dir of map_file, or maps/>/<map_name>_rooms.yaml.
+    map_name: {type: string, default: house, requirement: 003-R07}
+    map_file: {type: string, default: "", requirement: 003-R06, note: "non-empty: segment the loaded map at activation (003-R18)"}
+    start_pose_xyyaw: {type: double_array, default: [0.0, 0.0, 0.0], requirement: 003-R30, note: "start pose recorded in the rooms file when the map is saved; any length other than 3 means none"}
+
+  # ---- CoppeliaSim bridges (vacuum_sim_bridge, D-27; contract batch 2) ----
+  # Plain nodes (D-26 exception, docs/lifecycle-managers.md). Every node below declares the whole `sim_bridge` block;
+  # the defaults are the measured values of the combined model myRobotLaser.ttm (vacuum_sim_bridge/profile.py, mirrored in
+  # config/sim_bridge.yaml, kept equal by a test). A per-robot profile is a copy of that YAML passed as params_file.
+  sim_bridge:
+    zmq_host: {type: string, default: localhost, note: "CoppeliaSim ZeroMQ Remote API host (D-14)"}
+    zmq_port: {type: int, default: 23000}
+    atomic_wheel_write: {type: bool, default: false, requirement: 001-R23, note: "true: one executeScriptString call for both wheel signals; absent on CoppeliaSim 4.10, so the client logs one warning and falls back to two setFloatSignal calls"}
+    wheel_radius: {type: double, default: 0.05, note: "m"}
+    wheel_separation: {type: double, default: 0.2, note: "m"}
+    axle_offset_x: {type: double, default: 0.07, note: "m, wheel-axle centre ahead of the base_link origin"}
+    max_linear: {type: double, default: 0.5, note: "m/s, the cap of the model's python_controler"}
+    max_angular: {type: double, default: 1.5707963267948966, note: "rad/s (90 deg/s)"}
+    cmd_timeout: {type: double, default: 0.5, requirement: 001-R13, note: "s without a /cmd_vel message before the wheels are zeroed (answers Q-01 note 4 for this bridge)"}
+    joint_sign: {type: double, default: -1.0, note: "wheel travel = joint_sign * joint angle * radius"}
+    scan_num_beams: {type: int, default: 452, requirement: 001-R23, note: "expected count; the bridge uses the real count and warns once on a mismatch"}
+    scan_angle_min: {type: double, default: -1.5707963267948966}
+    scan_angle_increment: {type: double, default: 0.006981317007977318, note: "pi/450"}
+    scan_range_min: {type: double, default: 0.055, note: "below it (the model writes 0 for a miss) the range becomes inf"}
+    scan_range_max: {type: double, default: 10.0}
+    laser_xyz: {type: double_array, default: [0.0, 0.0, 0.16], note: "base_link -> laser_frame, no rotation"}
+    camera_width: {type: int, default: 640}
+    camera_height: {type: int, default: 480}
+    camera_fx: {type: double, default: 589.4, note: "fx = fy, cx = 319.5, cy = 239.5; the projector fx and fy defaults are the same value"}
+    camera_near: {type: double, default: 0.01}
+    camera_far: {type: double, default: 3.5}
+    camera_xyz: {type: double_array, default: [0.0983, 0.0141, 0.077]}
+    camera_quat: {type: double_array, default: [-0.5628, 0.5628, -0.4168, 0.439], note: "x y z w, optical frame in base_link"}
+    camera_flip_horizontal: {type: bool, default: false}
+    camera_flip_vertical: {type: bool, default: true, note: "the Remote API returns rows bottom to top (verified live)"}
+    odom_frame: {type: string, default: my_robot_odom, note: "2025S2 name, kept: nav2_params.yaml and the bridge use it; 003-R01 and the tf table say my_robot_odom"}
+    footprint_frame: {type: string, default: base_footprint}
+    base_frame: {type: string, default: base_link}
+    laser_frame: {type: string, default: laser_link}
+    camera_frame: {type: string, default: camera_link}
+    footprint_to_base_z: {type: double, default: 0.08}
+    robot_path: {type: string, default: /myRobot, requirement: 001-R23}
+    left_motor_path: {type: string, default: /myRobot/leftMotor}
+    right_motor_path: {type: string, default: /myRobot/rightMotor}
+    rgb_sensor_path: {type: string, default: /myRobot/kinect/rgb}
+    depth_sensor_path: {type: string, default: /myRobot/kinect/depth}
+    scan_signal: {type: string, default: signal.distSignal, requirement: 001-R23, note: "float-array property on robot_path"}
+  my_robot_scan_node:
+    rate_hz: {type: double, default: 10.0}
+  my_robot_vision_node:
+    rate_hz: {type: double, default: 10.0}
+    explicit_sensor_handling: {type: bool, default: false, note: "true: handleVisionSensor on rgb and depth before each frame; only for a model with explicit handling"}
+  my_robot_cmd_vel_node:
+    write_rate_hz: {type: double, default: 20.0, requirement: 001-R23, note: "rewrite period of the wheel signals (the stock model clears them after each actuation)"}
+  my_robot_odometry_node:
+    rate_hz: {type: double, default: 20.0}
+    odom_source: {type: string, default: ground_truth, values: [ground_truth, wheels], requirement: 003-R01, note: "NOT the mapping argument of the same name: mapping odom_source sim = bridge ground_truth; mapping laser = rf2o, the bridge is then not the TF broadcaster"}
+
+  # ---- launch arguments (contract batch 2) ----
+  sim_bridges_launch:               # vacuum_sim_bridge/launch/sim_bridges.launch.py
+    odom_source: {type: string, default: ground_truth, values: [ground_truth, wheels], note: "passed to my_robot_odometry_node"}
+    params_file: {type: string, default: "<share>/vacuum_sim_bridge/config/sim_bridge.yaml", note: "robot profile; start this launch or the stock 2025S2 bridges, never both"}
+  detection_launch:                 # vacuum_detection/launch/detection.launch.py (009a-R01)
+    offload: {type: bool, default: false, requirement: 009a-R01, note: "true adds image_throttle (cloud path); false: no image leaves the robot"}
+    local_weights: {type: string, default: yolo11n.pt, requirement: 009a-R04}
+    backend: {type: string, default: ultralytics, values: [ultralytics, "null"]}
+    device: {type: string, default: cpu}
+    with_manager: {type: bool, default: true, note: "false when an outer launch already runs lifecycle_manager_optional with these node names"}
+  coverage_launch:                  # vacuum_coverage/launch/coverage.launch.py
+    autostart: {type: bool, default: true, note: "configure and activate coverage_server without a lifecycle manager (stand-alone use)"}
+  skeleton_launch:                  # vacuum_bringup/launch/skeleton.launch.py
+    with_ia368ii: {type: bool, default: true, requirement: 001-R01}
+    with_wheel_bridge: {type: bool, default: true, requirement: 001-R13, note: "ignored when with_ia368ii is false"}
+    with_teleop: {type: bool, default: true}
+    with_sequencer: {type: bool, default: false, requirement: 005-R35}
