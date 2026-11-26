@@ -61,3 +61,20 @@ cd src/vacuum_bringup && python3 -m pytest test/test_manager_sequencer.py
 - `test/test_node_classification.py`: 005-R39, every node of the launch is on the plain list or managed.
 - `test/test_sequencer_graph.py`: live graph with the real Nav2 managers, the real sequencer and dummy nodes: five
   clean starts, one failing node per manager, `stop_guard` lost, shutdown order (read from the monotonic times the dummy nodes print, not from event arrival). Condition waits only; domain IDs 130 to 159.
+
+### Nav2 (spec 005)
+
+`launch/nav.launch.py` starts `planner_server`, `controller_server` (`cmd_vel` remapped to `/myRobot/mux/nav`),
+`bt_navigator` and `lifecycle_manager_nav` with `config/nav2_params.yaml` and `config/nav_bt.xml` (no recovery
+nodes; the whole goal sits under a `Timeout` of 180 s, 005-R34). One YAML serves Jazzy (Nav2 1.3.x) and Lyrical
+(1.5.x): Nav2 ignores undeclared parameters, and the differences are listed in the launch file docstring.
+Arguments: `autostart` (default true; false when `lifecycle_sequencer` starts the manager), `with_manager`,
+`params_file`, `bt_xml`. `skeleton.launch.py` does not include it yet and `lifecycle_nav.yaml` still has an empty
+`node_names` (the sequencer wiring is a later task). `nav.launch.py` sets `bond_timeout: 0.0` on its manager, so a
+crashed Nav2 node is not detected by the manager; the sequencer wiring follow-up must restore a bond timeout.
+
+- `test/test_nav_config.py`: YAML and BT checks, no ROS graph (005-R19, R23, R34).
+- `test/test_nav_graph.py`, `test/test_nav_timeout.py`: live graph with real Nav2, real `map_server` and
+  `test/fake_robot.py` (odometry, TF, empty scan); goal reached, cancel silences `mux/nav`, the `Timeout`
+  decorator aborts a long goal. Domains come from the vacuum_bringup range 100 to 129 (`graph_support.domain_for(20)` and `(21)`).
+- `test/test_nav_sim_live.py`: the same against CoppeliaSim, `VACUUM_SIM_LIVE=1`, run by the sim-operator only.
