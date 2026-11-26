@@ -1,5 +1,5 @@
-# twist_mux configuration (T007, spec 001). Inputs and priorities mirror
-# specs/000-system/contracts/topics.yaml; the contract test of T005 and
+# twist_mux configuration (spec 001). Inputs and priorities mirror
+# specs/000-system/contracts/topics.yaml; the contract test (vacuum_contract_tests) and
 # test/test_twist_mux_config.py keep them in sync.
 #
 # The output (cmd_vel_out) is remapped to /myRobot/cmd_vel in the launch file (D-03): twist_mux is the
@@ -18,6 +18,12 @@ twist_mux:
         topic: /myRobot/mux/escape
         timeout: 0.5
         priority: 80
+      # 005-R23, D-24: Nav2 controller_server (remapped cmd_vel) is the coverage actuator; above `coverage`
+      # (the stub), below `escape` so an escape always overrides navigation (D-25).
+      nav:
+        topic: /myRobot/mux/nav
+        timeout: 0.5
+        priority: 60
       coverage:
         topic: /myRobot/mux/coverage
         timeout: 0.5
@@ -32,7 +38,6 @@ twist_mux:
         topic: /myRobot/mux/stop
         timeout: 0.5
         priority: 250
-      # /myRobot/mux/nav (priority 60) enters with spec 005.
     locks:
       stop:
         topic: /myRobot/mux/lock_stop

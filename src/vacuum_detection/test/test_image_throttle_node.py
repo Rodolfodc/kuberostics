@@ -1,4 +1,4 @@
-"""T909: smoke test of the image_throttle node glue (rate logic: test_throttle_core.py, JPEG: test_image_codec.py).
+"""Smoke test of the image_throttle node glue (rate logic: test_throttle_core.py, JPEG: test_image_codec.py).
 
 Needs rclpy, numpy and OpenCV (skipped otherwise). In-process, no launch.
 """

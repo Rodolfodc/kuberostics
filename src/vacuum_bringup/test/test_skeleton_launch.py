@@ -1,7 +1,7 @@
-"""T013: structure tests of launch/skeleton.launch.py (001-R01, 001-R02, 001-R12, 001-R13).
+"""Structure tests of launch/skeleton.launch.py (001-R01, 001-R02, 001-R12, 001-R13).
 
 The launch description is built, never launched: no ROS graph, no IA368II checkout and no simulator are needed.
-What really runs (is_active, mux behaviour) is verified by launch_testing in T014.
+What really runs (is_active, mux behaviour) is verified by the live-graph launch_testing tests (test_graph_*.py).
 """
 import importlib.util
 import pathlib
@@ -154,8 +154,8 @@ def test_our_nodes_always_start(entities, package, executable):
 def test_twist_mux_is_the_only_publisher_of_cmd_vel(entities):
     """Art. VI, D-03, 001-R10: only twist_mux has /myRobot/cmd_vel as an output.
 
-    This checks remap targets only. The real proof is the T005 contract test (max_publishers on the live
-    graph) and the T014 graph check.
+    This checks remap targets only. The real proof is the contract test (max_publishers on the live
+    graph) and the live-graph checks.
     """
     mux = by_executable(entities, 'twist_mux')
     assert not is_conditional(mux)
@@ -196,7 +196,7 @@ def test_teleop(entities):
 
 
 def test_launch_file_is_installed():
-    """setup.py installs launch/ and config/ (T013)."""
+    """setup.py installs launch/ and config/."""
     source = (PKG / 'setup.py').read_text()
     assert "'launch'" in source and "'config'" in source
     assert "launch/*.py" in source and "config/*.yaml" in source

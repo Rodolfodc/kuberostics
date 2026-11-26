@@ -1,4 +1,4 @@
-"""Pure logic of the stuck_detector stub (T012, 001-R07). No ROS imports (D-18). Real detection is spec 005."""
+"""Pure logic of the stuck_detector stub (001-R07). No ROS imports (D-18). Real detection is spec 005."""
 
 
 class StuckStub:
