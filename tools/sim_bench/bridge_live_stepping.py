@@ -6,7 +6,7 @@ import math, sys
 sys.path.insert(0, sys.argv[1] + '/vacuum_sim_bridge')
 from vacuum_sim_bridge.sim_client import ZmqSimClient
 v, w, secs = float(sys.argv[2]), float(sys.argv[3]), float(sys.argv[4]); two = len(sys.argv) > 5
-c = ZmqSimClient(); sim = c._sim
+c = ZmqSimClient(); c.get_sim_time(); sim = c._sim  # the client connects lazily
 robot = sim.getObject('/myRobot'); lj = sim.getObject('/myRobot/leftMotor'); rj = sim.getObject('/myRobot/rightMotor')
 sim.setStepping(True)
 def pose():
