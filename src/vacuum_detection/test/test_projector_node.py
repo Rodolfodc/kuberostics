@@ -141,3 +141,25 @@ def test_009a_R12_node_receives_depth_from_a_best_effort_publisher(ros):
     assert spin_until(executor, cached, timeout_s=10.0)
     node.destroy_node()
     helper.destroy_node()
+
+
+def test_009a_R12_cleanup_survives_a_listener_without_the_tf2_internals_and_with_them(ros):
+    """The listener thread attributes are tf2_ros internals: cleanup must stop the real listener and also not fail
+    when they are absent."""
+    node = ProjectorNode()
+    node.trigger_configure()
+    listener = node._tf_listener
+    assert listener.dedicated_listener_thread.is_alive()
+    node.trigger_cleanup()
+    assert node._tf_listener is None and not listener.dedicated_listener_thread.is_alive()
+
+    class Bare:                                    # a listener without executor / dedicated_listener_thread
+        node = rclpy.create_node('bare_listener_node')
+
+        def unregister(self):
+            pass
+
+    node._tf_listener = Bare()
+    node._stop_tf_listener()                       # must not raise
+    assert node._tf_listener is None
+    node.destroy_node()

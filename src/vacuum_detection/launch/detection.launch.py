@@ -18,8 +18,10 @@ selector runs in both modes and the local detector always publishes to .../detec
 
 `autostart:=true` configures and then activates every node of the chain FROM THIS LAUNCH (launch lifecycle events:
 a node that reaches `inactive` is activated, a node that starts is configured), for use without a manager. The
-nodes go one after the other (detector_local, detection_selector, image_throttle, projector): a node is
-configured when the previous one is active. It needs
+nodes go one after the other (detector_local, detection_selector, image_throttle; the projector independently): a node is
+configured when the previous one is active. The projector has its OWN chain, started with the process and
+independent of the others: a perception failure must not cascade (Art. VII, D-09), so a detector_local that fails
+to configure never holds the projector back. It needs
 `with_manager:=false`: with the manager (default) the nodes are already started by it and `autostart` is ignored
 with a warning, so the manager and the launch never both drive a transition. Default false: the behaviour
 described below is unchanged (manager autostart when `with_manager:=true`, nothing otherwise).
@@ -41,6 +43,21 @@ from launch_ros.event_handlers import OnStateTransition
 from launch_ros.events.lifecycle import ChangeState
 
 LOCAL_TOPIC = '/myRobot/perception/detections/local'
+
+
+def autostart_plan(names):
+    """name -> name of the node it waits for before being configured (None: configured when its process starts).
+
+    detector_local, detection_selector and image_throttle depend on each other and go in a chain; the projector is
+    always a root of its own (a perception failure must not cascade, Art. VII, D-09)."""
+    plan, previous = {}, None
+    for name in names:
+        if name == 'projector':
+            plan[name] = None
+        else:
+            plan[name] = previous
+            previous = name
+    return plan
 
 
 def autostart_actions(node: LifecycleNode, name: str, previous: LifecycleNode = None):
@@ -74,7 +91,7 @@ def detection_actions(offload: bool, local_weights: str, backend: str, device: s
     if autostart and with_manager:
         actions.append(LogInfo(msg='autostart ignored: lifecycle_manager_optional starts the nodes (with_manager)'))
     names = []
-    previous = []
+    nodes = {}
 
     def add(executable, name, parameters=None):
         kwargs = dict(package='vacuum_detection', executable=executable, name=name, output='screen',
@@ -82,8 +99,9 @@ def detection_actions(offload: bool, local_weights: str, backend: str, device: s
         if launch_drives:
             node = LifecycleNode(namespace='', **kwargs)
             actions.append(node)
-            actions.extend(autostart_actions(node, name, previous[-1] if previous else None))
-            previous.append(node)
+            nodes[name] = node
+            waits_for = autostart_plan(names + [name])[name]
+            actions.extend(autostart_actions(node, name, nodes[waits_for] if waits_for else None))
         else:
             actions.append(Node(**kwargs))
         names.append(name)

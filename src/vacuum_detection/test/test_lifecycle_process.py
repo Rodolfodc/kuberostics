@@ -5,7 +5,6 @@ Verifies 009a-R12 (projector must be activatable with no inputs) and D-26 (lifec
 Domain: the per-test domain of conftest.py (160-174).
 """
 import subprocess
-import warnings
 import sys
 import time
 
@@ -54,7 +53,7 @@ def _call(node, client, request, bound_s=BOUND_S):
 
 
 def _drive(node, name, transition_id, target_label):
-    """Requests the transition until the node reports `target_label`, within BOUND_S. A request sent right after
+    """Requests the transition until (returns the number of requests sent, None on timeout) the node reports `target_label`, within BOUND_S. A request sent right after
     service discovery can be lost (Lyrical, loaded machine), so a missing answer is retried; a hang never
     reaches the label and fails after the bound."""
     change = node.create_client(ChangeState, f'/{name}/change_state')
@@ -65,12 +64,10 @@ def _drive(node, name, transition_id, target_label):
     while time.monotonic() < end:
         state = _call(node, get, GetState.Request(), bound_s=3.0)
         if state is not None and state.current_state.label == target_label:
-            return True
-        if sent:
-            warnings.warn(f'RETRY: {name} still not {target_label} after {sent} request(s): resending {transition_id}')
+            return sent
         sent += 1
         _call(node, change, ChangeState.Request(transition=Transition(id=transition_id)), bound_s=3.0)
-    return False
+    return None
 
 
 @pytest.mark.parametrize('module,name', [
@@ -81,6 +78,9 @@ def _drive(node, name, transition_id, target_label):
 def test_009a_R12_node_activates_alone_with_no_inputs_and_keeps_answering(ros, process, module, name):
     """No camera, no TF, no map: configure and activate complete within the bound and the services stay alive."""
     proc = process(module)
-    assert _drive(ros, name, Transition.TRANSITION_CONFIGURE, 'inactive'), f'{name}: configure did not complete (hang)'
-    assert _drive(ros, name, Transition.TRANSITION_ACTIVATE, 'active'), f'{name}: activate did not complete (hang)'
+    for tid, label in ((Transition.TRANSITION_CONFIGURE, 'inactive'), (Transition.TRANSITION_ACTIVATE, 'active')):
+        sent = _drive(ros, name, tid, label)
+        assert sent is not None, f'{name}: transition to {label} did not complete (hang)'
+        # one request is the norm; a second is the tolerated lost-request case; more is a startup race regression
+        assert sent <= 2, f'{name}: {sent} requests were needed to reach {label} (startup race regression)'
     assert proc.poll() is None

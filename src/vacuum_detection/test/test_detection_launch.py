@@ -104,3 +104,18 @@ def test_009a_R13_with_projector_adds_the_projector_only_when_asked():
 
 def executables_of(actions):
     return sorted(a.node_executable for a in actions if isinstance(a, Node))
+
+
+def test_001_R01_projector_chain_does_not_depend_on_detector_local():
+    """Art. VII / D-09: a failing detector_local must not stop the projector, and the others keep their order."""
+    plan = load().autostart_plan(['detector_local', 'detection_selector', 'image_throttle', 'projector'])
+    assert plan == {'detector_local': None, 'detection_selector': 'detector_local',
+                    'image_throttle': 'detection_selector', 'projector': None}
+
+
+def test_001_R01_projector_handlers_are_wired_to_its_own_process_start_in_the_action_list():
+    from launch.event_handlers import OnProcessStart
+    actions = actions_of(offload=True, autostart=True, with_projector=True)
+    starts = [a for a in actions if type(a).__name__ == 'RegisterEventHandler'
+              and isinstance(getattr(a, 'event_handler', None), OnProcessStart)]
+    assert len(starts) == 2                    # detector_local and projector are roots; the others wait

@@ -164,13 +164,25 @@ class ProjectorNode(LifecycleNode):
         return TransitionCallbackReturn.SUCCESS
 
     def _stop_tf_listener(self) -> None:
+        """Stops the listener thread and node. `executor` and `dedicated_listener_thread` are tf2_ros attributes
+        (present on Jazzy and Lyrical, not a documented API): a missing one is logged, never an error."""
         listener, self._tf_listener = getattr(self, '_tf_listener', None), None
         if listener is None:
             return
-        listener.executor.shutdown()
-        listener.dedicated_listener_thread.join(timeout=5.0)
-        listener.unregister()
-        listener.node.destroy_node()
+        log = self.get_logger()
+        executor = getattr(listener, 'executor', None)
+        thread = getattr(listener, 'dedicated_listener_thread', None)
+        if executor is None or thread is None:
+            log.warning('tf2_ros listener has no executor/thread attribute: relying on its own cleanup')
+        try:
+            if executor is not None:
+                executor.shutdown()
+            if thread is not None:
+                thread.join(timeout=5.0)
+            listener.unregister()
+            listener.node.destroy_node()
+        except Exception as exc:                 # noqa: BLE001 - cleanup must not fail the transition
+            log.warning(f'tf listener cleanup incomplete: {exc}')
 
     # --- inputs -------------------------------------------------------------------------------
     def _is_mapped(self, x: float, y: float) -> bool:
