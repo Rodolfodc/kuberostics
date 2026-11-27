@@ -283,6 +283,8 @@ def test_005_R12_deactivation_mid_escape_aborts_and_stops(rig):
     r.escape.trigger_deactivate()
     res = r.result(h)
     assert h.status == GoalStatus.STATUS_ABORTED and not res.result.success
+    # the brake went out before the lifecycle publisher was disabled (it was dropped by the first version)
+    assert r.world.last('escape').linear.x == 0.0 and r.world.last('escape').angular.z == 0.0
     assert r.silent_for('escape')
 
 

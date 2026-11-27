@@ -4,7 +4,6 @@ Runs the real `main()` in a subprocess and sends SIGINT as `ros2 launch` does at
 seconds with no `context is invalid` errors, and a running goal must end with its brake command and silence. Domain:
 range 1-5 of this package (a fresh one per round), LOCALHOST discovery.
 """
-import itertools
 import os
 import signal
 import subprocess
@@ -26,7 +25,6 @@ from world_fixtures import QOS  # noqa: E402
 CODE = 'from vacuum_coverage.escape_server_node import main; main()'
 EXIT_DEADLINE_S = 10.0
 BAD_STDERR = ('context is not valid', 'context is invalid', 'Traceback', 'RCLError', 'Error raised in')
-_domains = itertools.cycle(range(1, 6))
 
 
 def _spin_until(node, done, timeout):
@@ -43,7 +41,11 @@ def _change(node, client, transition_id):
 
 @pytest.mark.parametrize('goal_running', [False, True])
 def test_005_R12_escape_server_exits_on_sigint_with_a_brake_and_no_rcl_errors(goal_running):
-    os.environ['ROS_DOMAIN_ID'] = str(next(_domains))
+    # the conftest's random base domain (range 1-5); restored afterwards, the global environment is not kept
+    base = int(os.environ['ROS_DOMAIN_ID'])
+    domain = str(1 + (base - 1 + int(goal_running)) % 5)
+    saved = os.environ['ROS_DOMAIN_ID']
+    os.environ['ROS_DOMAIN_ID'] = domain
     env = dict(os.environ, PYTHONPATH=os.pathsep.join(sys.path), ROS_AUTOMATIC_DISCOVERY_RANGE='LOCALHOST')
     cmd = [sys.executable, '-c', CODE, '--ros-args', '-p', 'outcome:=hang', '-p', 'reverse_s:=0.1',
            '-p', 'turn_s:=0.1']
@@ -85,3 +87,4 @@ def test_005_R12_escape_server_exits_on_sigint_with_a_brake_and_no_rcl_errors(go
             proc.communicate()
         node.destroy_node()
         rclpy.try_shutdown()
+        os.environ['ROS_DOMAIN_ID'] = saved

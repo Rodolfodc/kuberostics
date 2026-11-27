@@ -40,6 +40,7 @@ from vacuum_coverage.node_support import (
     QOS_DEFAULT, QOS_IA368II, QOS_SCAN, build_diagnostics, guarded_change_state)
 
 ODOM_MAX_AGE_S = 1.0       # odometry older than this is "lost": the escape fails instead of driving blind
+DEACTIVATE_WAIT_S = 1.0     # deactivation waits this long for a running goal to brake and end
 ODOM_GRACE_S = 1.0         # a goal waits this long for the first odometry before failing without moving
 SCAN_MAX_AGE_S = 1.0       # a laser older than this gives no clearance (None = not clear)
 
@@ -77,6 +78,7 @@ class EscapeServerNode(LifecycleNode):
         self._scan = ScanCache()
         self._timer = None
         self._stopping = False
+        self._braked = True
 
     # ---- lifecycle ----
     def _LifecycleNodeMixin__on_change_state(self, request, response):  # noqa: N802 - overrides the rclpy callback
@@ -152,6 +154,12 @@ class EscapeServerNode(LifecycleNode):
     def on_deactivate(self, state) -> TransitionCallbackReturn:
         self._active = False          # a running goal sees this, publishes its zero Twist and aborts
         self._generation += 1
+        # the brake must go out BEFORE the lifecycle publisher is disabled: wait for the goal loop to end
+        deadline = time.monotonic() + DEACTIVATE_WAIT_S
+        while self._running and time.monotonic() < deadline:
+            time.sleep(0.01)
+        if self._running:
+            self.get_logger().error('a goal is still running at deactivation: its brake may be dropped')
         if self._timer is not None:
             self.destroy_timer(self._timer)
             self._timer = None
@@ -199,16 +207,19 @@ class EscapeServerNode(LifecycleNode):
 
     # ---- action ----
     def _on_goal(self, goal) -> GoalResponse:
-        reason = None
-        if not self._active:
-            reason = 'node not active'
-        elif self._busy:
-            reason = 'another goal is active'
+        with self._lock:
+            reason = None
+            if not self._active:
+                reason = 'node not active'
+            elif self._busy:
+                reason = 'another goal is active'
+            if reason:
+                self._counters['rejected'] += 1
+            else:
+                self._busy = True
         if reason:
-            self._counters['rejected'] += 1
             self.get_logger().warning(f'goal rejected: {reason}')
             return GoalResponse.REJECT
-        self._busy = True
         return GoalResponse.ACCEPT
 
     def _on_cancel(self, goal_handle) -> CancelResponse:
@@ -222,21 +233,28 @@ class EscapeServerNode(LifecycleNode):
         msg.angular.z = float(command.angular)
         return msg
 
-    def _publish_zero(self) -> None:
+    def _brake(self) -> None:
+        """One zero Twist, only when a non-zero command may still be on the input, then silence."""
+        if self._braked:
+            return
+        self._braked = True
         try:
-            self._pub.publish(Twist())        # one brake command, then silence (see the module docstring)
-        except RCLError:
-            pass
+            self._pub.publish(Twist())
+        except Exception as exc:  # noqa: BLE001 - never let the brake raise out of a cleanup path
+            if self.context.ok():
+                self.get_logger().error(f'brake failed: {type(exc).__name__}: {exc}')
 
     def _execute(self, goal_handle):
-        self._goals += 1
-        self._running += 1
+        with self._lock:
+            self._goals += 1
+            self._running += 1
         generation = self._generation
         goal = goal_handle.request
         period = 1.0 / self.get_parameter('publish_rate_hz').value
         start = self._now_s()
         result = Escape.Result(success=False, duration_s=0.0, strategy='scripted')
         moved = False
+        self._braked = True          # nothing commanded yet: no brake owed
         try:
             session = self._new_session()
             pose, _, _ = self._sense(start)
@@ -255,25 +273,22 @@ class EscapeServerNode(LifecycleNode):
                 t = self._now_s()
                 result.duration_s = float(t - start)
                 if goal_handle.is_cancel_requested:
-                    if moved:
-                        self._publish_zero()
+                    self._brake()
                     goal_handle.canceled()
                     return self._ended(result, 'cancelled', 'goal cancelled')
                 if self._stopping or not self.context.ok() or not self._active or generation != self._generation:
-                    if moved:
-                        self._publish_zero()
+                    self._brake()
                     goal_handle.abort()
                     return self._ended(result, 'aborted', 'node deactivated or shutting down')
                 pose, front, rear = self._sense(t)
                 out = session.step(t, pose, front, rear)
                 if isinstance(out, Final):
-                    if moved:
-                        self._publish_zero()
+                    self._brake()
                     result.success = out.success
                     goal_handle.succeed()
                     return self._ended(result, 'success' if out.success else 'failure', out.reason)
+                self._braked = False
                 self._pub.publish(self._twist(out))
-                moved = True
                 goal_handle.publish_feedback(Escape.Feedback(elapsed_s=float(t - start)))
                 time.sleep(period)
         except RCLError:
@@ -284,20 +299,25 @@ class EscapeServerNode(LifecycleNode):
             self._last_result = 'aborted'
             return result
         finally:
-            self._running -= 1
-            self._busy = False
+            self._brake()            # whatever ended the loop (any exception included), motion is never left on
+            with self._lock:
+                self._running -= 1
+                self._busy = False
             self._phase = 'idle'
 
     def _ended(self, result, kind: str, reason: str):
         key = {'success': 'succeeded', 'failure': 'failed', 'cancelled': 'cancelled', 'aborted': 'aborted'}[kind]
-        self._counters[key] += 1
+        with self._lock:
+            self._counters[key] += 1
         self._last_result, self._last_reason = kind, reason
         self.get_logger().info(f'Escape finished: {kind} ({reason}) in {result.duration_s:.2f} s')
         return result
 
     def _telemetry(self) -> None:
-        values = {'goals': self._goals, 'running': self._running, 'outcome': self.get_parameter('outcome').value,
-                  'last_result': self._last_result, 'last_reason': self._last_reason, **self._counters}
+        with self._lock:
+            values = {'goals': self._goals, 'running': self._running,
+                      'outcome': self.get_parameter('outcome').value, 'last_result': self._last_result,
+                      'last_reason': self._last_reason, **self._counters}
         self._pub_telemetry.publish(build_diagnostics(self, self._phase, values))
 
 
