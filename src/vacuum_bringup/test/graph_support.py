@@ -71,7 +71,7 @@ def isolate_environment(module_index: int) -> None:
     os.environ['ROS_DOMAIN_ID'] = str(domain_for(module_index))
 
 
-def launch_skeleton(module_index: int, with_ia368ii: bool = False) -> LaunchDescription:
+def launch_skeleton(module_index: int, with_ia368ii: bool = False, extra_args=None) -> LaunchDescription:
     """The real skeleton.launch.py, minus teleop (needs a terminal) and the wheel bridge (needs CoppeliaSim)."""
     source = os.path.join(get_package_share_directory('vacuum_bringup'), 'launch', 'skeleton.launch.py')
     return LaunchDescription([
@@ -84,6 +84,7 @@ def launch_skeleton(module_index: int, with_ia368ii: bool = False) -> LaunchDesc
             'with_ia368ii': 'true' if with_ia368ii else 'false',
             'with_wheel_bridge': 'false',
             'with_teleop': 'false',
+            **(extra_args or {}),
         }.items()),
         ReadyToTest(),
     ])

@@ -3,7 +3,7 @@
     ros2 launch vacuum_bringup skeleton.launch.py [with_ia368ii:=false] [with_wheel_bridge:=false]
                                                   [with_teleop:=false] [with_sequencer:=true]
                                                   [nav:=true] [real_coverage:=true] [sim_slowdown:=11]
-                                                  [wheel_bridge:=vacuum]
+                                                  [wheel_bridge:=vacuum] [map_tf:=true] [map_source:=static]
 
 Blocks, each built by its own function:
   - IA368II nodes + their lifecycle manager   (with_ia368ii, default true: 001-R01 asks for them)
@@ -15,6 +15,8 @@ Blocks, each built by its own function:
                                                 (D-27; with_wheel_bridge only, it does not need the IA368II checkout)
   - nav.launch.py                            (nav, default false): Nav2 under lifecycle_manager_nav; sim_slowdown is
                                                 forwarded to it and to the real coverage launch (real_coverage)
+  - map_tf.launch.py                         (map_tf, default false): static map -> my_robot_odom (dead reckoning only);
+                                                map_source:=slam is a placeholder that fails (slam_toolbox not integrated)
   - teleop_twist_keyboard                     (with_teleop; needs a terminal on stdin)
   - lifecycle_sequencer + nav manager (with_sequencer, default false): the managers that have nodes start in
     order core -> nav (005-R35; optional is not launched while it has no nodes, see sequencer_nodes()); lifecycle_manager_core then runs with autostart false
@@ -23,6 +25,9 @@ The IA368II packages are not in rosdep (they come from `vcs import`, Art. II), s
 them is conditional and resolved lazily: this file imports and builds without them, and the launch_testing
 the live-graph tests run with `with_ia368ii:=false` or against the installed checkout.
 """
+import os
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
@@ -76,6 +81,10 @@ def launch_arguments():
         DeclareLaunchArgument('nav', default_value='false',
                               description='Include nav.launch.py (Nav2 under lifecycle_manager_nav, 005-R35); needs '
                                           '/map and the map -> odom TF from outside'),
+        DeclareLaunchArgument('map_tf', default_value='false',
+                              description='Include map_tf.launch.py (map -> my_robot_odom, what nav needs)'),
+        DeclareLaunchArgument('map_source', default_value='static', choices=['static', 'slam'],
+                              description='Source of map -> my_robot_odom when map_tf is true (slam: not integrated)'),
         DeclareLaunchArgument('real_coverage', default_value='false',
                               description='Run the real coverage_server of vacuum_coverage instead of the stub'),
         DeclareLaunchArgument('sim_slowdown', default_value='1.0',
@@ -158,6 +167,13 @@ def coverage_include(condition):
         condition=condition)
 
 
+def map_tf_include(condition):
+    source = os.path.join(get_package_share_directory('vacuum_bringup'), 'launch', 'map_tf.launch.py')
+    return IncludeLaunchDescription(PythonLaunchDescriptionSource(source),
+                                    launch_arguments={'map_source': LaunchConfiguration('map_source')}.items(),
+                                    condition=condition)
+
+
 def twist_mux_node():
     # use_stamped: false lives in twist_mux.yaml (D-13). While lock_stop is on the mux publishes nothing,
     # stop_guard feeds the `stop` input instead (D-22).
@@ -214,6 +230,7 @@ def generate_launch_description():
         *sequencer_nodes(seq_and_nav, seq_no_nav),
         nav_include(with_nav),
         coverage_include(real_coverage),
+        map_tf_include(IfCondition(LaunchConfiguration('map_tf'))),
         twist_mux_node(),
         wheel_bridge_node(with_bridge),
         vacuum_wheel_bridge_node(with_vacuum_bridge),

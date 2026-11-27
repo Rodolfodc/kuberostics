@@ -72,7 +72,7 @@ Arguments: `autostart` (default true; false when `lifecycle_sequencer` starts th
 `with_sequencer:=true` the include starts no manager of its own and `lifecycle_manager_nav` (`config/lifecycle_nav.yaml`:
 `controller_server`, `planner_server`, `bt_navigator`) is started by the sequencer after the core manager; without
 `nav` no nav manager is launched and the sequencer lists only `lifecycle_manager_core`. A Nav2 `lifecycle_manager` with `node_names: []` aborts at startup (exit -6), so no manager without nodes is launched (`lifecycle_manager_optional` neither, until spec 009); `ManagerSequencer` additionally skips (log `X: no nodes configured, skipped`, telemetry `startup_X_outcome=SKIPPED`, no state change) a listed manager that reports no nodes. `/map` and the `map -> odom` TF come from
-outside. `bond_timeout` stays 0.0 on purpose: the sequencer checks the managers only at startup (005-R36), so a bond
+outside (`map_tf:=true` on `skeleton.launch.py`, or `map_tf.launch.py`, provides the static identity `map -> my_robot_odom`, dead reckoning only; `map_source:=slam` is a placeholder that fails). `bond_timeout` stays 0.0 on purpose: the sequencer checks the managers only at startup (005-R36), so a bond
 break at run time would reset Nav2 while the sequencer still says ALL_ACTIVE, and a 4 s bond can break spuriously on a
 loaded runner or the slow simulator. A dead Nav2 node is safe anyway (no goal; the mux input times out).
 `real_coverage:=true` swaps the coverage stub for the real `coverage_server` (`autostart` false, the core manager starts it).
