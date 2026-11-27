@@ -5,7 +5,9 @@ for SLAM and the sim bridges. The sequencer must bring lifecycle_manager_nav (li
 after the core manager, and the timeouts of the running nodes must be scaled. Domain: bringup range 100-129 through
 graph_support.domain_for. Condition waits only.
 """
+import atexit
 import os
+import shutil
 import sys
 import unittest
 
@@ -34,6 +36,7 @@ FACTOR = 3
 def generate_test_description():
     share = get_package_share_directory('vacuum_bringup')
     directory = tempfile.mkdtemp(prefix='nav_seq_')
+    atexit.register(shutil.rmtree, directory, ignore_errors=True)
     return LaunchDescription([
         SetEnvironmentVariable('ROS_DOMAIN_ID', str(gs.domain_for(MODULE))),
         SetEnvironmentVariable('ROS_AUTOMATIC_DISCOVERY_RANGE', gs.DISCOVERY_RANGE),
@@ -59,8 +62,10 @@ class TestNavSequenced(unittest.TestCase):
         cls.probe = gs.Probe(MODULE)
         node = cls.probe.node
         cls.states = []
+        cls.values = {}
         node.create_subscription(DiagnosticArray, '/myRobot/telemetry/lifecycle_sequencer',
-                                 lambda m: cls.states.append(m.status[0].message), 10)
+                                 lambda m: (cls.states.append(m.status[0].message),
+                                            cls.values.update({kv.key: kv.value for kv in m.status[0].values})), 10)
         cls.is_active = node.create_client(Trigger, '/lifecycle_manager_nav/is_active')
         cls.params = node.create_client(GetParameters, '/controller_server/get_parameters')
 
@@ -68,14 +73,10 @@ class TestNavSequenced(unittest.TestCase):
     def tearDownClass(cls):
         cls.probe.close()
 
-    def test_01_005_R35_sequencer_gets_past_nav_with_nav_inside(self):
-        # lifecycle_manager_optional is still an EMPTY manager (node_names: []) and does not answer its startup
-        # command (found here, pre-existing, independent of nav), so the end state is DEGRADED_OPTIONAL until spec 009
-        # gives it nodes; what matters for nav is that the sequencer passed STARTING_NAV without DEGRADED_NAV.
-        self.assertTrue(ns.wait_for(lambda: self.states[-1:] and self.states[-1] in
-                                    ('ALL_ACTIVE', 'DEGRADED_OPTIONAL', 'DEGRADED_NAV'), 150.0),
+    def test_01_005_R35_sequencer_reaches_all_active_with_nav_inside(self):
+        # only managers with nodes are launched and listed: no 5 s startup timeout of an empty manager
+        self.assertTrue(ns.wait_for(lambda: self.states[-1:] == ['ALL_ACTIVE'], 150.0),
                         f'sequencer states seen: {self.states[-5:]}')
-        self.assertIn(self.states[-1], ('ALL_ACTIVE', 'DEGRADED_OPTIONAL'))
 
     def test_02_005_R35_nav_manager_manages_the_three_nodes_and_is_active(self):
         self.assertTrue(self.is_active.wait_for_service(timeout_sec=30.0))
@@ -94,3 +95,11 @@ class TestNavSequenced(unittest.TestCase):
         value = future.result().values[0]
         self.assertEqual(value.type, ParameterType.PARAMETER_DOUBLE)
         self.assertEqual(value.double_value, 15.0 * FACTOR)
+
+    def test_04_005_R35_telemetry_lists_only_the_managers_that_have_nodes(self):
+        # a manager without nodes cannot be launched (the Nav2 manager aborts on node_names: []), so it is absent
+        # from the sequencer's managers and from its per-manager telemetry; the ones listed are active, none failed
+        self.assertTrue(ns.wait_for(lambda: 'startup_lifecycle_manager_core_outcome' in self.values, 30.0))
+        self.assertEqual(self.values['startup_lifecycle_manager_core_outcome'], 'OK')
+        self.assertEqual(self.values.get('startup_lifecycle_manager_nav_outcome'), 'OK')
+        self.assertNotIn('startup_lifecycle_manager_optional_outcome', self.values)

@@ -93,16 +93,29 @@ def test_005_R35_real_coverage_replaces_the_stub_and_is_off_by_default(entities)
     assert include.condition.evaluate(context) is True
 
 
-def test_005_R35_nav_manager_is_empty_when_the_sequencer_runs_without_nav(entities):
+def test_005_R35_no_manager_without_nodes_is_launched_or_listed(entities):
+    """A Nav2 lifecycle_manager with node_names [] aborts, so the sequencer lists only managers that have nodes."""
     from launch_ros.actions import Node
     managers = [e for e in entities if isinstance(e, Node) and e.node_executable == 'lifecycle_manager'
                 and 'lifecycle_manager_nav' in text(e._Node__node_name)]
-    assert len(managers) == 2
+    assert len(managers) == 1
+    sequencers = [e for e in entities if isinstance(e, Node) and e.node_executable == 'lifecycle_sequencer']
+    assert len(sequencers) == 2
+    listed = {}
     for with_nav in ('true', 'false'):
         context = LaunchContext()
         context.launch_configurations.update({'with_sequencer': 'true', 'nav': with_nav})
-        active = [m for m in managers if m.condition.evaluate(context)]
-        assert len(active) == 1, with_nav
-    disabled = yaml.safe_load((PKG / 'config' / 'lifecycle_nav_disabled.yaml').read_text())
-    assert disabled['lifecycle_manager_nav']['ros__parameters']['node_names'] == []
-    assert disabled['lifecycle_manager_nav']['ros__parameters']['autostart'] is False
+        active = [s for s in sequencers if s.condition.evaluate(context)]
+        assert len(active) == 1
+        (value,) = [v for k, v in active[0]._Node__parameters[-1].items() if text(list(k)) == 'managers']
+        listed[with_nav] = [text(item).split()[0] for item in value]
+    assert listed['true'] == ['lifecycle_manager_core', 'lifecycle_manager_nav']
+    assert listed['false'] == ['lifecycle_manager_core']
+    assert managers[0].condition.evaluate(_ctx('true', 'true')) and not managers[0].condition.evaluate(_ctx('true', 'false'))
+    assert not any('optional' in text(e._Node__node_name) for e in entities if isinstance(e, Node))
+
+
+def _ctx(with_sequencer, nav):
+    context = LaunchContext()
+    context.launch_configurations.update({'with_sequencer': with_sequencer, 'nav': nav})
+    return context

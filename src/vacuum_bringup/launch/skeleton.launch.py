@@ -16,8 +16,8 @@ Blocks, each built by its own function:
   - nav.launch.py                            (nav, default false): Nav2 under lifecycle_manager_nav; sim_slowdown is
                                                 forwarded to it and to the real coverage launch (real_coverage)
   - teleop_twist_keyboard                     (with_teleop; needs a terminal on stdin)
-  - lifecycle_sequencer + nav/optional managers (with_sequencer, default false): the three managers start
-    in order core -> nav -> optional (005-R35); lifecycle_manager_core then runs with autostart false
+  - lifecycle_sequencer + nav manager (with_sequencer, default false): the managers that have nodes start in
+    order core -> nav (005-R35; optional is not launched while it has no nodes, see sequencer_nodes()); lifecycle_manager_core then runs with autostart false
 
 The IA368II packages are not in rosdep (they come from `vcs import`, Art. II), so everything that references
 them is conditional and resolved lazily: this file imports and builds without them, and the launch_testing
@@ -82,8 +82,8 @@ def launch_arguments():
                               description='Factor > 0 forwarded to nav and coverage launches: scales their '
                                           'wall-clock timeouts for a slow simulator (1.0 = real time)'),
         DeclareLaunchArgument('with_sequencer', default_value='false',
-                              description='Start lifecycle_sequencer plus lifecycle_manager_nav and '
-                                          '_optional, and let the sequencer (not autostart) start the managers'),
+                              description='Start lifecycle_sequencer (plus lifecycle_manager_nav with nav:=true) '
+                                          'and let the sequencer (not autostart) start the managers'),
     ]
 
 
@@ -115,22 +115,25 @@ def core_nodes(stub_coverage):
     return nodes
 
 
-def sequencer_nodes(condition, nav_condition, no_nav_condition):
-    """The other two managers (autostart false, in their YAML) and the sequencer that starts all three. The nav
-    manager lists the three Nav2 nodes only when nav:=true (lifecycle_nav.yaml); otherwise it is empty
-    (lifecycle_nav_disabled.yaml) and trivially active."""
+def sequencer_nodes(nav_condition, no_nav_condition):
+    """The sequencer and the managers it starts (autostart false, in their YAML).
+
+    A Nav2 lifecycle_manager with `node_names: []` ABORTS at startup (exit -6: the empty YAML array has no
+    type), so a manager without nodes is never launched and never listed: lifecycle_manager_optional (cloud and
+    MQTT nodes, spec 009) is not launched until it has nodes, and lifecycle_manager_nav only with nav:=true. The
+    sequencer's `managers` parameter is overridden to match (ManagerSequencer also skips a live manager that
+    reports no nodes, but that cannot happen with a Nav2 manager)."""
     def config(name):
         return PathJoinSubstitution([FindPackageShare('vacuum_bringup'), 'config', name])
 
-    def manager(name, yaml_name, cond):
-        return Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name=name,
-                    output='screen', parameters=[config(yaml_name)], condition=cond)
-    nodes = [manager('lifecycle_manager_nav', 'lifecycle_nav.yaml', nav_condition),
-             manager('lifecycle_manager_nav', 'lifecycle_nav_disabled.yaml', no_nav_condition),
-             manager('lifecycle_manager_optional', 'lifecycle_optional.yaml', condition)]
-    nodes.append(Node(package='vacuum_bringup', executable='lifecycle_sequencer', name='lifecycle_sequencer',
-                      output='screen', parameters=[config('lifecycle_sequencer.yaml')], condition=condition))
-    return nodes
+    def sequencer(managers, cond):
+        return Node(package='vacuum_bringup', executable='lifecycle_sequencer', name='lifecycle_sequencer',
+                    output='screen', parameters=[config('lifecycle_sequencer.yaml'), {'managers': managers}],
+                    condition=cond)
+    return [Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_nav',
+                 output='screen', parameters=[config('lifecycle_nav.yaml')], condition=nav_condition),
+            sequencer(['lifecycle_manager_core', 'lifecycle_manager_nav'], nav_condition),
+            sequencer(['lifecycle_manager_core'], no_nav_condition)]
 
 
 def nav_include(condition):
@@ -208,7 +211,7 @@ def generate_launch_description():
         *launch_arguments(),
         *ia368ii_nodes(with_ia368ii),
         *core_nodes(stub_coverage),
-        *sequencer_nodes(with_sequencer, seq_and_nav, seq_no_nav),
+        *sequencer_nodes(seq_and_nav, seq_no_nav),
         nav_include(with_nav),
         coverage_include(real_coverage),
         twist_mux_node(),
