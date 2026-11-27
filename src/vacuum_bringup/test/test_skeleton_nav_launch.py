@@ -108,7 +108,7 @@ def test_005_R35_no_manager_without_nodes_is_launched_or_listed(entities):
         active = [s for s in sequencers if s.condition.evaluate(context)]
         assert len(active) == 1
         (value,) = [v for k, v in active[0]._Node__parameters[-1].items() if text(list(k)) == 'managers']
-        listed[with_nav] = [text(item).split()[0] for item in value]
+        listed[with_nav] = [text(item).split()[0].strip('"') for item in value]
     assert listed['true'] == ['lifecycle_manager_core', 'lifecycle_manager_nav']
     assert listed['false'] == ['lifecycle_manager_core']
     assert managers[0].condition.evaluate(_ctx('true', 'true')) and not managers[0].condition.evaluate(_ctx('true', 'false'))
