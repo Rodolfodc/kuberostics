@@ -45,7 +45,7 @@ class ImageThrottleNode(LifecycleNode):
         self._pub_telemetry = self.create_lifecycle_publisher(
             DiagnosticArray, '/myRobot/telemetry/image_throttle', 10)
         self._sub = self.create_subscription(
-            Image, self.get_parameter('input_topic').value, self._on_image, 10)
+            Image, self.get_parameter('input_topic').value, self._on_image, QOS_SENSOR)
         log.info('configured')
         return TransitionCallbackReturn.SUCCESS
 

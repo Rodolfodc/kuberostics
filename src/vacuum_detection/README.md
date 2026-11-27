@@ -136,6 +136,8 @@ rgb_throttled/compressed`, `output_topic:=/myRobot/perception/detections/cloud`,
 Lifecycle (D-26, D-09): the chain is under `lifecycle_manager_optional` (a perception failure never stops the core,
 Art. VII). The launch starts its own instance (`with_manager:=true`); with the skeleton sequencer use
 `with_manager:=false` and add the node names to `vacuum_bringup/config/lifecycle_optional.yaml`.
+`autostart:=true` (with `with_manager:=false`, default false) makes the launch itself configure and activate each node
+through launch lifecycle events; `with_projector:=true` adds the projector. With the manager, `autostart` is ignored.
 
 Optional Python dependencies (`requirements-detector.txt`): `ultralytics` (+ torch). They are not rosdep keys and no test
 needs them (fake model, `backend:=null`). Tests and the launch pass without them on both distros. torch wheels for
