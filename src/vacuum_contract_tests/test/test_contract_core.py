@@ -69,7 +69,7 @@ def test_001_R04_services_and_actions_are_expected(contract):
 
 def test_001_R04_exclude_owners_drops_sim_topics(contract):
     names = {e.name for e in build_expectations(contract, exclude_owners=SIM_OWNERS)}
-    assert '/scan' not in names and '/camera' not in names
+    assert '/scan' not in names and '/camera' not in names and '/myrobot/odom' not in names
     assert '/myRobot/cmd_vel' in names
 
 
@@ -168,6 +168,40 @@ def test_001_R04_owner_star_allows_any_publisher(contract):
     e = exp_by_name(contract, '/myRobot/notifications')
     assert check_topic(e, [Endpoint('anything', 'vacuum_interfaces/msg/Notification',
                                     QosSpec('reliable', 'volatile', 10))], []) == []
+
+
+# ---- owner given as a list of alternatives (e.g. /map: [slam_toolbox, map_server]) ---------------------------
+LIST_OWNER_CONTRACT = {
+    'qos_profiles': {'p': {'reliability': 'reliable', 'durability': 'volatile', 'depth': 1}},
+    'topics': [{'name': '/synthetic/map', 'type': 'std_msgs/msg/String', 'qos': 'p',
+                'owner': ['slam_toolbox', 'map_server'], 'since': '001', 'max_publishers': 1}],
+}
+LIST_QOS = QosSpec('reliable', 'volatile', 1)
+
+
+def list_owner_exp(exclude=()):
+    return build_expectations(LIST_OWNER_CONTRACT, exclude_owners=exclude)[0]
+
+
+def test_001_R04_list_owner_builds_without_crashing():
+    assert list_owner_exp().owners == ('slam_toolbox', 'map_server')
+
+
+def test_001_R04_list_owner_excluded_only_when_all_owners_excluded():
+    assert build_expectations(LIST_OWNER_CONTRACT, exclude_owners={'slam_toolbox'})
+    assert not build_expectations(LIST_OWNER_CONTRACT, exclude_owners={'slam_toolbox', 'map_server'})
+
+
+@pytest.mark.parametrize('node', ['slam_toolbox', 'map_server'])
+def test_001_R03_list_owner_any_listed_publisher_conforms(node):
+    pub = Endpoint(node, 'std_msgs/msg/String', LIST_QOS)
+    assert check_topic(list_owner_exp(), [pub], []) == []
+
+
+def test_001_R03_list_owner_unlisted_publisher_fails():
+    pub = Endpoint('intruder', 'std_msgs/msg/String', LIST_QOS)
+    problems = check_topic(list_owner_exp(), [pub], [])
+    assert any('intruder' in p for p in problems)
 
 
 # ---- services / actions / helpers -----------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-"""T521: a YAML loader that rejects duplicate keys, applied to the contract and to this package's configs.
+"""A YAML loader that rejects duplicate keys, applied to the contract and to this package's configs.
 
 PyYAML silently keeps the last of two equal keys; a bad merge once left two `note:` keys in one topics.yaml entry
 and dropped another entry's note. This test makes that fail loudly (Art. I, contract first).

@@ -1,0 +1,34 @@
+%% Sequence 3: stuck and escape. Built with stubs (PR #10). The real detector, scripted escape and fallback are spec 005 (spec merged in PR #12, code not started).
+sequenceDiagram
+  autonumber
+  participant D as stuck_detector (stub, trigger service)
+  participant S as supervisor (built)
+  participant C as coverage_server
+  participant E as escape_server (stub built)
+  participant M as twist_mux
+  participant G as stop_guard
+  participant O as operator
+
+  Note over S: submode COVERING, cover_room goal active
+  D->>S: /myRobot/stuck StuckEvent (stamp, pose, scan_ranges planned 005-R04)
+  S->>C: cancel cover_room goal (001-R07)
+  S-->>S: submode ESCAPING within 0.5 s, remember COVERING, start escape_timeout_s 20 s
+  alt escape server not yet discovered (PR 10)
+    S-->>S: retry from the tick up to escape_server_wait_s 2 s, clock not extended
+  end
+  S->>E: action /myRobot/escape goal (event, timeout_s)
+  E->>M: /myRobot/mux/escape Twist reverse then turn (priority 80 beats coverage 50)
+  alt escape succeeds
+    E-->>S: result success (strategy scripted, later rl in spec 008)
+    S-->>S: back to the previous submode COVERING (001-R08)
+    S->>C: cover_room goal again with the same room_id (resume planned, 005-R32)
+  else escape fails or exceeds escape_timeout_s
+    E-->>S: result success false, or timeout
+    S-->>S: submode ESCAPE_FAILED
+    S->>G: /myRobot/mux/lock_stop true
+    G->>M: /myRobot/mux/stop zero Twist at 10 Hz (priority 250)
+    M-->>M: /myRobot/cmd_vel exactly zero (001-R10)
+    S-->>O: Notification ERROR ESCAPE_FAILED on /myRobot/notifications
+    O->>S: service /myRobot/supervisor/reset (Trigger)
+    S->>G: lock_stop false
+  end

@@ -1,0 +1,38 @@
+# Robot profile for the combined model myRobotLaser.ttm: every value equals the documented default in
+# vacuum_sim_bridge/profile.py (a test keeps them identical). Edit a copy and pass it as params_file.
+/**:
+  ros__parameters:
+    wheel_radius: 0.05
+    wheel_separation: 0.2
+    axle_offset_x: 0.07
+    max_linear: 0.5
+    max_angular: 1.5707963267948966
+    cmd_timeout: 0.5
+    joint_sign: -1.0
+    scan_num_beams: 452
+    scan_angle_min: -1.5707963267948966
+    scan_angle_increment: 0.006981317007977318
+    scan_range_min: 0.055
+    scan_range_max: 10.0
+    laser_xyz: [0.0, 0.0, 0.16]
+    camera_width: 640
+    camera_height: 480
+    camera_fx: 589.4
+    camera_near: 0.01
+    camera_far: 3.5
+    camera_xyz: [0.0983, 0.0141, 0.077]
+    camera_quat: [-0.5628, 0.5628, -0.4168, 0.439]
+    camera_flip_horizontal: false
+    camera_flip_vertical: true
+    odom_frame: 'my_robot_odom'
+    footprint_frame: 'base_footprint'
+    base_frame: 'base_link'
+    laser_frame: 'laser_link'
+    camera_frame: 'camera_link'
+    footprint_to_base_z: 0.08
+    robot_path: '/myRobot'
+    left_motor_path: '/myRobot/leftMotor'
+    right_motor_path: '/myRobot/rightMotor'
+    rgb_sensor_path: '/myRobot/kinect/rgb'
+    depth_sensor_path: '/myRobot/kinect/depth'
+    scan_signal: 'signal.distSignal'

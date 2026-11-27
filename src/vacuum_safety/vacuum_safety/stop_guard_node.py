@@ -1,4 +1,4 @@
-"""`stop_guard` LifecycleNode (T018, D-22): publishes zero velocity on /myRobot/mux/stop while the stop lock is on.
+"""`stop_guard` LifecycleNode (D-22): publishes zero velocity on /myRobot/mux/stop while the stop lock is on.
 
 It is an actuator in the sense of Art. III: it publishes only to its own twist_mux input. All logic is in
 `StopGuard` (pure Python); this node wires it to the topics (D-18) and publishes telemetry (D-20).
@@ -9,7 +9,7 @@ import threading
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from geometry_msgs.msg import Twist
-# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical (T021).
+# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical.
 from rclpy._rclpy_pybind11 import RCLError
 from rclpy.executors import ExternalShutdownException, SingleThreadedExecutor
 from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
@@ -72,7 +72,7 @@ class StopGuardNode(LifecycleNode):
 
     @staticmethod
     def _publish_unless_shutdown(pub, msg) -> None:
-        """A timer can fire between SIGINT invalidating the context and the executor stopping (T021)."""
+        """A timer can fire between SIGINT invalidating the context and the executor stopping."""
         try:
             pub.publish(msg)
         except RCLError:
@@ -94,7 +94,7 @@ class StopGuardNode(LifecycleNode):
 def main(args=None) -> None:
     # SIGINT/SIGTERM only set a flag: rclpy's default handler invalidates the context and Python raises
     # KeyboardInterrupt at an arbitrary point (even inside a deallocator), which printed tracebacks under load
-    # (T021). The shutdown order is then ours: stop spinning, destroy the node, shut the context down.
+    # (flaky under load). The shutdown order is then ours: stop spinning, destroy the node, shut the context down.
     rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = StopGuardNode()
     executor = SingleThreadedExecutor()
@@ -111,7 +111,7 @@ def main(args=None) -> None:
         executor.shutdown()
         try:
             node.destroy_node()
-        except RCLError:
+        except RCLError:                         # the context was already invalidated by SIGINT
             pass
         rclpy.try_shutdown()
 

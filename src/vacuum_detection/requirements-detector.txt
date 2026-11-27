@@ -1,0 +1,7 @@
+# Optional Python dependencies of the YOLO backend of the `detector` node (vacuum_detection, spec 009a).
+# Not rosdep keys: there is no ROS package for them. Needed only where a detector with backend:=ultralytics runs
+# (the K3s detector image, T910, and a robot with yolo11n). Everything else, tests included, runs without them.
+# The `detector` node fails its configure step with a clear message if they are missing.
+# Python 3.14 (Lyrical): torch wheels were not verified for it; if pip finds none, run the detector in its
+# container image (docker/detector, T910) or use backend:=null.
+ultralytics>=8.3
