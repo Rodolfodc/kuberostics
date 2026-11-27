@@ -22,7 +22,9 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>teleop_twist_keyboard</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
   <exec_depend>twist_mux</exec_depend>
+  <exec_depend>vacuum_coverage</exec_depend>
   <exec_depend>vacuum_interfaces</exec_depend>
   <exec_depend>vacuum_safety</exec_depend>
   <exec_depend>vacuum_sim_bridge</exec_depend>

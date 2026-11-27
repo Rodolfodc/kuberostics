@@ -2,7 +2,8 @@
 
     ros2 launch vacuum_bringup skeleton.launch.py [with_ia368ii:=false] [with_wheel_bridge:=false]
                                                   [with_teleop:=false] [with_sequencer:=true]
-                                                  [wheel_bridge:=vacuum]
+                                                  [wheel_bridge:=vacuum] [map_tf:=true] [map_source:=static|slam]
+                                                  [real_nodes:=true]
 
 Blocks, each built by its own function:
   - IA368II nodes + their lifecycle manager   (with_ia368ii, default true: 001-R01 asks for them)
@@ -12,6 +13,9 @@ Blocks, each built by its own function:
                                                 of my_robot_pkg (D-06; with_ia368ii and with_wheel_bridge), wheel_bridge:=vacuum
                                                 is the same-name replacement of vacuum_sim_bridge for the combined model
                                                 (D-27; with_wheel_bridge only, it does not need the IA368II checkout)
+  - map -> my_robot_odom transform            (map_tf, default false; map_tf.launch.py, map_source static|slam)
+  - real_nodes (default false): swaps the stubs for the real nodes that exist (today only coverage_server of
+    vacuum_coverage; escape_server and stuck_detector have no real counterpart yet and stay the vacuum_stubs ones)
   - teleop_twist_keyboard                     (with_teleop; needs a terminal on stdin)
   - lifecycle_sequencer + nav/optional managers (with_sequencer, default false): the three managers start
     in order core -> nav -> optional (005-R35); lifecycle_manager_core then runs with autostart false
@@ -20,9 +24,13 @@ The IA368II packages are not in rosdep (they come from `vcs import`, Art. II), s
 them is conditional and resolved lazily: this file imports and builds without them, and the launch_testing
 the live-graph tests run with `with_ia368ii:=false` or against the installed checkout.
 """
+import os
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition, UnlessCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterValue
@@ -50,7 +58,6 @@ IA368II_REMAPS = {
 # (package, executable): our nodes, all LifecycleNodes under lifecycle_manager_core.
 CORE_NODES = (
     ('vacuum_safety', 'stop_guard'),
-    ('vacuum_stubs', 'coverage_server'),
     ('vacuum_stubs', 'escape_server'),
     ('vacuum_stubs', 'stuck_detector'),
     ('vacuum_supervisor', 'supervisor'),
@@ -69,6 +76,12 @@ def launch_arguments():
                                           'vacuum_sim_bridge (vacuum, D-27); only one runs, they share the node name'),
         DeclareLaunchArgument('with_teleop', default_value='true',
                               description='Start teleop_twist_keyboard (needs a terminal)'),
+        DeclareLaunchArgument('map_tf', default_value='false',
+                              description='Include map_tf.launch.py (map -> my_robot_odom)'),
+        DeclareLaunchArgument('map_source', default_value='static', choices=['static', 'slam'],
+                              description='Source of map -> my_robot_odom when map_tf is true (slam: not integrated)'),
+        DeclareLaunchArgument('real_nodes', default_value='false',
+                              description='Replace the stubs by the real nodes that exist (coverage_server)'),
         DeclareLaunchArgument('with_sequencer', default_value='false',
                               description='Start lifecycle_sequencer plus lifecycle_manager_nav and '
                                           '_optional, and let the sequencer (not autostart) start the managers'),
@@ -88,9 +101,26 @@ def ia368ii_nodes(condition):
     return nodes
 
 
+def coverage_server_nodes():
+    """The stub (vacuum_stubs) or the real node (vacuum_coverage): same executable and node name, one runs."""
+    real = IfCondition(LaunchConfiguration('real_nodes'))
+    stub = UnlessCondition(LaunchConfiguration('real_nodes'))
+    return [Node(package=package, executable='coverage_server', name='coverage_server', output='screen',
+                 condition=condition)
+            for package, condition in (('vacuum_stubs', stub), ('vacuum_coverage', real))]
+
+
+def map_tf_include():
+    source = os.path.join(get_package_share_directory('vacuum_bringup'), 'launch', 'map_tf.launch.py')
+    return IncludeLaunchDescription(PythonLaunchDescriptionSource(source),
+                                    launch_arguments={'map_source': LaunchConfiguration('map_source')}.items(),
+                                    condition=IfCondition(LaunchConfiguration('map_tf')))
+
+
 def core_nodes():
     nodes = [Node(package=package, executable=executable, name=executable, output='screen')
              for package, executable in CORE_NODES]
+    nodes.extend(coverage_server_nodes())
     nodes.append(Node(
         package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_core',
         output='screen',
@@ -162,6 +192,7 @@ def generate_launch_description():
         *ia368ii_nodes(with_ia368ii),
         *core_nodes(),
         *sequencer_nodes(with_sequencer),
+        map_tf_include(),
         twist_mux_node(),
         wheel_bridge_node(with_bridge),
         vacuum_wheel_bridge_node(with_vacuum_bridge),
