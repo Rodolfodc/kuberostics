@@ -255,7 +255,7 @@ def test_real_nodes_default_false_keeps_the_stub(entities):
 def test_real_nodes_keep_name_and_other_stubs(entities):
     """The swap keeps the node name (lifecycle_core.yaml lists it); escape_server and stuck_detector have no real node."""
     for package in ('vacuum_stubs', 'vacuum_coverage'):
-        assert text(by_executable(entities, 'coverage_server', package).node_name) == 'coverage_server'
+        assert text(private(by_executable(entities, 'coverage_server', package), 'node_name')) == 'coverage_server'
     assert by_executable(entities, 'escape_server').node_package == 'vacuum_stubs'
     assert by_executable(entities, 'stuck_detector').node_package == 'vacuum_stubs'
 
