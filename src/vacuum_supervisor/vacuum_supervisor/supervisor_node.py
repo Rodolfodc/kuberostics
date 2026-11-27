@@ -364,8 +364,9 @@ class SupervisorNode(LifecycleNode):
         handle, self._cover_handle = self._cover_handle, None
         if handle is not None:
             handle.cancel_goal_async()                # best effort: the server may be gone
-        # A new cover goal accepted while this window is pending (<= nav_cancel_s) can have its Nav2 goals hit by
-        # the cancel-all below; accepted, the window is short.
+        # A new cover_room goal is held by _try_send_cover_room (CancelWindow.holds) while this window is pending
+        # (<= nav_cancel_s), so the cancel-all and its retries cannot hit the Nav2 goals of a new coverage.
+        # Every call site of the window uses time.monotonic().
         self._drop_nav_cancel_request()              # a request left unanswered by an earlier loss must not block
         self._cancel_window.start(now)
         self._try_cancel_nav(now)
