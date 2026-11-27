@@ -56,12 +56,14 @@ def command_for_action(action: int) -> Tuple[float, float]:
 
 def _finite_pose(pose) -> Tuple[float, float, float]:
     try:
-        x, y, yaw = (float(v) for v in pose)
-    except (TypeError, ValueError):
+        values = tuple(pose)
+    except TypeError:
         raise PolicyError('pose must be (x, y, yaw), got %r' % (pose,))
-    if len(tuple(pose)) != 3 or not all(math.isfinite(v) for v in (x, y, yaw)):
+    ok = len(values) == 3 and all(isinstance(v, (int, float, np.integer, np.floating)) and not isinstance(v, bool)
+                                  and math.isfinite(v) for v in values)
+    if not ok:
         raise PolicyError('pose must be three finite numbers, got %r' % (pose,))
-    return x, y, yaw
+    return float(values[0]), float(values[1]), float(values[2])
 
 
 class ObservationBuilder:

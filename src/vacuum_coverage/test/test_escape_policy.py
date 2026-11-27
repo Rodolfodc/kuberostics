@@ -413,3 +413,13 @@ def test_008_R13_unreadable_sidecar_rejected(tmp_path):
     assert not ok and 'sidecar' in reason
     (tmp_path / 'w.json.sha256').write_text('')
     assert not PolicyInference().load(path)[0]
+
+
+def test_008_R08_pose_rejects_strings_and_consumes_iterables_once():
+    b = ObservationBuilder(budget_s=5.0)
+    for bad in (('1', '2', '3'), 5, None, (True, 0, 0), (0, 0, 0, 0)):
+        with pytest.raises(PolicyError):
+            b.reset(bad)
+    b.reset(x for x in (1.0, 2.0, 0.5))                      # a generator is accepted, read once
+    assert b._start == (1.0, 2.0, 0.5)
+    b.reset(np.array([0.0, 0.0, 0.0]))

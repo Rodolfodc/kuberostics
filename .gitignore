@@ -32,3 +32,6 @@ deploy/measurements/**/*.csv
 
 # Chaos run output (rosbags, kills.csv, reports): local only
 tools/chaos/local-logs/
+
+# Coverage data
+.coverage
