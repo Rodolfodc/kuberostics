@@ -5,6 +5,7 @@ Verifies 009a-R12 (projector must be activatable with no inputs) and D-26 (lifec
 Domain: the per-test domain of conftest.py (160-174).
 """
 import subprocess
+import warnings
 import sys
 import time
 
@@ -60,10 +61,14 @@ def _drive(node, name, transition_id, target_label):
     get = node.create_client(GetState, f'/{name}/get_state')
     assert change.wait_for_service(timeout_sec=BOUND_S), f'{name} lifecycle services never appeared'
     end = time.monotonic() + BOUND_S
+    sent = 0
     while time.monotonic() < end:
         state = _call(node, get, GetState.Request(), bound_s=3.0)
         if state is not None and state.current_state.label == target_label:
             return True
+        if sent:
+            warnings.warn(f'RETRY: {name} still not {target_label} after {sent} request(s): resending {transition_id}')
+        sent += 1
         _call(node, change, ChangeState.Request(transition=Transition(id=transition_id)), bound_s=3.0)
     return False
 
