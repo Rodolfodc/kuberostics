@@ -1,4 +1,4 @@
-"""`lifecycle_sequencer` (T521, spec 005, D-26): a PLAIN node on purpose (it only orchestrates managers and has
+"""`lifecycle_sequencer` (spec 005, D-26): a PLAIN node on purpose (it only orchestrates managers and has
 nothing for a manager to configure or clean up). Thin glue between ROS and `ManagerSequencer` (D-18).
 
 It wires the sequencer's `call` and `wait_active` callables to the Nav2 lifecycle manager services
@@ -65,6 +65,7 @@ class SequencerNode(Node):
         self._watch = GuardWatch(min_spacing_s=0.9 * self._poll_period_s)
         self.sequencer = ManagerSequencer(
             default_specs(names), self._call, self._wait_active, time.monotonic, self._log, self._notify,
+            has_nodes=self._has_nodes,
             startup_timeout_s=float(self.get_parameter('manager_startup_timeout_s').value),
             shutdown_timeout_s=float(self.get_parameter('manager_shutdown_timeout_s').value))
         period = 1.0 / max(0.1, float(self.get_parameter('telemetry_rate_hz').value))
@@ -114,6 +115,16 @@ class SequencerNode(Node):
         if outcome is not Outcome.OK:
             return outcome
         return Outcome.OK if response is not None and response.success else Outcome.FAILED
+
+    def _has_nodes(self, manager: str) -> bool:
+        """False only when the manager answers with an empty `node_names`; unreachable counts as having nodes so
+        the normal startup path reports the failure."""
+        request = GetParameters.Request(names=['node_names'])
+        outcome, response = self._call_once(GetParameters, f'/{manager}/get_parameters', request,
+                                            float(self.get_parameter('manager_startup_timeout_s').value))
+        if outcome is not Outcome.OK or response is None or not response.values:
+            return True
+        return len(response.values[0].string_array_value) > 0
 
     def _deactivate_nodes(self, manager: str, timeout_s: float) -> Outcome:
         """Deactivates every node of `manager` that is still active (names from its `node_names` parameter)."""

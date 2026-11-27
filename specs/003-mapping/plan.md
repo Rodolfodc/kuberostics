@@ -98,7 +98,13 @@ Pure logic receives a logger and a metrics callback (D-20).
 
 `escape` failure from EXPLORING follows the 001 row (lock, ESCAPE_FAILED).
 
-## Proposed contract changes (NOT applied; the architect applies them in one serialized change, after PRs #9 and #10)
+## Contract changes (APPLIED in contract batch 1; the block below is the proposal as written, kept for the record)
+
+`topics.yaml` and `interfaces.md` now hold these entries, with two deltas: `lifecycle_manager_core` in `topics.yaml` keeps
+its 005 list with a comment, and gains `odom_tf_bridge`, `exploration_server` and `room_segmenter` when their nodes land
+(the bring-up configs do not list them yet); `start_pose_xyyaw` and the TF arrays are written as floats. The diagram update
+below is still pending (separate change).
+
 
 `interfaces.md` (new types in `vacuum_interfaces`, T303):
 
@@ -176,7 +182,7 @@ parameters:
   exploration_server:
     min_frontier_cells: {type: int, default: 8, requirement: 003-R09}
     gain_weight: {type: double, default: 0.05}
-    robot_radius_m: {type: double, default: 0.16}
+    robot_radius_m: {type: double, default: 0.18}   # measured footprint, .sim/robot_report.txt
     frontier_timeout_s: {type: double, default: 60.0, requirement: 003-R10}
     explore_timeout_s: {type: double, default: 900.0, requirement: 003-R11}
     map_loaded: {type: bool, default: false, requirement: 003-R06, note: "set by the launch with map_file; explored = true"}

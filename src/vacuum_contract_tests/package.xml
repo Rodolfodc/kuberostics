@@ -3,7 +3,7 @@
 <package format="3">
   <name>vacuum_contract_tests</name>
   <version>0.1.0</version>
-  <description>Contract tests (spec 001, T005): read topics.yaml and check the live graph for existence, type, QoS, max_publishers and sink topics. The live part runs only with VACUUM_CONTRACT_LIVE=1.</description>
+  <description>Contract tests (spec 001): read topics.yaml and check the live graph for existence, type, QoS, max_publishers and sink topics. The live part runs as a launch_testing test against skeleton.launch.py; VACUUM_CONTRACT_LIVE=1 points test_live_graph.py at a graph you started.</description>
   <maintainer email="rodolfo.dalla.costa@hotmail.com">Rodolfo Dalla Costa</maintainer>
   <license>Apache-2.0</license>
 
@@ -11,6 +11,11 @@
   <exec_depend>rclpy</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
+  <test_depend>ament_index_python</test_depend>
+  <test_depend>launch</test_depend>
+  <test_depend>launch_testing</test_depend>
+  <test_depend>std_srvs</test_depend>
+  <test_depend>vacuum_bringup</test_depend>
   <test_depend>vacuum_interfaces</test_depend>
 
   <export>

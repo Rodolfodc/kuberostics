@@ -1,4 +1,4 @@
-"""ManagerSequencer (T521, spec 005, 005-R35 to R37, D-26): pure Python, no ROS imports.
+"""ManagerSequencer (spec 005, 005-R35 to R37, D-26): pure Python, no ROS imports.
 
 It decides in which order the lifecycle managers are started and stopped and what a failure means. It does
 not talk to ROS and it never sleeps: the caller injects
@@ -154,7 +154,11 @@ class ManagerSequencer:
                  log: Callable[[str, str], None] = _noop_log,
                  notify: Callable[[Severity, str, str], None] = _noop_notify,
                  startup_timeout_s: float = 30.0,
-                 shutdown_timeout_s: float = 15.0):
+                 shutdown_timeout_s: float = 15.0,
+                 has_nodes: Optional[Callable[[str], bool]] = None):
+        """`has_nodes(manager)` says whether a non-core manager manages any node; one without nodes is skipped
+        (not started, not a failure: the Nav2 manager does not answer its startup command with an empty list)."""
+        self._has_nodes = has_nodes
         self._specs = list(specs)
         self._call = call
         self._wait_active = wait_active
@@ -207,6 +211,10 @@ class ManagerSequencer:
                 reason = 'core failed' if core_failed else 'aborted'
                 self._results.append(StepResult(spec.name, Action.STARTUP, Outcome.SKIPPED, 0.0, reason))
                 self._log('warn', f'{spec.name}: not started ({reason})')
+                continue
+            if spec.role is not Role.CORE and self._has_nodes is not None and not self._has_nodes(spec.name):
+                self._results.append(StepResult(spec.name, Action.STARTUP, Outcome.SKIPPED, 0.0, 'no nodes'))
+                self._log('info', f'{spec.name}: no nodes configured, skipped')
                 continue
             self._set_state(_STARTING[spec.role])
             self._attempted.append(spec)

@@ -1,4 +1,4 @@
-"""T014, spec 001: live graph with the IA368II nodes (001-R01, 001-R02, 001-R03, 001-R12).
+"""Live-graph test with the IA368II nodes (001-R01, 001-R02, 001-R03, 001-R12).
 
 IA368II comes from `vcs import` and is not in the Docker test containers (Art. II, rosdep cannot install it), so
 this module launches with_ia368ii:=true only when `myrobot_bringup` is installed; otherwise it launches nothing and

@@ -13,7 +13,10 @@ plain:
   lifecycle_manager_optional: {kind: manager, reason: "lifecycle manager (Nav2), manages cloud and MQTT nodes"}
   lifecycle_manager: {kind: manager, reason: "IA368II lifecycle manager, third-party (Art. II)"}
   twist_mux: {kind: plain, reason: "third-party (Art. II)"}
-  my_robot_cmd_vel_node: {kind: plain, reason: "third-party wheel bridge (Art. II)"}
+  my_robot_cmd_vel_node: {kind: plain, reason: "third-party wheel bridge (Art. II), or its same-name replacement in vacuum_sim_bridge (D-27)"}
+  my_robot_scan_node: {kind: plain, reason: "vacuum_sim_bridge, same-name drop-in of the plain 2025S2 bridge (D-27); reconnects to ZeroMQ on the next call after an error"}
+  my_robot_vision_node: {kind: plain, reason: "vacuum_sim_bridge, same-name drop-in of the plain 2025S2 bridge (D-27); reconnects to ZeroMQ on the next call after an error"}
+  my_robot_odometry_node: {kind: plain, reason: "vacuum_sim_bridge, same-name drop-in of the plain 2025S2 bridge (D-27); reconnects to ZeroMQ on the next call after an error"}
   teleop_keyboard: {kind: plain, reason: "third-party teleop_twist_keyboard (Art. II)"}
 # IA368II nodes are lifecycle nodes managed by the IA368II `lifecycle_manager` (its own config, third-party).
 third_party_managed:
