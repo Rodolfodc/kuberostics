@@ -59,3 +59,21 @@ def scale_bt_xml(text: str, factor: float) -> str:
         return f'{match.group(1)}{int(round(msec))}{match.group(3)}'
 
     return _TIMEOUT_MSEC.sub(scaled, text)
+
+
+def scaled_keys(params: Dict[str, Any]) -> list:
+    """The `node.path` names of NAV_TIMEOUT_PARAMS that `params` really has (what scale_nav_params would scale).
+    Empty for a custom params_file without them: the caller can then say that nothing was scaled."""
+    found = []
+    for node, path in NAV_TIMEOUT_PARAMS:
+        holder = params.get(node, {}).get('ros__parameters') if isinstance(params, dict) else None
+        for key in path[:-1]:
+            holder = holder.get(key) if isinstance(holder, dict) else None
+        if isinstance(holder, dict) and isinstance(holder.get(path[-1]), (int, float)):
+            found.append(f'{node}.{".".join(path)}')
+    return found
+
+
+def count_bt_timeouts(text: str) -> int:
+    """How many `<Timeout msec="...">` decorators scale_bt_xml would scale."""
+    return len(_TIMEOUT_MSEC.findall(text))

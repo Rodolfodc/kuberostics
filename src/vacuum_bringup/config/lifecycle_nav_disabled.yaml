@@ -1,0 +1,8 @@
+# lifecycle_manager_nav when skeleton.launch.py runs with the sequencer but nav:=false: the Nav2 nodes are not
+# launched, so the manager has nothing to manage and is trivially active (005-R35). Same parameters as
+# lifecycle_nav.yaml otherwise.
+lifecycle_manager_nav:
+  ros__parameters:
+    autostart: false
+    bond_timeout: 0.0
+    node_names: []
