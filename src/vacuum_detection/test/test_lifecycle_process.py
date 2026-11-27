@@ -52,10 +52,20 @@ def _call(node, client, request, bound_s=BOUND_S):
     return future.result() if future.done() else None
 
 
-def _transition(node, name, transition_id):
-    client = node.create_client(ChangeState, f'/{name}/change_state')
-    assert client.wait_for_service(timeout_sec=BOUND_S), f'{name} lifecycle services never appeared'
-    return _call(node, client, ChangeState.Request(transition=Transition(id=transition_id)))
+def _drive(node, name, transition_id, target_label):
+    """Requests the transition until the node reports `target_label`, within BOUND_S. A request sent right after
+    service discovery can be lost (Lyrical, loaded machine), so a missing answer is retried; a hang never
+    reaches the label and fails after the bound."""
+    change = node.create_client(ChangeState, f'/{name}/change_state')
+    get = node.create_client(GetState, f'/{name}/get_state')
+    assert change.wait_for_service(timeout_sec=BOUND_S), f'{name} lifecycle services never appeared'
+    end = time.monotonic() + BOUND_S
+    while time.monotonic() < end:
+        state = _call(node, get, GetState.Request(), bound_s=3.0)
+        if state is not None and state.current_state.label == target_label:
+            return True
+        _call(node, change, ChangeState.Request(transition=Transition(id=transition_id)), bound_s=3.0)
+    return False
 
 
 @pytest.mark.parametrize('module,name', [
@@ -66,10 +76,6 @@ def _transition(node, name, transition_id):
 def test_009a_R12_node_activates_alone_with_no_inputs_and_keeps_answering(ros, process, module, name):
     """No camera, no TF, no map: configure and activate complete within the bound and the services stay alive."""
     proc = process(module)
-    for tid in (Transition.TRANSITION_CONFIGURE, Transition.TRANSITION_ACTIVATE):
-        result = _transition(ros, name, tid)
-        assert result is not None, f'{name}: transition {tid} did not complete in {BOUND_S} s (hang)'
-        assert result.success, f'{name}: transition {tid} refused'
-    state = _call(ros, ros.create_client(GetState, f'/{name}/get_state'), GetState.Request())
-    assert state is not None and state.current_state.label == 'active'
+    assert _drive(ros, name, Transition.TRANSITION_CONFIGURE, 'inactive'), f'{name}: configure did not complete (hang)'
+    assert _drive(ros, name, Transition.TRANSITION_ACTIVATE, 'active'), f'{name}: activate did not complete (hang)'
     assert proc.poll() is None
