@@ -126,3 +126,58 @@ def test_005_R34_launch_declares_sim_slowdown_with_default_one(nav_launch):
                 if isinstance(e, DeclareLaunchArgument)}
     assert 'sim_slowdown' in declared
     assert declared['sim_slowdown'].default_value[0].text == '1.0'
+
+
+def test_005_R34_scaled_keys_lists_what_a_params_file_actually_has():
+    from vacuum_bringup.slowdown import scaled_keys
+    params = yaml.safe_load((PKG / 'config' / 'nav2_params.yaml').read_text())   # fresh: the fixture is mutated above
+    assert len(scaled_keys(params)) == len(NAV_TIMEOUT_PARAMS)
+    assert scaled_keys({'controller_server': {'ros__parameters': {'other': 1}}}) == []
+    assert scaled_keys({}) == []
+
+
+def test_005_R34_count_bt_timeouts():
+    from vacuum_bringup.slowdown import count_bt_timeouts
+    assert count_bt_timeouts('<Timeout msec="5"><Timeout msec="7"/><Wait msec="1"/>') == 2
+    assert count_bt_timeouts('<Wait msec="1"/>') == 0
+
+
+def test_005_R34_custom_params_file_with_nothing_to_scale_is_logged(nav_launch, tmp_path):
+    custom = tmp_path / 'custom.yaml'
+    custom.write_text('controller_server: {ros__parameters: {other: 1}}\n')
+    bt = tmp_path / 'bt.xml'
+    bt.write_text('<root><Wait msec="1"/></root>')
+    lines = []
+    nav_launch.slowed_files(str(custom), str(bt), '3', directory=str(tmp_path / 'out'), log=lines.append)
+    assert any('params_file' in line and 'nothing' in line for line in lines), lines
+    assert any('bt_xml' in line and 'Timeout' in line for line in lines), lines
+
+
+def test_005_R34_shipped_files_log_no_warning(nav_launch, tmp_path):
+    lines = []
+    nav_launch.slowed_files(str(PKG / 'config' / 'nav2_params.yaml'), str(PKG / 'config' / 'nav_bt.xml'), '3',
+                            directory=str(tmp_path), log=lines.append)
+    assert lines == []
+
+
+def test_005_R34_overlay_directory_is_removed_at_exit(nav_launch, monkeypatch):
+    import atexit
+    import os
+    registered = []
+    monkeypatch.setattr(atexit, 'register', lambda fn, *a, **k: registered.append((fn, a, k)))
+    out_params, _ = nav_launch.slowed_files(str(PKG / 'config' / 'nav2_params.yaml'),
+                                            str(PKG / 'config' / 'nav_bt.xml'), '2')
+    directory = os.path.dirname(out_params)
+    assert os.path.isdir(directory) and registered
+    fn, a, k = registered[0]
+    fn(*a, **k)
+    assert not os.path.exists(directory)
+
+
+def test_005_R34_a_caller_given_directory_is_not_removed(nav_launch, monkeypatch, tmp_path):
+    import atexit
+    registered = []
+    monkeypatch.setattr(atexit, 'register', lambda fn, *a, **k: registered.append(fn))
+    nav_launch.slowed_files(str(PKG / 'config' / 'nav2_params.yaml'), str(PKG / 'config' / 'nav_bt.xml'), '2',
+                            directory=str(tmp_path))
+    assert registered == []

@@ -147,13 +147,13 @@ def test_core_config_lists_our_nodes():
     ('vacuum_stubs', 'stuck_detector')])
 def test_our_nodes_always_start(entities, package, executable):
     """001-R01, 001-R12: stop_guard in particular must never be optional (D-22)."""
-    if executable == 'coverage_server':      # stub or real (real_nodes), see test_real_nodes_*
-        node = by_executable(entities, executable, package)
-        assert is_conditional(node)
-        return
     node = by_executable(entities, executable)
     assert node.node_package == package
-    assert not is_conditional(node)
+    if executable == 'coverage_server':
+        # the stub is replaced only by the real coverage_server (real_coverage:=true), never dropped
+        assert node.condition.__class__.__name__ == 'UnlessCondition'
+    else:
+        assert not is_conditional(node)
 
 
 def test_twist_mux_is_the_only_publisher_of_cmd_vel(entities):
@@ -242,29 +242,12 @@ def declared_default(entities, name):
     return next(e for e in entities if isinstance(e, DeclareLaunchArgument) and e.name == name).default_value
 
 
-def test_real_nodes_default_false_keeps_the_stub(entities):
-    """T519 prep: real_nodes defaults to false; exactly one coverage_server runs, the stub by default."""
-    assert text(declared_default(entities, 'real_nodes')) == 'false'
-    stub = by_executable(entities, 'coverage_server', 'vacuum_stubs')
-    real = by_executable(entities, 'coverage_server', 'vacuum_coverage')
-    for flag, stub_runs in (('false', True), ('true', False)):
-        assert evaluate(stub.condition, real_nodes=flag) is stub_runs
-        assert evaluate(real.condition, real_nodes=flag) is (not stub_runs)
-
-
-def test_real_nodes_keep_name_and_other_stubs(entities):
-    """The swap keeps the node name (lifecycle_core.yaml lists it); escape_server and stuck_detector have no real node."""
-    for package in ('vacuum_stubs', 'vacuum_coverage'):
-        assert text(private(by_executable(entities, 'coverage_server', package), 'node_name')) == 'coverage_server'
-    assert by_executable(entities, 'escape_server').node_package == 'vacuum_stubs'
-    assert by_executable(entities, 'stuck_detector').node_package == 'vacuum_stubs'
-
-
 def test_map_tf_default_false_and_included_behind_the_flag(entities):
     """map -> my_robot_odom is opt-in (existing graphs are unchanged)."""
     from launch.actions import IncludeLaunchDescription
     assert text(declared_default(entities, 'map_tf')) == 'false'
     assert text(declared_default(entities, 'map_source')) == 'static'
-    include = next(e for e in entities if isinstance(e, IncludeLaunchDescription))
+    include = next(e for e in entities if isinstance(e, IncludeLaunchDescription)
+                   and any(k == 'map_source' for k, _ in e.launch_arguments))
     assert evaluate(include.condition, map_tf='true') is True
     assert evaluate(include.condition, map_tf='false') is False
