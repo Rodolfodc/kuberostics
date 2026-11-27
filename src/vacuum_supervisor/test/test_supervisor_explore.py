@@ -76,8 +76,11 @@ def system():
 
 def begin_exploration_with_nav_goal(sup, fake):
     assert wait_for(lambda: fake.pub_mode.get_subscription_count() >= 1)
-    fake.pub_mode.publish(String(data='CLEANING'))
-    assert wait_for(lambda: sup._explore_handle is not None), 'explore goal was not accepted'
+
+    def republish_until_accepted():       # the orchestrator republishes the mode every 0.2 s (no single-shot input)
+        fake.pub_mode.publish(String(data='CLEANING'))
+        return sup._explore_handle is not None
+    assert wait_for(republish_until_accepted), 'explore goal was not accepted'
     assert sup._machine.submode == 'EXPLORING'
     fake.client.send_goal_async(NavigateToPose.Goal())          # what exploration_server does
     assert wait_for(lambda: fake.active and fake.last_nonzero is not None), 'fake Nav2 not driving'
