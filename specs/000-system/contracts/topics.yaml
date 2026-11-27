@@ -103,7 +103,7 @@ topics:
     qos: default
     owner: lifecycle_sequencer
     since: "005"
-    note: "T521: sequencer state (ALL_ACTIVE, DEGRADED_NAV, ...) and step durations, 1 Hz; the supervisor will log when it stops (005-R37, not implemented yet)"
+    note: "T521: sequencer state and step results, 1 Hz; the supervisor will log when it stops (005-R37, not implemented yet). Keys: state (ALL_ACTIVE, DEGRADED_NAV, ...), notifications, codes, and per step <action>_<manager>_s and <action>_<manager>_outcome (action startup or shutdown; outcome OK, FAILED, TIMEOUT or SKIPPED). SKIPPED is an outcome, not a state (reasons: no nodes, core failed, aborted; 005-R35)"
 
   - name: /myRobot/telemetry/stop_guard
     type: diagnostic_msgs/msg/DiagnosticArray
@@ -206,7 +206,7 @@ actions:
 # TF broadcasters (contract batch 2). Not read by the contract tests yet. One broadcaster per child frame
 # (003-R02). Frame names are parameters of the broadcaster; the values below are the ones the launch must use.
 tf:
-  - {parent: map,            child: my_robot_odom,           owner: [slam_toolbox, static_transform_publisher], since: "003", note: "003-R05; static from the recorded start pose with map_file (003-R06, R30)"}
+  - {parent: map,            child: my_robot_odom,           owner: [slam_toolbox, static_transform_publisher], since: "003", note: "003-R05; static from the recorded start pose with map_file (003-R06, R30); map_tf.launch.py map_source:=static publishes identity from node map_tf_static (dead reckoning only, until slam_toolbox is integrated)"}
   - {parent: my_robot_odom,  child: base_footprint, owner: my_robot_odometry_node, since: "003", note: "D-27: the bridge parameter odom_frame keeps its default my_robot_odom (the 2025S2 name, also used by nav2_params.yaml); with these bridges odom_tf_bridge is not started (003-R02: one broadcaster); proposal, see Q-14 in spec 003"}
   - {parent: base_footprint, child: base_link,      owner: my_robot_odometry_node, static: true, since: "003", note: "z = footprint_to_base_z (0.08 m)"}
   - {parent: base_link,      child: laser_link,     owner: my_robot_scan_node,     static: true, since: "003", note: "laser_xyz of the profile; the mapping launch shall not publish it a second time (003-R03)"}
@@ -216,10 +216,10 @@ lifecycle:
   ia368ii_manager: [myrobot, behaviour_server, cleaning_server, autodocking_server, charging_server, charged_server]
   # spec 003 adds odom_tf_bridge, exploration_server and room_segmenter here when its nodes land (003-R26)
   lifecycle_manager_core: [supervisor, stop_guard, stuck_detector, escape_server, coverage_server]
-  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # nav.launch.py (T510) has its own lifecycle_manager_nav (params autostart, bond_timeout); wiring into the sequencer pending; Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
+  lifecycle_manager_nav: [planner_server, controller_server, bt_navigator]   # nav.launch.py (T510) has its own lifecycle_manager_nav (params autostart, bond_timeout); with with_sequencer:=true and nav:=true skeleton.launch.py runs it from config/lifecycle_nav.yaml (autostart false) and the sequencer starts it; Q-09 (decided, conditional; amends D-09); started after core by lifecycle_sequencer (005-R35)
   # not managed (plain; D-26 exception PROPOSED in D-27, awaiting the project owner): the four vacuum_sim_bridge nodes (my_robot_scan_node, my_robot_vision_node,
   # my_robot_cmd_vel_node, my_robot_odometry_node), same-name drop-ins of the plain 2025S2 bridges (D-27)
-  lifecycle_manager_optional: []      # detection chain of 009a (detector_local, image_throttle, detection_selector) when the sequencer launch includes it; MQTT bridge in spec 009; detector_cloud runs in K3s, outside the robot managers
+  lifecycle_manager_optional: []      # NOT launched by skeleton.launch.py while empty (a Nav2 manager with node_names [] aborts, 005-R35); future: detection chain of 009a (detection.launch.py runs its own copy with with_manager:=true), MQTT bridge in spec 009; detector_cloud runs in K3s, outside the robot managers
 
 # Public parameters (Art. I.1). Values are the defaults; the launch file may override them.
 # Blocks are keyed by node name, except `detector` (keyed by executable: it runs as detector_local and
@@ -229,7 +229,7 @@ parameters:
   lifecycle_sequencer:
     manager_startup_timeout_s: {type: double, default: 30.0, requirement: 005-R35}
     manager_shutdown_timeout_s: {type: double, default: 15.0, requirement: 005-R37}
-    managers: {type: string_array, default: [lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional], requirement: 005-R35}
+    managers: {type: string_array, default: [lifecycle_manager_core, lifecycle_manager_nav], requirement: 005-R35, note: "only managers that have nodes; skeleton.launch.py overrides it to [lifecycle_manager_core] without nav:=true; lifecycle_manager_optional joins when it gets nodes"}
     stop_guard_node: {type: string, default: stop_guard, requirement: 005-R36}
     telemetry_rate_hz: {type: double, default: 1.0}
     stop_guard_poll_period_s: {type: double, default: 1.0, requirement: 005-R36, note: "how often the sequencer confirms with get_state that stop_guard is still active; transition events alone can be missed"}
@@ -466,7 +466,9 @@ parameters:
     rate_hz: {type: double, default: 20.0}
     odom_source: {type: string, default: ground_truth, values: [ground_truth, wheels], requirement: 003-R01, note: "NOT the mapping argument of the same name: mapping odom_source sim = bridge ground_truth; mapping laser = rf2o, the bridge is then not the TF broadcaster"}
 
-  # ---- launch arguments (contract batch 2) ----
+  # ---- launch arguments (contract batches 2 and 3) ----
+  # autostart defaults differ on purpose: coverage_launch and nav_launch default to true (stand-alone use, no manager);
+  # detection_launch defaults to false because its own with_manager (default true) already drives the transitions.
   sim_bridges_launch:               # vacuum_sim_bridge/launch/sim_bridges.launch.py
     odom_source: {type: string, default: ground_truth, values: [ground_truth, wheels], note: "passed to my_robot_odometry_node"}
     params_file: {type: string, default: "<share>/vacuum_sim_bridge/config/sim_bridge.yaml", note: "robot profile; start this launch or the stock 2025S2 bridges, never both"}
@@ -476,11 +478,13 @@ parameters:
     backend: {type: string, default: ultralytics, values: [ultralytics, "null"]}
     device: {type: string, default: cpu}
     with_manager: {type: bool, default: true, note: "false when an outer launch already runs lifecycle_manager_optional with these node names"}
+    autostart: {type: bool, default: false, note: "true: the launch configures and activates the nodes itself; effective only with with_manager:=false, ignored with a warning otherwise (never two drivers)"}
+    with_projector: {type: bool, default: false, note: "also start the projector (needs TF and /topologic_map from the caller)"}
   coverage_launch:                  # vacuum_coverage/launch/coverage.launch.py
     autostart: {type: bool, default: true, note: "configure and activate coverage_server without a lifecycle manager (stand-alone use)"}
     sim_slowdown: {type: double, default: 1.0, note: "factor > 0 for a slow simulator (about 0.09x real time): multiplies waypoint_timeout_s, coverage_timeout_s and resume_window_s; 1.0 overrides nothing; use the same value as nav_launch"}
   nav_launch:                       # vacuum_bringup/launch/nav.launch.py (005-R19)
-    autostart: {type: bool, default: true, note: "false when lifecycle_sequencer starts the manager"}
+    autostart: {type: bool, default: true, note: "autostart of the manager of this launch; with with_sequencer:=true skeleton.launch.py passes with_manager:=false instead and runs its own lifecycle_manager_nav (config/lifecycle_nav.yaml, autostart false) under the sequencer"}
     with_manager: {type: bool, default: true}
     params_file: {type: string, default: "<share>/vacuum_bringup/config/nav2_params.yaml"}
     bt_xml: {type: string, default: "<share>/vacuum_bringup/config/nav_bt.xml", requirement: 005-R34}
@@ -488,5 +492,13 @@ parameters:
   skeleton_launch:                  # vacuum_bringup/launch/skeleton.launch.py
     with_ia368ii: {type: bool, default: true, requirement: 001-R01}
     with_wheel_bridge: {type: bool, default: true, requirement: 001-R13, note: "ignored when with_ia368ii is false"}
+    wheel_bridge: {type: string, default: stock, values: [stock, vacuum], requirement: 001-R13, note: "which bridge with_wheel_bridge starts: the 2025S2 my_robot_cmd_vel_node (stock) or vacuum_sim_bridge (vacuum, D-27); same node name, only one runs"}
     with_teleop: {type: bool, default: true}
-    with_sequencer: {type: bool, default: false, requirement: 005-R35}
+    nav: {type: bool, default: false, requirement: 005-R35, note: "include nav.launch.py; needs /map and map -> my_robot_odom from outside (e.g. map_tf:=true)"}
+    map_tf: {type: bool, default: false, requirement: 003-R05, note: "include map_tf.launch.py (map -> my_robot_odom)"}
+    map_source: {type: string, default: static, values: [static, slam], requirement: 003-R05, note: "forwarded to map_tf_launch when map_tf is true"}
+    real_coverage: {type: bool, default: false, note: "real coverage_server of vacuum_coverage (coverage_launch with autostart false, same node name under lifecycle_manager_core) instead of the stub"}
+    sim_slowdown: {type: double, default: 1.0, note: "factor > 0 forwarded to nav_launch and coverage_launch"}
+    with_sequencer: {type: bool, default: false, requirement: 005-R35, note: "start lifecycle_sequencer (plus lifecycle_manager_nav with nav:=true); the sequencer, not autostart, starts the managers"}
+  map_tf_launch:                    # vacuum_bringup/launch/map_tf.launch.py (003-R05)
+    map_source: {type: string, default: static, values: [static, slam], requirement: 003-R05, note: "static: identity map -> my_robot_odom (dead reckoning only); slam: placeholder, the launch fails at startup (slam_toolbox not integrated)"}
