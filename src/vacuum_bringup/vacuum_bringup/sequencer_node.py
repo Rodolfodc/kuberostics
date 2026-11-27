@@ -29,7 +29,7 @@ from std_srvs.srv import Trigger
 from vacuum_interfaces.msg import Notification
 
 from vacuum_bringup.manager_sequencer import (
-    Action, GuardWatch, ManagerSequencer, Outcome, Severity, State, default_specs)
+    Action, GuardWatch, ManagerSequencer, Outcome, Severity, State, deactivation_result, default_specs)
 
 COMMANDS = {
     Action.STARTUP: ManageLifecycleNodes.Request.STARTUP,
@@ -145,15 +145,18 @@ class SequencerNode(Node):
             change = ChangeState.Request()
             change.transition.id = Transition.TRANSITION_DEACTIVATE
             outcome, done = self._call_once(ChangeState, f'/{name}/change_state', change, left())
+            active_after = None
             if outcome is Outcome.TIMEOUT:
                 # the reply can be lost although the transition happened: confirm with get_state
                 self._log('warn', f'{manager}: no reply to deactivate {name}, checking its state')
-                outcome2, state = self._call_once(GetState, f'/{name}/get_state', GetState.Request(), 2.0)
-                if outcome2 is Outcome.OK and state.current_state.id != LifecycleState.PRIMARY_STATE_ACTIVE:
-                    self._log('info', f'{manager}: {name} is no longer active although the reply was lost')
-                    continue
-            self._log('info', f'{manager}: deactivated {name}: {outcome.value}')
-            if outcome is not Outcome.OK or not done.success:
+                confirm_outcome, confirmed = self._call_once(GetState, f'/{name}/get_state', GetState.Request(), 2.0)
+                if confirm_outcome is Outcome.OK:
+                    active_after = confirmed.current_state.id == LifecycleState.PRIMARY_STATE_ACTIVE
+            verdict = deactivation_result(outcome, outcome is Outcome.OK and done.success, active_after)
+            self._log('info', f'{manager}: deactivated {name}: {verdict.value}'
+                              + (' (reply lost, node confirmed not active)' if outcome is Outcome.TIMEOUT
+                                 and verdict is Outcome.OK else ''))
+            if verdict is not Outcome.OK:
                 result = Outcome.FAILED
         return result
 

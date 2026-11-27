@@ -5,7 +5,8 @@ Every test name cites the requirement it verifies (Art. VIII).
 import pytest
 
 from vacuum_bringup.manager_sequencer import (
-    Action, GuardWatch, ManagerSequencer, ManagerSpec, Outcome, Role, Severity, State, default_specs)
+    Action, GuardWatch, ManagerSequencer, ManagerSpec, Outcome, Role, Severity, State, deactivation_result,
+    default_specs)
 
 CORE, NAV, OPT = 'lifecycle_manager_core', 'lifecycle_manager_nav', 'lifecycle_manager_optional'
 
@@ -447,6 +448,7 @@ def test_005_R36_lost_startup_reply_and_manager_never_active_is_still_a_timeout(
     result = next(r for r in seq.results if r.manager == NAV and r.action is Action.STARTUP)
     assert result.outcome is Outcome.TIMEOUT
     assert clock.now <= 30.0 + 5.0 + 1e-9                      # the extra poll is bounded by reply_grace_s
+    assert dict(managers.waits)[NAV] == 5.0
 
 
 def test_005_R36_lost_core_startup_reply_is_recovered_too():
@@ -458,3 +460,38 @@ def test_005_R36_a_failed_startup_reply_is_not_second_guessed():
     seq, managers, _, _ = build({(NAV, Action.STARTUP): Outcome.FAILED})
     assert seq.run_startup() is State.DEGRADED_NAV
     assert managers.waits.count((NAV, 30.0)) == 0 and NAV not in dict(managers.waits)
+
+
+def test_005_R36_no_grace_poll_when_an_abort_arrives_during_the_lost_reply():
+    clock = FakeClock()
+    managers = FakeManagers(clock, {(NAV, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    holder = []
+
+    def call(manager, action, timeout_s):
+        outcome = managers.call(manager, action, timeout_s)
+        if manager == NAV and action is Action.STARTUP:
+            holder[0].request_abort()               # shutdown requested while the reply was awaited
+        return outcome
+
+    holder.append(ManagerSequencer(default_specs([CORE, NAV]), call, managers.wait_active, clock))
+    holder[0].run_startup()
+    assert NAV not in dict(managers.waits)
+
+
+def test_005_R36_startup_timeout_is_per_reply_worst_case_adds_the_grace():
+    seq, managers, _, clock = build({(CORE, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    managers.active_script[CORE] = (Outcome.TIMEOUT, 5.0)
+    seq.run_startup()
+    assert clock.now == pytest.approx(35.0)
+
+
+@pytest.mark.parametrize('outcome,success,active_after,expected', [
+    (Outcome.OK, True, None, Outcome.OK),
+    (Outcome.OK, False, None, Outcome.FAILED),
+    (Outcome.TIMEOUT, False, False, Outcome.OK),        # reply lost, node is no longer active
+    (Outcome.TIMEOUT, False, True, Outcome.FAILED),     # reply lost and the node is still active
+    (Outcome.TIMEOUT, False, None, Outcome.FAILED),     # reply lost and get_state unknown
+    (Outcome.FAILED, False, False, Outcome.FAILED),
+])
+def test_005_R37_deactivation_result_confirms_a_lost_reply_with_the_node_state(outcome, success, active_after, expected):
+    assert deactivation_result(outcome, success, active_after) is expected

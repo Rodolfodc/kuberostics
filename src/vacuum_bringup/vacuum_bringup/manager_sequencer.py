@@ -138,6 +138,17 @@ class GuardWatch:
         return True
 
 
+def deactivation_result(outcome: Outcome, success: bool, active_after: Optional[bool]) -> Outcome:
+    """Result of one node deactivation. `outcome`/`success` come from the change_state reply; `active_after` is the
+    node's state read with get_state after a reply TIMEOUT (None: unknown or not asked). A lost reply (rclpy "failed
+    to send response (timeout)") is OK when the node is no longer active; any other non-OK reply is FAILED."""
+    if outcome is Outcome.OK:
+        return Outcome.OK if success else Outcome.FAILED
+    if outcome is Outcome.TIMEOUT and active_after is False:
+        return Outcome.OK
+    return Outcome.FAILED
+
+
 def _noop_log(level: str, message: str) -> None:
     pass
 
@@ -241,11 +252,15 @@ class ManagerSequencer:
         return self._state
 
     def _start_one(self, spec: ManagerSpec) -> StepResult:
+        """`startup_timeout_s` is a per-reply budget: the command may use all of it, then (reply lost) is_active is
+        polled for `reply_grace_s` more, so the worst case is startup_timeout_s + reply_grace_s. After a normal reply
+        the is_active wait gets only what is left of startup_timeout_s. The grace poll is skipped once an abort was
+        requested, and `wait_active` itself must return early on abort (the node's does)."""
         t0 = self._clock()
         deadline = t0 + self._startup_timeout_s
         outcome = self._call(spec.name, Action.STARTUP, self._startup_timeout_s)
         detail = 'startup command'
-        if outcome is Outcome.TIMEOUT:
+        if outcome is Outcome.TIMEOUT and not self._abort:
             # A reply can be lost under load (rclpy: "failed to send response (timeout)") although the manager did
             # start: ask is_active before calling it a failure (a reply that arrived with success=false is not
             # second-guessed). Bounded by reply_grace_s.
