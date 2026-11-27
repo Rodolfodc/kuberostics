@@ -1,4 +1,4 @@
-"""`escape_server` stub LifecycleNode (T011, 001-R07, 001-R16): Escape action server on /myRobot/escape.
+"""`escape_server` stub LifecycleNode (001-R07, 001-R16): Escape action server on /myRobot/escape.
 
 Runs a scripted escape (reverse, then turn) on /myRobot/mux/escape (its own mux input only) and returns the
 result chosen by the `outcome` parameter (succeed, fail, hang). Logic in `EscapeScript` (pure Python, D-18).
@@ -10,7 +10,7 @@ import time
 import rclpy
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import Twist
-# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical (T021).
+# RCLError is not re-exported by a public rclpy module on Jazzy; this path works on Jazzy and Lyrical.
 from rclpy._rclpy_pybind11 import RCLError
 from rclpy.action import ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -148,7 +148,7 @@ class EscapeServerNode(LifecycleNode):
             if rclpy.ok():
                 raise
             # SIGINT/shutdown invalidated the context while the goal was publishing: not an error, just the
-            # end of the process. Nothing can be published or logged any more (T021).
+            # end of the process. Nothing can be published or logged any more.
             self._last_result = 'aborted'
             return result
         finally:
@@ -164,7 +164,7 @@ class EscapeServerNode(LifecycleNode):
 
 def main(args=None) -> None:
     # rclpy's own SIGINT handler invalidates the context at once, while a goal may still be publishing: rcl then
-    # prints "context is invalid" errors from inside rclpy (T021, flaky under load). The signals are handled here
+    # prints "context is invalid" errors from inside rclpy (flaky under load). The signals are handled here
     # instead: flag the goal to abort (context still valid), wait for it, then shut everything down in order.
     rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = EscapeServerNode()
