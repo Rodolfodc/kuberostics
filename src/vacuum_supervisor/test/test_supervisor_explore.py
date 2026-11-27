@@ -17,7 +17,7 @@ import threading
 import time
 
 import pytest
-from test_supervisor_watchdog import BUDGET_S, FakeNav2, NavigateToPose, wait_for
+from nav_fakes import BUDGET_S, FakeNav2, NavigateToPose, wait_for
 
 import rclpy  # noqa: E402
 from action_msgs.msg import GoalStatus  # noqa: E402

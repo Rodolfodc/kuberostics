@@ -245,6 +245,11 @@ class SupervisorNode(LifecycleNode):
     def _try_send_cover_room(self) -> None:
         if not self._pending_cover:
             return
+        if self._cancel_window.holds(time.monotonic()):
+            # 003-R31: the cancel-all of /navigate_to_pose after an explore loss is still being delivered; a retry
+            # of it must not hit the Nav2 goal of the coverage that follows. Resent from the tick (<= nav_cancel_s).
+            self.get_logger().debug('cover_room held: navigate_to_pose cancel in progress')
+            return
         if not self._cover_client.server_is_ready():
             self.get_logger().warning('cover_room server not ready, will retry')
             return
