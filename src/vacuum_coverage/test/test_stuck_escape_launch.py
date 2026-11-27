@@ -9,6 +9,7 @@ The domain ID comes from conftest.py (range 1-5, this package, serialized with i
 import os
 import threading
 import time
+import warnings
 import unittest
 
 import launch_testing
@@ -49,6 +50,8 @@ def generate_test_description():
 
 
 class TestStuckEscapeAlone(unittest.TestCase):
+    nudges = 0       # how many times the autostart workaround fired in this run
+
     @classmethod
     def setUpClass(cls):
         cls.context = rclpy.Context()
@@ -88,13 +91,20 @@ class TestStuckEscapeAlone(unittest.TestCase):
         return [e.process_name for e in self.proc_info if isinstance(e, ProcessExited)]
 
     def _nudge(self, name):
-        """Known infrastructure flake (rclpy "failed to send response (timeout)" on the first service reply under
-        load): launch_ros then never sees the transition and the autostart chain stalls. The test finishes the
-        chain itself, from the state the node is in, so the rest of the test still checks the real processes."""
+        """Lifecycle reply lost under load (rclpy "failed to send response (timeout)" on the first change_state
+        reply; root cause in rclpy/executor, not a node bug): launch_ros then never sees the transition and the
+        autostart chain stalls. The test finishes the chain itself, from the state the node is in, so the rest of
+        the test still checks the real processes. Every use is logged and counted so a CI run that needed it is
+        visible."""
         state = self._state(name)
         step = {State.PRIMARY_STATE_UNCONFIGURED: Transition.TRANSITION_CONFIGURE,
                 State.PRIMARY_STATE_INACTIVE: Transition.TRANSITION_ACTIVATE}.get(state)
         if step is not None and self.change_state[name].service_is_ready():
+            type(self).nudges += 1
+            warnings.warn(f'autostart workaround #{type(self).nudges}: {name} stalled in state {state}, sending '
+                          f'transition {step} (lifecycle reply lost under load)')
+            print(f'WARNING: autostart workaround #{type(self).nudges} for {name} (state {state}, '
+                  f'transition {step})', flush=True)
             future = self.change_state[name].call_async(ChangeState.Request(transition=Transition(id=step)))
             wait_for(future.done, 10.0)
 
