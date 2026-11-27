@@ -20,13 +20,16 @@ from rclpy.lifecycle import LifecycleNode, TransitionCallbackReturn
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
-from vacuum_interfaces.action import CoverRoom, Escape
+from vacuum_interfaces.action import CoverRoom, Escape, Explore
 from vacuum_interfaces.msg import Notification, StuckEvent, Submode
 
 from vacuum_supervisor.feedback_watchdog import CancelWindow, FeedbackWatchdog
 from vacuum_supervisor.submode_machine import Effect, SubmodeMachine
 
 # QoS of the IA368II contract (specs/000-system/contracts/topics.yaml, profile ia368ii).
+QOS_LATCHED = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                         durability=DurabilityPolicy.TRANSIENT_LOCAL)
+EXPLORED_TOPIC = '/myRobot/map/explored'      # 003-R13, latched
 QOS_IA368II = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
                          durability=DurabilityPolicy.VOLATILE)
 WATCHDOG_PERIOD_S = 0.1     # detection resolution of 005-R34 (inside the 0.5 s margin of the test)
@@ -58,6 +61,9 @@ class SupervisorNode(LifecycleNode):
         # stop_requested, so after charging it ends in CHARGED instead of resuming CLEANING).
         self.declare_parameter('start_stop_service', '/myRobot/start_stop')
         self.declare_parameter('dock_command', 'stop')
+        # 003-R14: EXPLORING rows; off by default (spec 001 holds unchanged until amendment A1).
+        self.declare_parameter('explore_on_start', False)
+        self.declare_parameter('explore_action', '/myRobot/explore')
         # 005-R34: the supervisor watches the feedback of cover_room (1 Hz from the server). A killed server does
         # not cancel its Nav2 goal and controller_server keeps publishing, so after feedback_stale_s without
         # feedback (or a server that is not ready) all /navigate_to_pose goals are cancelled within nav_cancel_s.
@@ -71,10 +77,14 @@ class SupervisorNode(LifecycleNode):
         # Created once, not per configure: the stop lock must survive a deactivate/activate or
         # cleanup/configure cycle (001-R22). Only a process restart starts unlocked.
         self._machine = SubmodeMachine(
-            logger=self.get_logger(), dock_after_coverage=bool(self.get_parameter('dock_after_coverage').value))
+            logger=self.get_logger(), dock_after_coverage=bool(self.get_parameter('dock_after_coverage').value),
+            explore_on_start=bool(self.get_parameter('explore_on_start').value))
         self._last_stuck: Optional[StuckEvent] = None
         self._cover_handle = None
         self._escape_handle = None
+        self._explore_handle = None
+        self._explore_seq = 0              # same for explore (003-R14)
+        self._pending_explore = False
         self._escape_seq = 0               # identifies the escape goal whose result still matters
         self._cover_seq = 0                # same for cover_room: a late acceptance must not outlive a cancel
         self._escape_timer = None
@@ -83,6 +93,8 @@ class SupervisorNode(LifecycleNode):
         self._timers = []
         self._watchdog = FeedbackWatchdog(float(self.get_parameter('feedback_stale_s').value),
                                           logger=self.get_logger())
+        self._explore_watchdog = FeedbackWatchdog(float(self.get_parameter('feedback_stale_s').value),
+                                                  logger=self.get_logger())
         self._cancel_window = CancelWindow(float(self.get_parameter('nav_cancel_s').value),
                                            logger=self.get_logger())
         self._nav_cancel_client = None
@@ -103,6 +115,8 @@ class SupervisorNode(LifecycleNode):
         self._sub_stuck = self.create_subscription(StuckEvent, '/myRobot/stuck', self._on_stuck, 10)
         self._cover_client = ActionClient(self, CoverRoom, self.get_parameter('cover_room_action').value)
         self._escape_client = ActionClient(self, Escape, self.get_parameter('escape_action').value)
+        self._explore_client = ActionClient(self, Explore, self.get_parameter('explore_action').value)
+        self._sub_explored = self.create_subscription(Bool, EXPLORED_TOPIC, self._on_explored, QOS_LATCHED)
         self._srv_reset = self.create_service(Trigger, '/myRobot/supervisor/reset', self._on_reset)
         self._configure_dock_client()
         self._nav_cancel_client = self.create_client(
@@ -143,6 +157,8 @@ class SupervisorNode(LifecycleNode):
         self.destroy_service(self._srv_reset)
         self._cover_client.destroy()
         self._escape_client.destroy()
+        self._explore_client.destroy()
+        self.destroy_subscription(self._sub_explored)
         if self._dock_client is not None:
             self.destroy_client(self._dock_client)
             self._dock_client = None
@@ -160,6 +176,10 @@ class SupervisorNode(LifecycleNode):
         if self._active:
             self._last_stuck = msg
             self._apply(self._machine.on_stuck())
+
+    def _on_explored(self, msg: Bool) -> None:
+        if self._active:
+            self._apply(self._machine.on_explored(bool(msg.data)))
 
     def _on_reset(self, request, response):
         effects = self._machine.reset() if self._active else []
@@ -180,6 +200,9 @@ class SupervisorNode(LifecycleNode):
         elif effect.kind == 'send_cover_room':
             self._pending_cover = True
             self._try_send_cover_room()
+        elif effect.kind == 'send_explore':
+            self._pending_explore = True
+            self._try_send_explore()
         elif effect.kind == 'send_escape':
             self._send_escape()
         elif effect.kind == 'request_dock':
@@ -205,15 +228,18 @@ class SupervisorNode(LifecycleNode):
 
     def _cancel_actions(self) -> None:
         self._pending_cover = False
+        self._pending_explore = False
         self._pending_escape_deadline = None
         self._cover_seq += 1               # any callback of the goals cancelled below is stale
+        self._explore_seq += 1
         self._watchdog.disarm()
+        self._explore_watchdog.disarm()
         self._escape_seq += 1
         self._stop_escape_timer()
-        for handle in (self._cover_handle, self._escape_handle):
+        for handle in (self._cover_handle, self._explore_handle, self._escape_handle):
             if handle is not None:
                 handle.cancel_goal_async()
-        self._cover_handle = self._escape_handle = None
+        self._cover_handle = self._explore_handle = self._escape_handle = None
 
     # ---------------------------------------------------------------- cover_room
     def _try_send_cover_room(self) -> None:
@@ -259,12 +285,71 @@ class SupervisorNode(LifecycleNode):
         ok = status == GoalStatus.STATUS_SUCCEEDED and bool(wrapped.result.success)
         self._apply(self._machine.on_cover_result(success=ok))      # 005-R30 (no-op while the rows are off)
 
+    # ---------------------------------------------------------------- explore (003-R14)
+    def _try_send_explore(self) -> None:
+        if not self._pending_explore:
+            return
+        if not self._explore_client.server_is_ready():
+            self.get_logger().warning('explore server not ready, will retry')
+            return
+        self._pending_explore = False
+        self._explore_seq += 1
+        seq = self._explore_seq
+        goal = Explore.Goal(timeout_s=0.0)               # 0 = the server's explore_timeout_s
+        self.get_logger().info('sending explore goal')
+        self._explore_client.send_goal_async(
+            goal, feedback_callback=lambda fb, s=seq: self._on_explore_feedback(s)).add_done_callback(
+            lambda fut, s=seq: self._on_explore_accepted(fut, s))
+
+    def _on_explore_accepted(self, future, seq: int) -> None:
+        handle = future.result()
+        if seq != self._explore_seq:                  # cancelled (mode change, stuck) before being accepted
+            self.get_logger().info('explore goal accepted after a cancel: cancelling it')
+            handle.cancel_goal_async()
+            return
+        if not handle.accepted:
+            self.get_logger().error('explore goal rejected: treated as a failed exploration')
+            self._apply(self._machine.on_explore_result(success=False))
+            return
+        self._explore_handle = handle
+        self._explore_watchdog.arm(time.monotonic())  # 003-R31, 005-R34
+        handle.get_result_async().add_done_callback(lambda fut, s=seq: self._on_explore_result(fut, s))
+
+    def _on_explore_feedback(self, seq: int) -> None:
+        if seq == self._explore_seq:
+            self._explore_watchdog.feed(time.monotonic())
+
+    def _on_explore_result(self, future, seq: int) -> None:
+        wrapped = future.result()
+        status = wrapped.status
+        self.get_logger().info(f'explore finished with status {status}')
+        if seq != self._explore_seq:                  # cancelled by us (mode change, stuck): not a result
+            return
+        self._explore_handle = None
+        self._explore_watchdog.disarm()
+        ok = status == GoalStatus.STATUS_SUCCEEDED and bool(wrapped.result.success)
+        self._apply(self._machine.on_explore_result(success=ok))   # aborted or cancelled by the server: failed
+
+    def _on_explore_lost(self, reason: str, now: float) -> None:
+        self.get_logger().error(f'explore server lost ({reason}): cancelling /navigate_to_pose, action failed')
+        self._explore_seq += 1                        # a late result of the lost goal is stale
+        handle, self._explore_handle = self._explore_handle, None
+        if handle is not None:
+            handle.cancel_goal_async()                # best effort: the server may be gone
+        self._drop_nav_cancel_request()
+        self._cancel_window.start(now)
+        self._try_cancel_nav(now)
+        self._apply(self._machine.on_explore_result(success=False))   # continues with the partial map
+
     # ---------------------------------------------------------------- watchdog (005-R34)
     def _watchdog_tick(self) -> None:
         now = time.monotonic()
         reason = self._watchdog.check(now, self._cover_client.server_is_ready())
         if reason is not None:
             self._on_cover_lost(reason, now)
+        reason = self._explore_watchdog.check(now, self._explore_client.server_is_ready())
+        if reason is not None:
+            self._on_explore_lost(reason, now)
         if self._cancel_window.pending:
             self._try_cancel_nav(now)
 
@@ -450,11 +535,13 @@ class SupervisorNode(LifecycleNode):
         self._pub_submode.publish(msg)
         self._pub_lock.publish(Bool(data=self._machine.locked))       # republished: twist_mux may start later
         self._try_send_cover_room()
+        self._try_send_explore()
         self._try_send_escape()
 
     def _publish_telemetry(self) -> None:
         snap = self._machine.snapshot()
         snap.update(self._watchdog.snapshot(), nav_cancels=self._nav_cancels)
+        snap.update({f'explore_{k}': v for k, v in self._explore_watchdog.snapshot().items()})
         status = DiagnosticStatus(
             name=self.get_name(), hardware_id='vacuum',
             level=DiagnosticStatus.ERROR if snap['locked'] else DiagnosticStatus.OK,
