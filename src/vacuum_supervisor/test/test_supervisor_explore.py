@@ -3,6 +3,11 @@
 The supervisor and a fake Nav2 (`NavigateToPose` server driving `mux/nav`, as in test_supervisor_watchdog.py)
 run in this process; the fake `explore` server is a child process. Killing it mid-goal must stop the Nav2
 velocity within `feedback_stale_s + nav_cancel_s + 0.5 s` and the supervisor must go on with COVERING.
+
+Only two rclpy tests live here on purpose: conftest.py hands out 30 domains (70-99), one per test, and a package
+with more than 30 rclpy tests reuses a domain inside one run (measured: the last tests of test_supervisor_watchdog.py
+then fail to discover their servers). The other behaviour (results, stuck, mode changes) is in the pure
+test_submode_machine_exploring.py. Keep the total of rclpy tests of this package at 30 or fewer.
 """
 import os
 import signal
@@ -15,6 +20,7 @@ import pytest
 from test_supervisor_watchdog import BUDGET_S, FakeNav2, NavigateToPose, wait_for
 
 import rclpy  # noqa: E402
+from action_msgs.msg import GoalStatus  # noqa: E402
 from rclpy.executors import MultiThreadedExecutor  # noqa: E402
 from rclpy.parameter import Parameter  # noqa: E402
 from std_msgs.msg import String  # noqa: E402
@@ -77,49 +83,35 @@ def begin_exploration_with_nav_goal(sup, fake):
     assert wait_for(lambda: fake.active and fake.last_nonzero is not None), 'fake Nav2 not driving'
 
 
-@pytest.mark.parametrize('how', ['killed', 'silent'])
-def test_003_R31_lost_explore_server_stops_the_nav_velocity_and_recovers_within_the_budget(system, how):
-    sup, fake, proc = system(*(['--silent'] if how == 'silent' else []))
+def test_003_R31_lost_explore_server_stops_the_nav_velocity_and_recovers_within_the_budget(system):
+    sup, fake, proc = system()
     begin_exploration_with_nav_goal(sup, fake)
     t0 = time.monotonic()
-    if how == 'killed':
-        proc.send_signal(signal.SIGKILL)       # the Nav2 goal is NOT cancelled by the dead server
-        proc.wait(timeout=10)
-        t0 = time.monotonic()
+    proc.send_signal(signal.SIGKILL)           # the Nav2 goal is NOT cancelled by the dead server
+    proc.wait(timeout=10)
+    t0 = time.monotonic()
     assert wait_for(lambda: fake.cancelled, timeout=BUDGET_S + 2.0), 'navigate_to_pose goals were never cancelled'
     assert wait_for(lambda: not fake.active)
     assert wait_for(lambda: time.monotonic() - fake.last_nonzero > 0.3)
     assert fake.last_nonzero - t0 <= BUDGET_S, (
-        f'non-zero command {fake.last_nonzero - t0:.2f} s after the {how} (budget {BUDGET_S} s)')
+        f'non-zero command {fake.last_nonzero - t0:.2f} s after the kill (budget {BUDGET_S} s)')
     # recovery (003-R14): the failed action continues with the partial map
     assert wait_for(lambda: sup._machine.submode == 'COVERING'), 'supervisor did not go on to COVERING'
     assert sup._machine.exploration_done
     assert sup._explore_handle is None and not sup._explore_watchdog.armed
 
 
-def test_003_R31_a_live_explore_server_with_feedback_is_never_cancelled(system):
+def test_003_R14_mode_leaving_cleaning_cancels_the_explore_goal_and_the_canceled_result_is_dropped(system):
     sup, fake, proc = system()
+    statuses = []
     begin_exploration_with_nav_goal(sup, fake)
-    end = time.monotonic() + 5.0
-    while time.monotonic() < end:
-        assert not fake.cancelled and fake.active
-        time.sleep(0.05)
-    assert sup._explore_watchdog.armed and sup._machine.submode == 'EXPLORING'
-
-
-@pytest.mark.parametrize('outcome', ['success', 'abort'])
-def test_003_R14_explore_result_continues_with_covering(system, outcome):
-    sup, fake, proc = system('--finish', outcome)
-    assert wait_for(lambda: fake.pub_mode.get_subscription_count() >= 1)
-    fake.pub_mode.publish(String(data='CLEANING'))
-    assert wait_for(lambda: sup._machine.exploration_done, timeout=30.0), 'explore result not handled'
-    assert wait_for(lambda: sup._machine.submode == 'COVERING')
-    assert not fake.cancelled
-
-
-def test_003_R14_mode_leaving_cleaning_cancels_the_explore_goal(system):
-    sup, fake, proc = system()
-    begin_exploration_with_nav_goal(sup, fake)
+    # a second result future on the same goal records the server's answer to the cancel
+    handle = sup._explore_handle
+    seq = sup._explore_seq
+    handle.get_result_async().add_done_callback(lambda fut: statuses.append(fut.result().status))
     fake.pub_mode.publish(String(data='IDLE'))
     assert wait_for(lambda: sup._machine.submode == 'NONE')
-    assert wait_for(lambda: sup._explore_handle is None and not sup._explore_watchdog.armed)
+    assert wait_for(lambda: GoalStatus.STATUS_CANCELED in statuses), 'the CANCELED result never arrived'
+    assert sup._explore_handle is None and not sup._explore_watchdog.armed
+    assert not sup._machine.exploration_done        # a cancel by us is not a result (stale sequence)
+    assert sup._machine.submode == 'NONE' and sup._explore_seq != seq
