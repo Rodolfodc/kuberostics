@@ -20,6 +20,7 @@ module "workloads" {
   ros_distro  = var.ros_distro
   transport   = var.transport
   weights_url = var.weights_url
+  model_file  = var.model_file
   node_port   = var.node_port
 
   allow_unfiltered_rmw_zenoh = var.allow_unfiltered_rmw_zenoh
