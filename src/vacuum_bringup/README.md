@@ -5,7 +5,7 @@ Launch files and configuration of the system, plus the lifecycle sequencer (spec
 ## The lifecycle sequencer
 
 Three Nav2 lifecycle managers bring the nodes up: `lifecycle_manager_core` (stop_guard first, supervisor last),
-`lifecycle_manager_nav` and `lifecycle_manager_optional`. The `lifecycle_sequencer` starts them in that order, each
+`lifecycle_manager_nav` and `lifecycle_manager_optional` (the last is not launched while it has no nodes). The `lifecycle_sequencer` starts them in that order, each
 one only when the previous one reports `is_active` (or after `manager_startup_timeout_s`), and stops them in
 reverse order on shutdown, so `stop_guard` is the last to go down. It is a **plain node on purpose** (D-26): it
 only orchestrates managers.
@@ -35,8 +35,7 @@ sequence stays within `manager_shutdown_timeout_s` (each step gets an equal shar
 ros2 launch vacuum_bringup skeleton.launch.py with_sequencer:=true   # default false: lifecycle_manager_core autostarts alone
 ```
 
-With `with_sequencer:=true` the launch adds `lifecycle_manager_nav`, `lifecycle_manager_optional` (both
-`autostart: false`, empty node lists until the Nav2 nodes (spec 005) and the cloud/MQTT nodes (spec 009) fill them in) and the sequencer, and
+With `with_sequencer:=true` the launch adds the sequencer and, with `nav:=true`, `lifecycle_manager_nav` (`autostart: false`, the three Nav2 nodes); `lifecycle_manager_optional` is not launched until the cloud/MQTT nodes (spec 009) give it nodes (a Nav2 manager with an empty `node_names` aborts), and
 `lifecycle_manager_core` starts with `autostart: false`.
 
 ### How to add a manager

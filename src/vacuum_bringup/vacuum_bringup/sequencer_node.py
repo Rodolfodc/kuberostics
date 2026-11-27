@@ -44,8 +44,7 @@ SERVICE_WAIT_S = 1.0
 class SequencerNode(Node):
     def __init__(self):
         super().__init__('lifecycle_sequencer')
-        self.declare_parameter('managers', [
-            'lifecycle_manager_core', 'lifecycle_manager_nav', 'lifecycle_manager_optional'])
+        self.declare_parameter('managers', ['lifecycle_manager_core', 'lifecycle_manager_nav'])
         self.declare_parameter('manager_startup_timeout_s', 30.0)
         self.declare_parameter('manager_shutdown_timeout_s', 15.0)
         self.declare_parameter('telemetry_rate_hz', 1.0)

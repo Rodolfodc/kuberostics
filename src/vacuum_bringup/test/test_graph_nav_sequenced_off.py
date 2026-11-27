@@ -1,9 +1,7 @@
-"""Live-graph test: with_sequencer:=true nav:=false (005-R35): no nav manager is launched or listed (and optional has no nodes), so the sequencer reaches ALL_ACTIVE. Companion of test_graph_nav_sequenced.py.
-
-skeleton.launch.py with_sequencer:=true nav:=true sim_slowdown:=3, with a map_server and the fake robot standing in
-for SLAM and the sim bridges. The sequencer must bring lifecycle_manager_nav (listing the three Nav2 nodes) active
-after the core manager, and the timeouts of the running nodes must be scaled. Domain: bringup range 100-129 through
-graph_support.domain_for. Condition waits only.
+"""Live-graph test: skeleton.launch.py with_sequencer:=true nav:=false (005-R35), with a map_server and the fake robot
+standing in for SLAM and the sim bridges. No nav manager is launched or listed (and optional has no nodes), so the
+sequencer reaches ALL_ACTIVE with only lifecycle_manager_core in its telemetry. Companion of
+test_graph_nav_sequenced.py. Domain: bringup range 100-129 through graph_support.domain_for. Condition waits only.
 """
 import atexit
 import os
@@ -73,7 +71,7 @@ class TestNoNavSequenced(unittest.TestCase):
         self.assertTrue(ns.wait_for(lambda: self.states[-1:] == ['ALL_ACTIVE'], 150.0),
                         f'sequencer states seen: {self.states[-5:]}')
 
-    def test_04_005_R35_telemetry_lists_only_the_managers_that_have_nodes(self):
+    def test_02_005_R35_telemetry_lists_only_the_managers_that_have_nodes(self):
         # a manager without nodes cannot be launched (the Nav2 manager aborts on node_names: []), so it is absent
         # from the sequencer's managers and from its per-manager telemetry; the ones listed are active, none failed
         self.assertTrue(ns.wait_for(lambda: 'startup_lifecycle_manager_core_outcome' in self.values, 30.0))
