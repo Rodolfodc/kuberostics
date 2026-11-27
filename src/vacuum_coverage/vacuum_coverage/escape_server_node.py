@@ -40,6 +40,7 @@ from vacuum_coverage.node_support import (
     QOS_DEFAULT, QOS_IA368II, QOS_SCAN, build_diagnostics, guarded_change_state)
 
 ODOM_MAX_AGE_S = 1.0       # odometry older than this is "lost": the escape fails instead of driving blind
+ODOM_GRACE_S = 1.0         # a goal waits this long for the first odometry before failing without moving
 SCAN_MAX_AGE_S = 1.0       # a laser older than this gives no clearance (None = not clear)
 
 CONFIG_PARAMS = ('reverse_m', 'rear_clearance_m', 'turn_deg_base', 'turn_deg_step', 'front_clearance_m',
@@ -239,6 +240,11 @@ class EscapeServerNode(LifecycleNode):
         try:
             session = self._new_session()
             pose, _, _ = self._sense(start)
+            grace_end = start + ODOM_GRACE_S
+            while pose is None and self._now_s() < grace_end and self.context.ok() and self._active \
+                    and not goal_handle.is_cancel_requested:
+                time.sleep(0.02)           # the first odometry may still be on its way (discovery)
+                pose, _, _ = self._sense(self._now_s())
             geometry = scan_geometry_or_default(self._scan.geometry(), len(goal.event.scan_ranges))
             session.start(start, list(goal.event.scan_ranges), pose, geometry[0], geometry[1],
                           float(goal.timeout_s))

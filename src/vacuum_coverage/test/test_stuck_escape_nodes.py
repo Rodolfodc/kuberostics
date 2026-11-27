@@ -83,6 +83,10 @@ class Rig:
                 assert n.trigger_activate() == TransitionCallbackReturn.SUCCESS
         if self.escape is not None:
             assert self.client.wait_for_server(timeout_sec=30.0)
+            if self.world is not None and self.world.with_odom:       # the first odometry and laser have arrived
+                assert wait_for(lambda: self.escape._odom is not None, 30.0)
+            if self.world is not None and self.world.with_scan:
+                assert wait_for(lambda: self.escape._scan.geometry() is not None, 30.0)
 
     def send(self, timeout_s=0.0, ranges=None, feedback=None):
         goal = Escape.Goal(timeout_s=float(timeout_s))
@@ -255,6 +259,7 @@ def test_005_R12_no_odometry_fails_without_moving(rig):
     h = r.send()
     res = r.result(h)
     assert not res.result.success
+    assert res.result.duration_s >= 0.9                # it waited for the first odometry (ODOM_GRACE_S)
     assert r.world.count('escape') == 0
 
 
