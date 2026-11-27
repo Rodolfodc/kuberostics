@@ -117,10 +117,11 @@ def test_005_R35_wait_budget_is_what_is_left_of_the_startup_timeout_after_the_ca
     assert managers.calls[0][2] == pytest.approx(30.0)
 
 
-def test_005_R35_a_call_that_takes_the_whole_timeout_leaves_no_wait_and_fails_the_step():
+def test_005_R35_a_call_that_takes_the_whole_timeout_gets_only_the_grace_poll_and_fails_the_step():
     seq, managers, _, _ = build({(NAV, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    managers.active_script[NAV] = Outcome.TIMEOUT
     seq.run_startup()
-    assert NAV not in dict(managers.waits)
+    assert dict(managers.waits)[NAV] == pytest.approx(5.0)          # reply_grace_s, not the (used up) timeout
     assert next(r for r in seq.results if r.manager == NAV).outcome is Outcome.TIMEOUT
 
 
@@ -426,3 +427,34 @@ def test_005_R35_telemetry_tells_skipped_from_active_and_failed():
     assert metrics[f'startup_{NAV}_outcome'] == 'SKIPPED'
     assert metrics[f'startup_{OPT}_outcome'] == 'TIMEOUT'
     assert seq.state is State.DEGRADED_OPTIONAL      # the skipped one did not degrade anything
+
+
+# ---- a lost reply (rclpy "failed to send response (timeout)" under load) must not be taken for a failure
+
+def test_005_R36_lost_startup_reply_but_manager_became_active_is_success():
+    seq, managers, rec, clock = build({(NAV, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    assert seq.run_startup() is State.ALL_ACTIVE
+    result = next(r for r in seq.results if r.manager == NAV and r.action is Action.STARTUP)
+    assert result.outcome is Outcome.OK
+    assert any('reply' in message and NAV in message for _, message in rec.logs)
+    assert not any(code.endswith('UNAVAILABLE') for _, code in rec.notes)
+
+
+def test_005_R36_lost_startup_reply_and_manager_never_active_is_still_a_timeout():
+    seq, managers, rec, clock = build({(NAV, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    managers.active_script[NAV] = (Outcome.TIMEOUT, 5.0)
+    assert seq.run_startup() is State.DEGRADED_NAV
+    result = next(r for r in seq.results if r.manager == NAV and r.action is Action.STARTUP)
+    assert result.outcome is Outcome.TIMEOUT
+    assert clock.now <= 30.0 + 5.0 + 1e-9                      # the extra poll is bounded by reply_grace_s
+
+
+def test_005_R36_lost_core_startup_reply_is_recovered_too():
+    seq, managers, _, _ = build({(CORE, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    assert seq.run_startup() is State.ALL_ACTIVE
+
+
+def test_005_R36_a_failed_startup_reply_is_not_second_guessed():
+    seq, managers, _, _ = build({(NAV, Action.STARTUP): Outcome.FAILED})
+    assert seq.run_startup() is State.DEGRADED_NAV
+    assert managers.waits.count((NAV, 30.0)) == 0 and NAV not in dict(managers.waits)

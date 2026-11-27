@@ -145,6 +145,13 @@ class SequencerNode(Node):
             change = ChangeState.Request()
             change.transition.id = Transition.TRANSITION_DEACTIVATE
             outcome, done = self._call_once(ChangeState, f'/{name}/change_state', change, left())
+            if outcome is Outcome.TIMEOUT:
+                # the reply can be lost although the transition happened: confirm with get_state
+                self._log('warn', f'{manager}: no reply to deactivate {name}, checking its state')
+                outcome2, state = self._call_once(GetState, f'/{name}/get_state', GetState.Request(), 2.0)
+                if outcome2 is Outcome.OK and state.current_state.id != LifecycleState.PRIMARY_STATE_ACTIVE:
+                    self._log('info', f'{manager}: {name} is no longer active although the reply was lost')
+                    continue
             self._log('info', f'{manager}: deactivated {name}: {outcome.value}')
             if outcome is not Outcome.OK or not done.success:
                 result = Outcome.FAILED

@@ -155,10 +155,12 @@ class ManagerSequencer:
                  notify: Callable[[Severity, str, str], None] = _noop_notify,
                  startup_timeout_s: float = 30.0,
                  shutdown_timeout_s: float = 15.0,
-                 has_nodes: Optional[Callable[[str], bool]] = None):
+                 has_nodes: Optional[Callable[[str], bool]] = None,
+                 reply_grace_s: float = 5.0):
         """`has_nodes(manager)` says whether a non-core manager manages any node; one without nodes is skipped
         (not started, not a failure: the Nav2 manager does not answer its startup command with an empty list)."""
         self._has_nodes = has_nodes
+        self._reply_grace_s = reply_grace_s     # extra is_active poll after a startup reply timed out
         self._specs = list(specs)
         self._call = call
         self._wait_active = wait_active
@@ -243,6 +245,15 @@ class ManagerSequencer:
         deadline = t0 + self._startup_timeout_s
         outcome = self._call(spec.name, Action.STARTUP, self._startup_timeout_s)
         detail = 'startup command'
+        if outcome is Outcome.TIMEOUT:
+            # A reply can be lost under load (rclpy: "failed to send response (timeout)") although the manager did
+            # start: ask is_active before calling it a failure (a reply that arrived with success=false is not
+            # second-guessed). Bounded by reply_grace_s.
+            self._log('warn', f'{spec.name}: no reply to the startup command, polling is_active for '
+                              f'{self._reply_grace_s:.1f} s before giving up')
+            if self._wait_active(spec.name, self._reply_grace_s) is Outcome.OK:
+                self._log('info', f'{spec.name}: active although the startup reply was lost')
+                return StepResult(spec.name, Action.STARTUP, Outcome.OK, self._clock() - t0)
         if outcome is Outcome.OK:
             remaining = deadline - self._clock()
             if remaining <= 0.0:
