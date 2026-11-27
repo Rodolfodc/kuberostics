@@ -15,6 +15,7 @@ from geometry_msgs.msg import TransformStamped                  # noqa: E402
 from nav_msgs.msg import OccupancyGrid                          # noqa: E402
 from rclpy.executors import SingleThreadedExecutor              # noqa: E402
 from rclpy.parameter import Parameter                           # noqa: E402
+from rclpy.qos import qos_profile_sensor_data                   # noqa: E402
 from sensor_msgs.msg import Image                               # noqa: E402
 from visualization_msgs.msg import Marker, MarkerArray          # noqa: E402
 from vision_msgs.msg import Detection2D, Detection2DArray, ObjectHypothesisWithPose   # noqa: E402
@@ -115,5 +116,28 @@ def test_009a_R12_R13_node_projects_at_photo_stamp_and_republishes_the_whole_set
     assert (t.pose.position.x, t.pose.position.y) == pytest.approx((2.0, 3.0))
     assert spin_until(executor, lambda: any(
         {kv.key: kv.value for kv in d.status[0].values}.get('dropped_confidence') == '1' for d in diags))
+    node.destroy_node()
+    helper.destroy_node()
+
+
+def test_009a_R12_node_receives_depth_from_a_best_effort_publisher(ros):
+    """/camera_depth is `default` (reliable) in the contract, but a best-effort publisher must reach the node too."""
+    node = ProjectorNode()
+    helper = rclpy.create_node('projector_best_effort_helper')
+    pub_depth = helper.create_publisher(Image, '/camera_depth', qos_profile_sensor_data)     # BEST_EFFORT
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
+    executor.add_node(helper)
+    node.trigger_configure()
+    node.trigger_activate()
+    assert spin_until(executor, lambda: pub_depth.get_subscription_count() > 0)
+    depth = Image(height=4, width=4, encoding='32FC1', step=16, data=struct.pack('<f', 1.0) * 16)
+    depth.header.stamp.sec = 10
+
+    def cached():
+        pub_depth.publish(depth)
+        return node._depths.get(10.0, 0.05) is not None
+
+    assert spin_until(executor, cached, timeout_s=10.0)
     node.destroy_node()
     helper.destroy_node()

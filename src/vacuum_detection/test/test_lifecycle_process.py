@@ -1,0 +1,86 @@
+"""Real-process lifecycle tests of the detection nodes: the node runs as the console script does (rclpy.spin in
+main), a client drives its lifecycle services. In-process tests cannot see executor deadlocks of `main()`.
+
+Verifies 009a-R12 (projector must be activatable with no inputs) and D-26 (lifecycle nodes answer their services).
+Domain: the per-test domain of conftest.py (160-174).
+"""
+import subprocess
+import warnings
+import sys
+import time
+
+import pytest
+
+rclpy = pytest.importorskip('rclpy')
+pytest.importorskip('tf2_ros')
+from lifecycle_msgs.msg import Transition                       # noqa: E402
+from lifecycle_msgs.srv import ChangeState, GetState             # noqa: E402
+
+BOUND_S = 30.0          # generous: other test runs share the machine; a hang is unbounded
+
+
+@pytest.fixture()
+def ros():
+    rclpy.init()
+    node = rclpy.create_node('lifecycle_test_client')
+    yield node
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+@pytest.fixture()
+def process():
+    procs = []
+
+    def start(module):
+        p = subprocess.Popen([sys.executable, '-m', module], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        procs.append(p)
+        return p
+    yield start
+    for p in procs:
+        p.terminate()
+        try:
+            p.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            p.kill()
+
+
+def _call(node, client, request, bound_s=BOUND_S):
+    future = client.call_async(request)
+    end = time.monotonic() + bound_s
+    while time.monotonic() < end and not future.done():
+        rclpy.spin_once(node, timeout_sec=0.1)
+    return future.result() if future.done() else None
+
+
+def _drive(node, name, transition_id, target_label):
+    """Requests the transition until the node reports `target_label`, within BOUND_S. A request sent right after
+    service discovery can be lost (Lyrical, loaded machine), so a missing answer is retried; a hang never
+    reaches the label and fails after the bound."""
+    change = node.create_client(ChangeState, f'/{name}/change_state')
+    get = node.create_client(GetState, f'/{name}/get_state')
+    assert change.wait_for_service(timeout_sec=BOUND_S), f'{name} lifecycle services never appeared'
+    end = time.monotonic() + BOUND_S
+    sent = 0
+    while time.monotonic() < end:
+        state = _call(node, get, GetState.Request(), bound_s=3.0)
+        if state is not None and state.current_state.label == target_label:
+            return True
+        if sent:
+            warnings.warn(f'RETRY: {name} still not {target_label} after {sent} request(s): resending {transition_id}')
+        sent += 1
+        _call(node, change, ChangeState.Request(transition=Transition(id=transition_id)), bound_s=3.0)
+    return False
+
+
+@pytest.mark.parametrize('module,name', [
+    ('vacuum_detection.projector_node', 'projector'),
+    ('vacuum_detection.image_throttle_node', 'image_throttle'),
+    ('vacuum_detection.detection_selector_node', 'detection_selector'),
+])
+def test_009a_R12_node_activates_alone_with_no_inputs_and_keeps_answering(ros, process, module, name):
+    """No camera, no TF, no map: configure and activate complete within the bound and the services stay alive."""
+    proc = process(module)
+    assert _drive(ros, name, Transition.TRANSITION_CONFIGURE, 'inactive'), f'{name}: configure did not complete (hang)'
+    assert _drive(ros, name, Transition.TRANSITION_ACTIVATE, 'active'), f'{name}: activate did not complete (hang)'
+    assert proc.poll() is None
