@@ -83,7 +83,21 @@ class System:
 
     def wait_ready(self):
         """Map, TF and the fake Nav2 server discovered: the node accepts goals from here on."""
-        assert wait_for(lambda: self.node.has_map and self.node._nav.server_is_ready() and self.node._pose() is not None, 30.0)
+        def ready():
+            return self.node.has_map and self.node._nav.server_is_ready() and self.node._pose() is not None
+        # the action server flaps to "not ready" while discovery settles under load (a goal sent right after the
+        # first "ready" was rejected as "not available"): require it to hold for 1 s
+        end = time.monotonic() + 60.0
+        stable_since = None
+        while time.monotonic() < end:
+            if ready():
+                stable_since = stable_since or time.monotonic()
+                if time.monotonic() - stable_since >= 1.0:
+                    return
+            else:
+                stable_since = None
+            time.sleep(0.02)
+        raise AssertionError('map, TF and the Nav2 action server never became ready and stayed ready')
 
     def close(self):
         try:
