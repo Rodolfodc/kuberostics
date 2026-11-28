@@ -1,0 +1,101 @@
+sequenceDiagram
+  autonumber
+  %% One cleaning scenario end to end. Status on main: BUILT = implemented and tested, STUB = honors the contract
+  %% with simple behaviour, CORE = only the pure-Python core, PLANNED = not built, 3RD = third-party unchanged.
+  actor U as User
+  participant SEQ as lifecycle_sequencer (BUILT)
+  participant BEH as behaviour_server (3RD)
+  participant SUP as supervisor (BUILT)
+  participant COV as coverage_server (STUB)
+  participant ESC as escape_server (STUB)
+  participant STK as stuck_detector (STUB)
+  participant GRD as stop_guard (BUILT)
+  participant MUX as twist_mux (3RD)
+  participant WB as wheel bridge (3RD)
+  participant SIM as CoppeliaSim (host, 3RD)
+  participant SEL as detection_selector (BUILT)
+  participant PRJ as projector (CORE)
+  participant SEM as semantic node (3RD)
+  participant DCK as autodocking_server (PLANNED)
+  participant MQB as MQTT bridge and weights loader (PLANNED)
+
+  rect rgb(235,245,240)
+  Note over SEQ,GRD: 1. Bring-up, no network needed
+  SEQ->>SEQ: start lifecycle_manager_core (stop_guard first, supervisor last), wait is_active
+  SEQ->>SEQ: then lifecycle_manager_nav, then lifecycle_manager_optional (when present)
+  Note over SEQ,GRD: shutdown runs in reverse order, stop_guard is the last to go down
+  end
+
+  rect rgb(245,245,235)
+  Note over U,SIM: 2 and 3. Request, mode, submode, motion
+  U->>BEH: /myRobot/start_stop
+  BEH-->>SUP: /myRobot/behaviour/mode = CLEANING (every 0.2 s)
+  SUP->>SUP: submode NONE to COVERING
+  SUP-->>U: /myRobot/behaviour/submode = COVERING
+  SUP->>COV: action CoverRoom (goal)
+  loop 10 Hz while the goal is active
+    COV->>MUX: /myRobot/mux/coverage (Twist, priority 50)
+    MUX->>WB: /myRobot/cmd_vel (Twist, sole publisher)
+    WB->>SIM: wheel speeds via ZeroMQ :23000
+  end
+  Note over COV: stub path shown. The real coverage_server (D-24) publishes no Twist, it sends NavigateToPose goals and Nav2 controller_server drives on mux/nav (60)
+  end
+
+  rect rgb(235,240,250)
+  Note over SIM,SEM: 4. Perception, in parallel with motion
+  SIM-->>SEL: /camera RGB, compressed and throttled to 2 Hz (stamp t0) via image_throttle (BUILT)
+  Note over SEL: detector_local yolo11n (PLANNED) or detector_cloud yolo11x in K3s (PLANNED)<br/>circuit breaker, max_age_s and watermark filters, OffloadStatus at 1 Hz
+  SEL->>PRJ: /myRobot/perception/detections (header.stamp = t0)
+  Note over PRJ: depth cached at t0 stays on the robot, TF queried at t0<br/>only ProjectorCore exists, the node is PLANNED
+  PRJ->>SEM: /detections_markers (position on the map)
+  Note over SEM: room awareness: MapDiff, RoomSegmenter, RoomTracker, RoomLabeler exist only as pure cores (CORE), SLAM and nodes are PLANNED
+  end
+
+  rect rgb(250,238,238)
+  Note over STK,MUX: 5 and 6. Stuck, escape, stop
+  STK->>SUP: /myRobot/stuck (StuckEvent: NO_PROGRESS or BUMPER)
+  SUP->>SUP: submode COVERING to ESCAPING, cancels CoverRoom
+  SUP->>ESC: action Escape (goal)
+  loop while the escape runs
+    ESC->>MUX: /myRobot/mux/escape (Twist, priority 80 beats coverage 50)
+    MUX->>WB: /myRobot/cmd_vel
+  end
+  Note over ESC: the scripted escape is the base, an RL policy is a later add-on (PLANNED)
+  alt escape succeeds
+    ESC-->>SUP: result succeeded
+    SUP->>SUP: back to COVERING, new CoverRoom goal
+  else escape fails or times out
+    ESC-->>SUP: result failed (or escape_timeout_s elapsed)
+    SUP->>SUP: submode ESCAPE_FAILED, notification
+    SUP->>GRD: /myRobot/mux/lock_stop = true
+    loop 10 Hz while locked
+      GRD->>MUX: /myRobot/mux/stop (zero Twist, priority 250)
+      MUX->>WB: /myRobot/cmd_vel = zero
+    end
+    Note over MUX: twist_mux alone publishes nothing while locked, so stop_guard feeds the zero Twist through the mux<br/>only the user's /myRobot/supervisor/reset releases the lock
+  end
+  end
+
+  rect rgb(245,240,230)
+  Note over BEH,DCK: 7. Low battery, docking, charging
+  BEH-->>SUP: mode = AUTODOCKING (battery low, simulated by myrobot_server)
+  SUP->>SUP: cancels coverage, submode NONE
+  SUP->>COV: cancel CoverRoom
+  DCK->>MUX: /myRobot/mux/docking (Twist, priority 40), docking behaviour PLANNED
+  MUX->>WB: /myRobot/cmd_vel
+  BEH-->>SUP: mode = CHARGING, then CHARGED
+  Note over SUP: outside CLEANING and AUTODOCKING the submode is NONE
+  end
+
+  rect rgb(238,238,250)
+  Note over BEH,MQB: 8. Only in CHARGED: cloud sync and new policy weights (optional, PLANNED)
+  BEH-->>MQB: mode = CHARGED
+  MQB->>MQB: publish recorded stuck events (MQTT QoS 1), GET weights with If-None-Match
+  alt new approved weights
+    MQB->>ESC: load new policy weights (RL escape, PLANNED)
+  else unchanged or network down
+    Note over MQB: tries again at the next dock, the robot never waits for the cloud to clean
+  end
+  BEH-->>SUP: mode = CLEANING
+  SUP->>COV: action CoverRoom (cycle restarts)
+  end

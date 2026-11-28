@@ -1,0 +1,76 @@
+%% Built so far (tooling, specs and decisions): reflects main c48b385 (merged PRs #5 to #14, #16 to #18, #20 to #23, #25) plus open PRs #15, #26, as read on 2026-11-24. Refresh after merges.
+%% Legend: green = merged on main; amber = in an open PR (number in label); grey = planned only.
+flowchart TB
+  classDef merged fill:#d4edda,stroke:#2e7d32,color:#000
+  classDef pr fill:#fff3cd,stroke:#b58900,color:#000
+  classDef planned fill:#eeeeee,stroke:#777,color:#555
+
+  subgraph LEG["Legend"]
+    direction LR
+    L1["merged on main"]:::merged
+    L2["open PR (number)"]:::pr
+    L3["planned only"]:::planned
+  end
+
+  subgraph SPECS["Specs and decisions"]
+    direction LR
+    S000["spec 000 + contracts<br/>topics.yaml, interfaces.md<br/>edits: #9, #15, #18"]:::merged
+    S001["spec 001 skeleton<br/>edits: #9, #7, #10"]:::merged
+    S009["spec 009a offload<br/>rulings #13, transport results #18"]:::merged
+    S005["spec 005 coverage and escape<br/>D-24 Nav2 coverage, D-26 (#12)"]:::merged
+    S003["spec 003 mapping<br/>D-23 sim odometry (#12)"]:::merged
+    AMD["Art. III.2 amendment text<br/>pending the owner (#12)"]:::merged
+    S002["specs 002, 004, 006, 007,<br/>008, 009b, 010"]:::planned
+  end
+
+  subgraph TESTS["Tests (CI runs no simulator)"]
+    direction LR
+    UT["unit tests: SubmodeMachine, StopGuard,<br/>stub cores, twist_mux config"]:::merged
+    FL["node tests deterministic<br/>isolated domains (#7)"]:::merged
+    RG["regression tests: escape race,<br/>shutdown (#10)"]:::merged
+    CT["vacuum_contract_tests<br/>from topics.yaml (#6)"]:::merged
+    LT["launch_testing<br/>scenarios 1-4 (#8)"]:::merged
+    SQT["sequencer tests (#25),<br/>mapping core tests (#22)"]:::merged
+    PRB["mux_lock_probe.sh<br/>real twist_mux"]:::merged
+    DT["vacuum_detection tests:<br/>selector_core, projection_core (#11),<br/>selector node, image_throttle (#21)"]:::merged
+  end
+
+  subgraph ENV["Environment and CI"]
+    direction LR
+    TD["scripts/test-docker.sh"]:::merged
+    IMG["docker/jazzy, docker/lyrical<br/>CI matrix jazzy, lyrical (#5, #20)"]:::merged
+    SE["setup_env.sh, setup.sh<br/>deps.repos pin"]:::merged
+    RD["render-diagrams.sh<br/>mermaid-cli in Docker"]:::merged
+    NAMING["naming cleanup: descriptions<br/>instead of task IDs (#26, open)"]:::pr
+    CHAOS["tools/chaos/kill_detector.sh"]:::planned
+  end
+
+  subgraph MEAS["Measurements and checks (need simulator or cluster)"]
+    direction LR
+    SB["tools/sim_bench<br/>bench.py, inspect_scene.py<br/>--no-robot, --no-kinect (#14)"]:::merged
+    IC["ia368ii-check-docker.sh (#17)<br/>Lyrical: RcutilsLogger.warn crash"]:::merged
+    TB["transport benchmark (#16)<br/>rmw_zenoh vs zenoh-bridge"]:::merged
+  end
+
+  subgraph RES["Recorded results"]
+    direction LR
+    R1["D-11: 35.6 / 3.6 / 20.1 steps/s,<br/>RL trains in 2D env; Q-01 closed (#15, open)"]:::pr
+    R2["Q-04 partial: orchestrator ok on Lyrical (#18)"]:::merged
+    R3["Q-06: recommendation, owner decides (#18)"]:::merged
+  end
+
+  S000 --> TESTS
+  S001 --> TESTS
+  S009 --> DT
+  TD --> TESTS
+  IMG -->|"runs"| TD
+  SB --> R1
+  IC --> R2
+  TB --> R3
+  R1 --> S000
+  R2 --> S000
+  R3 --> S009
+  S005 --- S003
+  S005 --- AMD
+  S009 -.-> CHAOS
+  RD -.->|"renders docs/diagrams"| SPECS

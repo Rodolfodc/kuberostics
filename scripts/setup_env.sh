@@ -25,7 +25,11 @@ IMG_LYRICAL="ros:lyrical-ros-base"
 IMG_JAZZY_BASE="ros:jazzy-ros-base"   # same flavour as Lyrical: scripts/ia368ii-check-docker.sh --jazzy-base
 IMG_MERMAID="minlag/mermaid-cli:12.0.1"
 IMG_ZENOH_BRIDGE="eclipse/zenoh-bridge-ros2dds:1.10.2"   # transport benchmark (scripts/transport-bench.sh)
-IMAGES_ALL=("$IMG_JAZZY" "$IMG_LYRICAL" "$IMG_JAZZY_BASE" "$IMG_MERMAID" "$IMG_ZENOH_BRIDGE")
+IMG_SHELLCHECK="koalaman/shellcheck:v0.10.0"   # lint of scripts/*.sh: docker run --rm -v "$PWD/scripts":/mnt:ro $IMG_SHELLCHECK -x /mnt/<file>
+IMG_TERRAFORM="hashicorp/terraform:1.13.5"            # scripts/check-cloud.sh (TF_IMG)
+IMG_KUBECONFORM="ghcr.io/yannh/kubeconform:v0.7.0"    # scripts/check-cloud.sh (KUBECONFORM_IMG)
+IMG_PYTHON="python:3.13-slim"                         # scripts/check-cloud.sh, scripts/test-chaos-tools.sh (PY_IMG)
+IMAGES_ALL=("$IMG_JAZZY" "$IMG_LYRICAL" "$IMG_JAZZY_BASE" "$IMG_MERMAID" "$IMG_ZENOH_BRIDGE" "$IMG_SHELLCHECK" "$IMG_TERRAFORM" "$IMG_KUBECONFORM" "$IMG_PYTHON")
 # docker/jazzy and docker/lyrical build FROM the first two (T003); CI builds them, nothing extra to pull.
 
 COPPELIA_VER="V4_10_0_rev0"
