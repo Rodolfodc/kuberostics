@@ -283,12 +283,16 @@ def test_R27_telemetry_path_and_covered_grid_are_published(system):
     s = system()
     s.up()
     s.wait_ready()
-    assert wait_for(lambda: s.telemetry, 5.0)
+    assert wait_for(lambda: s.telemetry, 30.0)
     assert s.status_values()['state'] == 'idle'
+    # /myRobot/coverage/path is volatile and published once at the goal start: the probe's subscription must
+    # be matched before the goal is sent, or under load the only message is lost (failed 3 times on Jazzy)
+    assert wait_for(lambda: s.node._pub_path.get_subscription_count() >= 1, 30.0), 'path subscriber not matched'
+    assert wait_for(lambda: s.node._pub_covered.get_subscription_count() >= 1, 30.0)
     s.result(s.send())
-    assert wait_for(lambda: s.paths, 5.0)
+    assert wait_for(lambda: s.paths, 30.0)
     assert s.paths[0].header.frame_id == 'map' and s.paths[0].poses
-    assert wait_for(lambda: s.covered and max(s.covered[-1].data) == 100, 5.0)
+    assert wait_for(lambda: s.covered and max(s.covered[-1].data) == 100, 30.0)
     assert min(s.covered[-1].data) == -1
     values = s.status_values()
     assert {'goals', 'succeeded', 'failed', 'cancelled', 'skipped_waypoints', 'covered_ratio'} <= set(values)
