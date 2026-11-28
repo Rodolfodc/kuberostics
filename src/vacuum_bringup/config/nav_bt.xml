@@ -1,0 +1,23 @@
+<!--
+  Behavior tree of bt_navigator for NavigateToPose (spec 005, plan "Nav2 minimal configuration").
+  * No recovery nodes (no RecoveryNode, no Spin/BackUp/Wait/ClearCostmap): behavior_server is not launched, so
+    controller_server is the only Nav2 node that publishes velocity. A blocked waypoint fails the goal and the
+    coverage server applies its retry-once-then-skip rule (005-R20).
+  * 005-R34: every goal is bounded by the BehaviorTree.CPP `Timeout` decorator, msec = nav_goal_timeout_s * 1000
+    (180 s). On timeout the decorator halts its child, which cancels FollowPath and so stops controller_server
+    from publishing on /myRobot/mux/nav. Both distributions use BehaviorTree.CPP v4 (BTCPP_format="4"). If you
+    change nav_goal_timeout_s change msec here (test_nav_config.py checks that they agree).
+  * Replanning at 1 Hz (RateController) with the navfn planner, then FollowPath.
+-->
+<root BTCPP_format="4" main_tree_to_execute="NavigateToPoseTimed">
+  <BehaviorTree ID="NavigateToPoseTimed">
+    <Timeout msec="180000">
+      <PipelineSequence name="ComputeAndFollow">
+        <RateController hz="1.0">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        </RateController>
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+      </PipelineSequence>
+    </Timeout>
+  </BehaviorTree>
+</root>

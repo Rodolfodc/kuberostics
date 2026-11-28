@@ -1,4 +1,4 @@
-"""ManagerSequencer (T521, spec 005, 005-R35 to R37, D-26): pure Python, no ROS imports.
+"""ManagerSequencer (spec 005, 005-R35 to R37, D-26): pure Python, no ROS imports.
 
 It decides in which order the lifecycle managers are started and stopped and what a failure means. It does
 not talk to ROS and it never sleeps: the caller injects
@@ -138,6 +138,17 @@ class GuardWatch:
         return True
 
 
+def deactivation_result(outcome: Outcome, success: bool, active_after: Optional[bool]) -> Outcome:
+    """Result of one node deactivation. `outcome`/`success` come from the change_state reply; `active_after` is the
+    node's state read with get_state after a reply TIMEOUT (None: unknown or not asked). A lost reply (rclpy "failed
+    to send response (timeout)") is OK when the node is no longer active; any other non-OK reply is FAILED."""
+    if outcome is Outcome.OK:
+        return Outcome.OK if success else Outcome.FAILED
+    if outcome is Outcome.TIMEOUT and active_after is False:
+        return Outcome.OK
+    return Outcome.FAILED
+
+
 def _noop_log(level: str, message: str) -> None:
     pass
 
@@ -154,7 +165,13 @@ class ManagerSequencer:
                  log: Callable[[str, str], None] = _noop_log,
                  notify: Callable[[Severity, str, str], None] = _noop_notify,
                  startup_timeout_s: float = 30.0,
-                 shutdown_timeout_s: float = 15.0):
+                 shutdown_timeout_s: float = 15.0,
+                 has_nodes: Optional[Callable[[str], bool]] = None,
+                 reply_grace_s: float = 5.0):
+        """`has_nodes(manager)` says whether a non-core manager manages any node; one without nodes is skipped
+        (not started, not a failure: the Nav2 manager does not answer its startup command with an empty list)."""
+        self._has_nodes = has_nodes
+        self._reply_grace_s = reply_grace_s     # extra is_active poll after a startup reply timed out
         self._specs = list(specs)
         self._call = call
         self._wait_active = wait_active
@@ -208,6 +225,10 @@ class ManagerSequencer:
                 self._results.append(StepResult(spec.name, Action.STARTUP, Outcome.SKIPPED, 0.0, reason))
                 self._log('warn', f'{spec.name}: not started ({reason})')
                 continue
+            if spec.role is not Role.CORE and self._has_nodes is not None and not self._has_nodes(spec.name):
+                self._results.append(StepResult(spec.name, Action.STARTUP, Outcome.SKIPPED, 0.0, 'no nodes'))
+                self._log('info', f'{spec.name}: no nodes configured, skipped')
+                continue
             self._set_state(_STARTING[spec.role])
             self._attempted.append(spec)
             result = self._start_one(spec)
@@ -231,19 +252,49 @@ class ManagerSequencer:
         return self._state
 
     def _start_one(self, spec: ManagerSpec) -> StepResult:
+        """`startup_timeout_s` is a per-reply budget. The command may use all of it; if its reply is lost,
+        is_active is polled for `reply_grace_s` more (the manager may have started). If it is still not active the
+        request itself may have been lost (the first request after a service appears sometimes is), so the command
+        is sent ONCE more with the same budget and the same grace poll. Worst case:
+        2 * (startup_timeout_s + reply_grace_s). After a normal reply the is_active wait gets only what is left of
+        startup_timeout_s. The grace polls and the resend are skipped once an abort was requested, and
+        `wait_active` itself must return early on abort (the node's does).
+        """
         t0 = self._clock()
-        deadline = t0 + self._startup_timeout_s
+        note = ''
+        outcome, detail = self._command_and_wait(spec)
+        if outcome is Outcome.TIMEOUT and detail == 'startup command' and not self._abort:   # no reply
+            self._log('warn', f'{spec.name}: reply lost and manager not active, resending startup')
+            note = 'startup resent once'
+            outcome, detail = self._command_and_wait(spec)
+        if outcome is not Outcome.OK and note:
+            detail = f'{detail}; {note}'
+        return StepResult(spec.name, Action.STARTUP, outcome, self._clock() - t0,
+                          detail if outcome is not Outcome.OK else note)
+
+    def _command_and_wait(self, spec: ManagerSpec):
+        """One startup command and the wait for is_active; (outcome, detail). TIMEOUT means no reply and not
+        active after the grace poll (the only outcome that is worth a resend)."""
+        deadline = self._clock() + self._startup_timeout_s
         outcome = self._call(spec.name, Action.STARTUP, self._startup_timeout_s)
         detail = 'startup command'
-        if outcome is Outcome.OK:
+        if outcome is Outcome.TIMEOUT and not self._abort:
+            # A reply can be lost under load (rclpy: "failed to send response (timeout)") although the manager did
+            # start: ask is_active before calling it a failure (a reply that arrived with success=false is not
+            # second-guessed). Bounded by reply_grace_s.
+            self._log('warn', f'{spec.name}: no reply to the startup command, polling is_active for '
+                              f'{self._reply_grace_s:.1f} s before giving up')
+            if self._wait_active(spec.name, self._reply_grace_s) is Outcome.OK:
+                self._log('info', f'{spec.name}: active although the startup reply was lost')
+                return Outcome.OK, ''
+        elif outcome is Outcome.OK:
             remaining = deadline - self._clock()
             if remaining <= 0.0:
                 outcome, detail = Outcome.TIMEOUT, 'startup command used the whole timeout'
             else:
                 outcome = self._wait_active(spec.name, remaining)
                 detail = 'is_active'
-        return StepResult(spec.name, Action.STARTUP, outcome, self._clock() - t0,
-                          detail if outcome is not Outcome.OK else '')
+        return outcome, detail
 
     def _on_failure(self, spec: ManagerSpec) -> State:
         """The rule of 005-R36 for the role of the failed manager."""

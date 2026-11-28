@@ -1,0 +1,117 @@
+flowchart TB
+  %% One cleaning scenario end to end. Status of each element on main is shown in its label and colour.
+  %% Legend: BUILT = implemented and tested on main · STUB = honors the contract, simple behaviour ·
+  %% CORE = only the pure-Python core exists, no ROS node yet · PLANNED = not built · 3RD = third-party, unchanged
+
+  subgraph LEGEND["Legend"]
+    direction LR
+    L1["BUILT"]:::built
+    L2["STUB"]:::stub
+    L3["CORE only"]:::core
+    L4["PLANNED"]:::planned
+    L5["3RD party, unchanged"]:::third
+  end
+
+  USER(["User request: start cleaning"])
+
+  subgraph ROBOT["ROS 2 container · namespace /myRobot · works without network"]
+    SEQ["lifecycle_sequencer<br/>core, then nav, then optional<br/>BUILT"]:::built
+
+    subgraph ORCH["Orchestrator (IA368II)"]
+      BEH["behaviour_server<br/>mode every 0.2 s: CLEANING · AUTODOCKING · CHARGING · CHARGED · IDLE<br/>3RD"]:::third
+      BATT["myrobot_server<br/>simulated battery and charging base<br/>3RD"]:::third
+    end
+
+    SUP["supervisor (SubmodeMachine)<br/>/myRobot/behaviour/submode · /myRobot/mux/lock_stop<br/>BUILT"]:::built
+
+    subgraph ACT["Actuators (each publishes only to its own mux input)"]
+      COV["coverage_server<br/>action CoverRoom · NavigateToPose goals (D-24)<br/>stub: mux/coverage 50 (reserved)"]:::stub
+      ESC["escape_server<br/>action Escape · mux/escape 80<br/>STUB (scripted reverse and turn)"]:::stub
+      DOCK["autodocking_server<br/>mux/docking 40<br/>PLANNED (docking behaviour)"]:::planned
+      NAVC["controller_server (Nav2)<br/>mux/nav 60<br/>PLANNED (real coverage and navigation)"]:::planned
+      TELEOP["teleop<br/>mux/teleop 100<br/>3RD"]:::third
+      RLP["RL escape policy<br/>replaces the scripted escape<br/>PLANNED"]:::planned
+    end
+
+    STUCKD["stuck_detector<br/>/myRobot/stuck (StuckEvent)<br/>STUB (manual trigger service)"]:::stub
+    GUARD["stop_guard<br/>zero Twist on mux/stop 250 while lock_stop is true<br/>BUILT"]:::built
+    MUX["twist_mux<br/>stop 250 · lock 200 · teleop 100 · escape 80 · nav 60 · coverage 50 · docking 40<br/>sole publisher of /myRobot/cmd_vel (Twist)<br/>3RD, configured by us"]:::third
+    WHEEL["wheel bridge my_robot_cmd_vel_node<br/>/cmd_vel remapped<br/>vacuum_sim_bridge (D-27) or 2025S2"]:::third
+    SENS["sensor bridges<br/>/scan · /camera · /camera_depth · /myrobot/odom<br/>vacuum_sim_bridge (D-27) or 2025S2"]:::third
+
+    subgraph PERC["Perception"]
+      THR["image_throttle<br/>compressed RGB, 2 Hz<br/>BUILT"]:::built
+      DETL["detector_local<br/>yolo11n<br/>PLANNED"]:::planned
+      SELD["detection_selector<br/>circuit breaker · age and watermark filters · OffloadStatus<br/>BUILT"]:::built
+      PROJ["projector<br/>2D + depth + TF at the photo timestamp<br/>CORE only (ProjectorCore)"]:::core
+      SEM["semantic node (2025S2)<br/>consumes /detections_markers<br/>3RD"]:::third
+    end
+
+    subgraph MAP["Room awareness (mapping)"]
+      SLAM["SLAM / map<br/>PLANNED"]:::planned
+      ROOMS["MapDiff · RoomSegmenter · RoomTracker · RoomLabeler<br/>CORE only, no nodes"]:::core
+    end
+
+    MQB["MQTT bridge + weights loader<br/>lifecycle_manager_optional, only in CHARGED<br/>PLANNED"]:::planned
+  end
+
+  subgraph K3S["Local K3s cluster (optional, Art. VII)"]
+    DETC["detector_cloud<br/>yolo11x, echoes the image header<br/>PLANNED"]:::planned
+    MQ["Mosquitto · MinIO (weights)"]:::planned
+    RETRAIN["Cloud retraining<br/>PLANNED"]:::planned
+  end
+
+  subgraph HOST["Host"]
+    SIM["CoppeliaSim · House scene<br/>ZeroMQ :23000"]:::third
+  end
+
+  %% Stage 1 and 2: request, mode, submode
+  USER -->|"/myRobot/start_stop"| BEH
+  SEQ -.->|"activates managers"| SUP
+  BATT -->|"battery_state, base signals"| BEH
+  BEH -->|"mode"| SUP
+  SUP -->|"action CoverRoom"| COV
+  SUP -->|"action Escape"| ESC
+
+  %% Stage 3: motion
+  COV -.->|"NavigateToPose (D-24)"| NAVC
+  COV -->|"mux/coverage (stub only, reserved)"| MUX
+  ESC -->|"mux/escape"| MUX
+  DOCK -.->|"mux/docking"| MUX
+  NAVC -.->|"mux/nav"| MUX
+  TELEOP -->|"mux/teleop"| MUX
+  RLP -.->|"later add-on"| ESC
+  MUX -->|"/myRobot/cmd_vel"| WHEEL
+  WHEEL <-->|"ZeroMQ"| SIM
+  SIM <-->|"ZeroMQ"| SENS
+
+  %% Stage 5 and 6: stuck and stop
+  SENS -.->|"scan, odom (real detector PLANNED)"| STUCKD
+  STUCKD -->|"StuckEvent"| SUP
+  SUP -->|"lock_stop (Bool)"| GUARD
+  GUARD -->|"mux/stop 250"| MUX
+
+  %% Stage 4: perception
+  SENS -->|"/camera"| THR
+  SENS -->|"/camera"| DETL
+  THR -->|"compressed RGB (only thing that leaves the robot)"| DETC
+  DETC -->|"detections/cloud"| SELD
+  DETL -->|"detections/local"| SELD
+  SELD -->|"/myRobot/perception/detections"| PROJ
+  SENS -->|"/camera_depth stays on the robot"| PROJ
+  PROJ -->|"/detections_markers"| SEM
+  SENS -->|"/scan, odom"| SLAM
+  SLAM -.-> ROOMS
+  ROOMS -.->|"room labels"| SEM
+
+  %% Stage 8: dock and sync
+  BEH -->|"CHARGED"| MQB
+  MQB <-->|"MQTT, weights over HTTP"| MQ
+  MQ --> RETRAIN
+  MQB -.->|"new weights"| RLP
+
+  classDef built fill:#E1F5EE,stroke:#0F6E56,color:#04342C
+  classDef stub fill:#FFF3CD,stroke:#B58900,color:#000
+  classDef core fill:#DCE9F9,stroke:#2F5FA8,color:#0B2545
+  classDef planned fill:#FFFFFF,stroke:#0F6E56,stroke-dasharray:4 3,color:#04342C
+  classDef third fill:#ECEAE4,stroke:#8A8880,color:#2C2C2A

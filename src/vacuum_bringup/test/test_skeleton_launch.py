@@ -1,7 +1,7 @@
-"""T013: structure tests of launch/skeleton.launch.py (001-R01, 001-R02, 001-R12, 001-R13).
+"""Structure tests of launch/skeleton.launch.py (001-R01, 001-R02, 001-R12, 001-R13).
 
 The launch description is built, never launched: no ROS graph, no IA368II checkout and no simulator are needed.
-What really runs (is_active, mux behaviour) is verified by launch_testing in T014.
+What really runs (is_active, mux behaviour) is verified by the live-graph launch_testing tests (test_graph_*.py).
 """
 import importlib.util
 import pathlib
@@ -41,8 +41,9 @@ def nodes(entities):
     return [e for e in entities if isinstance(e, Node)]
 
 
-def by_executable(entities, executable):
-    found = [n for n in nodes(entities) if n.node_executable == executable]
+def by_executable(entities, executable, package=None):
+    found = [n for n in nodes(entities) if n.node_executable == executable
+             and (package is None or n.node_package == package)]
     assert len(found) == 1, f'expected exactly one {executable}, found {len(found)}'
     return found[0]
 
@@ -78,7 +79,7 @@ def is_conditional(node):
 def test_launch_arguments_are_declared(entities):
     """001-R01: optional blocks are switched by arguments, so the file works without IA368II or simulator."""
     declared = {e.name for e in entities if isinstance(e, DeclareLaunchArgument)}
-    assert {'with_ia368ii', 'with_wheel_bridge', 'with_teleop'} <= declared
+    assert {'with_ia368ii', 'with_wheel_bridge', 'with_teleop', 'wheel_bridge'} <= declared
 
 
 IA368II_EXECUTABLES = ['myrobot_server', 'behaviour_server', 'cleaning_server', 'autodocking_server',
@@ -148,14 +149,18 @@ def test_our_nodes_always_start(entities, package, executable):
     """001-R01, 001-R12: stop_guard in particular must never be optional (D-22)."""
     node = by_executable(entities, executable)
     assert node.node_package == package
-    assert not is_conditional(node)
+    if executable == 'coverage_server':
+        # the stub is replaced only by the real coverage_server (real_coverage:=true), never dropped
+        assert node.condition.__class__.__name__ == 'UnlessCondition'
+    else:
+        assert not is_conditional(node)
 
 
 def test_twist_mux_is_the_only_publisher_of_cmd_vel(entities):
     """Art. VI, D-03, 001-R10: only twist_mux has /myRobot/cmd_vel as an output.
 
-    This checks remap targets only. The real proof is the T005 contract test (max_publishers on the live
-    graph) and the T014 graph check.
+    This checks remap targets only. The real proof is the contract test (max_publishers on the live
+    graph) and the live-graph checks.
     """
     mux = by_executable(entities, 'twist_mux')
     assert not is_conditional(mux)
@@ -179,8 +184,15 @@ def test_every_ia368ii_publisher_of_cmd_vel_is_remapped_away(entities):
 
 def test_wheel_bridge(entities):
     """D-06, 001-R13."""
-    node = by_executable(entities, 'my_robot_cmd_vel_node')
-    assert node.node_package == 'my_robot_pkg'
+    node = by_executable(entities, 'my_robot_cmd_vel_node', 'my_robot_pkg')
+    assert ('/cmd_vel', CMD_VEL) in remaps(node)
+    assert is_conditional(node)
+
+
+def test_vacuum_wheel_bridge(entities):
+    """D-27, 001-R23: the same-name replacement of vacuum_sim_bridge, remapped to the mux output like the stock one."""
+    node = by_executable(entities, 'my_robot_cmd_vel_node', 'vacuum_sim_bridge')
+    assert name_of(node) == name_of(by_executable(entities, 'my_robot_cmd_vel_node', 'my_robot_pkg'))
     assert ('/cmd_vel', CMD_VEL) in remaps(node)
     assert is_conditional(node)
 
@@ -196,18 +208,23 @@ def test_teleop(entities):
 
 
 def test_launch_file_is_installed():
-    """setup.py installs launch/ and config/ (T013)."""
+    """setup.py installs launch/ and config/."""
     source = (PKG / 'setup.py').read_text()
     assert "'launch'" in source and "'config'" in source
     assert "launch/*.py" in source and "config/*.yaml" in source
 
 
-@pytest.mark.parametrize('ia368ii,bridge,expected', [
-    ('true', 'true', True), ('true', 'false', False), ('false', 'true', False), ('false', 'false', False)])
-def test_wheel_bridge_condition(entities, ia368ii, bridge, expected):
-    """001-R13: the bridge starts only when with_ia368ii and with_wheel_bridge are both true."""
+@pytest.mark.parametrize('ia368ii,bridge,impl,stock,vacuum', [
+    ('true', 'true', 'stock', True, False), ('true', 'false', 'stock', False, False),
+    ('false', 'true', 'stock', False, False), ('false', 'false', 'stock', False, False),
+    ('true', 'true', 'vacuum', False, True), ('false', 'true', 'vacuum', False, True),
+    ('true', 'false', 'vacuum', False, False)])
+def test_wheel_bridge_condition(entities, ia368ii, bridge, impl, stock, vacuum):
+    """001-R13, D-27: the stock bridge starts only when with_ia368ii and with_wheel_bridge are true and wheel_bridge is
+    stock; ours when with_wheel_bridge is true and wheel_bridge is vacuum. Never both."""
     context = LaunchContext()
     context.launch_configurations['with_ia368ii'] = ia368ii
     context.launch_configurations['with_wheel_bridge'] = bridge
-    condition = by_executable(entities, 'my_robot_cmd_vel_node').condition
-    assert condition.evaluate(context) is expected
+    context.launch_configurations['wheel_bridge'] = impl
+    assert by_executable(entities, 'my_robot_cmd_vel_node', 'my_robot_pkg').condition.evaluate(context) is stock
+    assert by_executable(entities, 'my_robot_cmd_vel_node', 'vacuum_sim_bridge').condition.evaluate(context) is vacuum

@@ -1,0 +1,12 @@
+# Goal
+float32 timeout_s               # 0 = parameter explore_timeout_s
+---
+# Result
+bool success
+uint32 frontiers_done
+uint32 frontiers_blacklisted
+float32 duration_s
+---
+# Feedback (1 Hz or faster, 003-R31)
+uint32 frontiers_remaining
+float32 elapsed_s

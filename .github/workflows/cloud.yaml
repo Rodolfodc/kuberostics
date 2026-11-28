@@ -1,0 +1,23 @@
+name: cloud
+# Cloud side (009a-R17): offline validation of Terraform and manifests. The ~5 GB detector image is NOT built here (local only,
+# see docs in infra/README.md); GitHub Actions on the free plan is not the place for it.
+# Separate from ci.yaml on purpose. No cluster, no apply, no secrets, no weights.
+on:
+  push:
+    paths: ['docker/detector/**', 'deploy/**', 'infra/**', 'scripts/check-cloud.sh', 'scripts/check_cloud_manifests.py',
+            'scripts/test-chaos-tools.sh', 'tools/chaos/**', 'tools/tf.sh', 'compose.yaml', '.github/workflows/cloud.yaml']
+  pull_request:
+    paths: ['docker/detector/**', 'deploy/**', 'infra/**', 'scripts/check-cloud.sh', 'scripts/check_cloud_manifests.py',
+            'scripts/test-chaos-tools.sh', 'tools/chaos/**', 'tools/tf.sh', 'compose.yaml', '.github/workflows/cloud.yaml']
+permissions:
+  contents: read
+jobs:
+  manifests:
+    name: terraform and manifests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Terraform fmt, validate, render, policy checks, kubeconform
+        run: scripts/check-cloud.sh
+      - name: Chaos analysis unit tests
+        run: scripts/test-chaos-tools.sh
