@@ -56,3 +56,24 @@ stays reserved for the stub. It publishes `/myRobot/coverage/path`, `/myRobot/co
   default and is kept free.
 
 Test: `cd src/vacuum_coverage && PYTHONPATH=../vacuum_mapping python3 -m pytest test`.
+
+## `stuck_detector` and `escape_server` nodes (T508, T509, T513)
+
+Real nodes behind the stubs of `vacuum_stubs`, same node names, topics, action and service (005-R26).
+`launch/stuck_escape.launch.py` runs the pair alone (`autostart:=false` leaves them unconfigured for
+`lifecycle_manager_core`); it sets `escape_server` `outcome: auto` (005-R33). `skeleton.launch.py` is not wired yet.
+
+- `stuck_detector` (`StuckCore` + `core/sensor_cache.py`): command on `/myRobot/cmd_vel`, odometry, laser, TF
+  `map -> base_link` (odometry pose plus a WARN when TF is missing), optional bumper, `~/trigger` kept. Parameters:
+  the `stuck_detector` block of the contract. Publishes nothing but `StuckEvent` and telemetry.
+- `escape_server` (`EscapeSession` in `core/escape_session.py` around `EscapeScript`): publishes ONLY on
+  `/myRobot/mux/escape` at `publish_rate_hz`; front and rear clearance from the live `/scan`; the scan geometry is
+  the live laser's (full circle from -pi if none was received). Goal timeout `goal.timeout_s` or
+  `default_timeout_s`. No odometry (or older than 1 s) fails the goal without driving blind.
+- Goal status: success and failure are both `SUCCEEDED` with `result.success`; cancel is `CANCELED`;
+  deactivation and shutdown are `ABORTED`. Every end publishes one zero `Twist` (only if the robot was commanded)
+  and then goes silent; `twist_mux` releases the input at its 0.5 s timeout.
+- `outcome`: `auto` (script) or the stub behaviours `succeed`, `fail`, `hang` (reverse, turn, then the outcome;
+  `hang` holds a zero command until cancel or timeout).
+- Tests use ROS domains 1-5 (this package), one context per test, serialized by colcon with the other tests of the
+  package; `test/world_fixtures.py` is a fake odometry and laser world that obeys only `mux/escape`.
