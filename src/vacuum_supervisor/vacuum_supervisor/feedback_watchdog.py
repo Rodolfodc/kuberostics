@@ -83,6 +83,10 @@ class CancelWindow:
     def done(self) -> None:
         self._deadline = None
 
+    def holds(self, now: float) -> bool:
+        """True while a new goal must wait: the cancel is being delivered and the window is not over."""
+        return self._deadline is not None and now <= self._deadline
+
     def should_try(self, now: float) -> bool:
         """True while the caller must still try. When the window is over, logs once and returns False."""
         if self._deadline is None:

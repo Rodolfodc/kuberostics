@@ -60,3 +60,19 @@ def test_005_R34_cancel_window_retries_until_done_or_expired():
     assert c.should_try(21.0)
     assert not c.should_try(21.1)                  # expired: gives up
     assert not c.pending
+
+
+# --- 003-R31, 005-R34: no new coverage goal while a cancel-all of /navigate_to_pose is being delivered ---------
+def test_003_R31_cancel_window_holds_new_goals_until_done():
+    w = CancelWindow(1.0)
+    assert not w.holds(0.0)
+    w.start(10.0)
+    assert w.holds(10.0) and w.holds(10.9)
+    w.done()
+    assert not w.holds(10.2)
+
+
+def test_003_R31_cancel_window_stops_holding_after_the_window_even_if_never_answered():
+    w = CancelWindow(1.0)
+    w.start(10.0)
+    assert not w.holds(11.1)          # nav_cancel_s elapsed: the retry is over, the goal may go
