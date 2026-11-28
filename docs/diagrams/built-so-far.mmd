@@ -30,8 +30,8 @@ flowchart TB
       direction LR
       LMC["lifecycle_manager_core"]:::merged
       SEQ{{"lifecycle_sequencer<br/>(#25, D-26)<br/>opt-in: with_sequencer, default false"}}:::merged
-      LMN["lifecycle_manager_nav<br/>autostart false, node list empty (#25)"]:::merged
-      LMO["lifecycle_manager_optional<br/>autostart false, node list empty until spec 009b (#25)"]:::merged
+      LMN["lifecycle_manager_nav<br/>autostart false, planner, controller, bt_navigator<br/>launched with nav:=true"]:::merged
+      LMO["lifecycle_manager_optional<br/>not launched while its node list is empty<br/>(until spec 009b)"]:::merged
       MQB["MQTT bridge<br/>optional, spec 009b"]:::planned
     end
 

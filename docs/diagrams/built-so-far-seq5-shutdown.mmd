@@ -3,13 +3,13 @@ sequenceDiagram
   autonumber
   participant L as launch (Ctrl-C or SIGINT)
   participant SQ as lifecycle_sequencer (built, opt-in)
-  participant OP as lifecycle_manager_optional (built, empty list)
-  participant NV as lifecycle_manager_nav (built, empty list)
+  participant OP as lifecycle_manager_optional (not launched while empty)
+  participant NV as lifecycle_manager_nav (built, nav:=true)
   participant CO as lifecycle_manager_core (built)
   participant M as twist_mux
 
   L->>SQ: shutdown requested
-  SQ->>OP: deactivate and clean up (cloud, MQTT)
+  SQ->>OP: deactivate and clean up (cloud, MQTT, only when launched)
   OP-->>SQ: done, a failure does not stop the sequence
   SQ->>NV: deactivate planner, controller_server, bt_navigator
   Note over NV,M: controller_server stops publishing on mux/nav before the supervisor goes down
