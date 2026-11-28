@@ -28,7 +28,7 @@ from vacuum_detection.detection_set import DetectionSet
 from vacuum_detection.marker_spec import FRAME, MarkerSpec
 from vacuum_detection.projection_core import ProjectorCore, Transform
 from vacuum_detection.projector_pipeline import ProjectionPipeline
-from vacuum_detection.ros_common import build_diagnostics, stamp_to_sec
+from vacuum_detection.ros_common import QOS_SENSOR, build_diagnostics, stamp_to_sec
 from vacuum_detection.stamp_cache import StampCache
 
 
@@ -119,13 +119,16 @@ class ProjectorNode(LifecycleNode):
         self._tolerance = float(p('depth_tolerance_s'))
         self._window = int(p('depth_window_px'))
         self.tf_buffer = Buffer()
-        self._tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
+        # node=None: the listener owns a private node and spins it in its own thread. Passing `self` with
+        # spin_thread=True put the lifecycle node in two executors (the listener's and rclpy.spin in main), and
+        # on_activate, which creates timers, then hung with the lifecycle services unanswered.
+        self._tf_listener = TransformListener(self.tf_buffer, None, spin_thread=True)
         self._pub = self.create_lifecycle_publisher(MarkerArray, p('output_topic'), 10)
         self._pub_telemetry = self.create_lifecycle_publisher(
             DiagnosticArray, '/myRobot/telemetry/projector', 10)
         self._subs = [
             self.create_subscription(Detection2DArray, p('detections_topic'), self._on_detections, 10),
-            self.create_subscription(Image, p('depth_topic'), self._on_depth, 10),
+            self.create_subscription(Image, p('depth_topic'), self._on_depth, QOS_SENSOR),
             self.create_subscription(OccupancyGrid, p('map_topic'), self._on_map, 10),
         ]
         log.info('configured')
@@ -155,10 +158,31 @@ class ProjectorNode(LifecycleNode):
             self.destroy_subscription(s)
         self.destroy_publisher(self._pub)
         self.destroy_publisher(self._pub_telemetry)
-        self._tf_listener = None
+        self._stop_tf_listener()
         self.tf_buffer = None
         self._pipeline = None
         return TransitionCallbackReturn.SUCCESS
+
+    def _stop_tf_listener(self) -> None:
+        """Stops the listener thread and node. `executor` and `dedicated_listener_thread` are tf2_ros attributes
+        (present on Jazzy and Lyrical, not a documented API): a missing one is logged, never an error."""
+        listener, self._tf_listener = getattr(self, '_tf_listener', None), None
+        if listener is None:
+            return
+        log = self.get_logger()
+        executor = getattr(listener, 'executor', None)
+        thread = getattr(listener, 'dedicated_listener_thread', None)
+        if executor is None or thread is None:
+            log.warning('tf2_ros listener has no executor/thread attribute: relying on its own cleanup')
+        try:
+            if executor is not None:
+                executor.shutdown()
+            if thread is not None:
+                thread.join(timeout=5.0)
+            listener.unregister()
+            listener.node.destroy_node()
+        except Exception as exc:                 # noqa: BLE001 - cleanup must not fail the transition
+            log.warning(f'tf listener cleanup incomplete: {exc}')
 
     # --- inputs -------------------------------------------------------------------------------
     def _is_mapped(self, x: float, y: float) -> bool:

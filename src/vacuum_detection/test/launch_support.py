@@ -36,7 +36,7 @@ def isolate_environment() -> None:
     os.environ['ROS_DOMAIN_ID'] = str(DOMAIN)
 
 
-def launch_description(offload: bool) -> LaunchDescription:
+def launch_description(offload: bool, extra: dict = None) -> LaunchDescription:
     source = os.path.join(get_package_share_directory('vacuum_detection'), 'launch', 'detection.launch.py')
     return LaunchDescription([
         # actions, not os.environ: launch_testing restores the environment after generate_test_description
@@ -44,7 +44,7 @@ def launch_description(offload: bool) -> LaunchDescription:
         SetEnvironmentVariable('ROS_AUTOMATIC_DISCOVERY_RANGE', 'LOCALHOST'),
         SetEnvironmentVariable('ROS_LOCALHOST_ONLY', '0'),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(source), launch_arguments={
-            'offload': 'true' if offload else 'false', 'backend': 'null'}.items()),
+            'offload': 'true' if offload else 'false', 'backend': 'null', **(extra or {})}.items()),
         ReadyToTest(),
     ])
 
