@@ -42,7 +42,9 @@ k3d cluster list kuberostics >/dev/null 2>&1 || "$K" up
 [[ -f "$REPO/.k3s/kubeconfig" ]] || "$K" up
 # Only the bench image is imported: importing the multi-arch bridge image fails in ctr; the Pod pulls it instead.
 k3d image import -c kuberostics "$IMG" >/dev/null
-sed "s#transport-bench:lyrical#$IMG#" "$REPO/deploy/transport-bench/k8s/transport-bench.yaml" | "$K" apply -f - >/dev/null
+# Rewrite the image tag and the ROS_DISTRO the cloud bridge announces (both are "lyrical" in the manifest).
+sed -e "s#transport-bench:lyrical#$IMG#" -e "s#{name: ROS_DISTRO, value: lyrical}#{name: ROS_DISTRO, value: $DISTRO}#" \
+  "$REPO/deploy/transport-bench/k8s/transport-bench.yaml" | "$K" apply -f - >/dev/null
 NODE_IP="$(docker inspect -f '{{(index .NetworkSettings.Networks "k3d-kuberostics").IPAddress}}' k3d-kuberostics-server-0)"
 echo "   node IP $NODE_IP"
 

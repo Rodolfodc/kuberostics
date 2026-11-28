@@ -1,4 +1,4 @@
-"""T909: ThrottleCore tests (rate limiting by photo stamp), simulated clock. No ROS.
+"""ThrottleCore tests (rate limiting by photo stamp), simulated clock. No ROS.
 
 009a-R03: the image sent to the cloud leaves at `image_rate_hz`. 009a-R11: the rate does not depend on the
 breaker state, so the core has no notion of state at all (the probe keeps the same rate by construction).

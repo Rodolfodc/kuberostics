@@ -16,9 +16,12 @@ unresolved); the segmenter uses only numpy and plain breadth-first searches.
 | `core/room_segmenter.py` | `RoomSegmenter.segment(raster)` -> raw label raster (erosion, seeds, nearest-seed growth) | T306/T313, 003-R16, R17 |
 | `core/room_tracker.py` | `RoomTracker.track(previous, raw_labels, ...)` -> `TrackedMap` with stable indexes | T306/T313, 003-R19, R20 |
 | `core/room_labeler.py` | `RoomLabeler.label_rooms(...)` weighted vote of observations -> rooms | T307/T314, 003-R21 |
+| `core/frontier_finder.py` | `FrontierFinder.find(grid, robot_xy, blacklist)` -> ordered `Frontier(centroid, size)`; uses `vacuum_grid.GridView` | T305/T309, 003-R09 |
+| `core/marker_observations.py` | `ObservationBuffer`: `/detections_markers` markers -> `Observation`s keyed by marker id (republish-safe) | T314, 003-R22 |
+| `config/room_rules.yaml` | placeholder class -> room label table (real classes come with spec 004) | T314, 003-R21 |
 | `map_io.py` | nav2 `map.yaml` + `.pgm` <-> `Raster` | 003-R33, R34 |
 | `rooms_io.py` | `<map>_rooms.yaml` and `room_rules.yaml` <-> dataclasses | 003-R21, R23, R30 |
-| `map_diff_cli.py` | `ros2 run vacuum_mapping map_diff <committed.yaml> <new.yaml> [-o report.md]` | T325 |
+| `map_diff_cli.py` | `ros2 run vacuum_mapping map_diff <committed.yaml> <new.yaml> [-o report.md]` | 003-R34 |
 
 Rules followed: the `core/` modules never read files, topics or clocks, hold no global state, and log
 through an injected `log(str)` callable (default: drop). Every result is an explicit frozen dataclass.
@@ -78,7 +81,7 @@ Test names carry the requirement id (`test_003_R17_...`). Test grids are tiny sy
 
 - `map_io.read_map` follows the thresholds of the file, except that pixel 205 (the `map_saver` unknown grey)
   is always unknown in non-negated maps; `write_map` writes the standard 0.65 / 0.25 thresholds.
-- Requirement gap for node task T313: `RoomTracker` can only match rooms when the previous and the new label
+- Requirement gap for the room tracker node: `RoomTracker` can only match rooms when the previous and the new label
   rasters have the same shape. When the map grows (new shape) it logs a WARNING and every room gets a new
   index, losing labels. Architect to rule whether to match by world-coordinate centroid; not implemented.
 - `MapDiff` distance is O(N * M) in occupied cells (see its docstring).
@@ -89,8 +92,19 @@ Test names carry the requirement id (`test_003_R17_...`). Test grids are tiny sy
   and vote inflation when the same object is detected repeatedly across frames (no de-duplication).
 - `MapDiff`: which resolution to compare at when the two resolutions differ (now: the finer one).
 
+## Exploration (optional and late)
+
+`exploration_server` (`exploration_server_node.py`, core `ExplorationSession`) serves `/myRobot/explore` and
+sends frontiers to Nav2 as `NavigateToPose` goals. It is NOT in any default launch; run it alone with
+`ros2 launch vacuum_mapping exploration.launch.py [autostart:=true] [map_loaded:=false]`.
+Assumptions not in the spec text: "frontiers seen" counts distinct frontiers (merged within 0.3 m), blacklisted
+ones included; a frontier that Nav2 reaches but that is still a frontier is blacklisted after 3 reaches
+(`max_reaches`, constructor argument, not a node parameter). The kill test (`test_exploration_kill.py`) uses a
+stand-in for the supervisor watchdog (005-R34) until the supervisor handles `explore`.
+
 ## Not here yet
 
-`FrontierFinder` and `GridView` (T305, T309; they belong in the shared `vacuum_grid` package), all nodes,
-`config/room_rules.yaml`, `config/mapping.yaml`, `maps/`. The interfaces (`Room`, `RoomArray`, ...) are
-mirrored by the plain dataclasses in `core/types.py` until the contract change is applied.
+The nodes `odom_tf_bridge`, `config/mapping.yaml`, `maps/` and the mapping launch file.
+The interfaces (`Room`, `RoomArray`, `Explore`, `SetRoomLabel`) are imported from `vacuum_interfaces`
+(the nodes use them); `core/types.py` keeps plain-dataclass mirrors for the pure cores. `GridView` lives in the shared package `src/vacuum_grid` (no ROS); the
+duplicate cell arithmetic of `Raster` is pinned to it by `test/test_grid_conventions.py` and can be merged later.

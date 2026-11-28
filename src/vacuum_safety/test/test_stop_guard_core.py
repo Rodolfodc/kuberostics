@@ -1,4 +1,4 @@
-"""T017: StopGuard tests (spec 001, Q-08 / D-22). Pure Python, no ROS.
+"""StopGuard tests (spec 001, Q-08 / D-22). Pure Python, no ROS.
 
 The guard turns the stop lock into an explicit zero-velocity command, because twist_mux publishes
 nothing while locked (001-R10, 001-R19).

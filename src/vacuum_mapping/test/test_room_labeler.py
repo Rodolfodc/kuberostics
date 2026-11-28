@@ -1,4 +1,4 @@
-"""T307: RoomLabeler tests (003-R21). Two rooms on a 1 m grid: room 1 is x in [0, 4), room 2 is x in [4, 8)."""
+"""RoomLabeler tests (003-R21). Two rooms on a 1 m grid: room 1 is x in [0, 4), room 2 is x in [4, 8)."""
 import dataclasses
 
 import numpy as np
