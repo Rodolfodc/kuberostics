@@ -1,7 +1,9 @@
-# lifecycle_sequencer (T521, 005-R35, R37): order and timeouts of the manager sequence. Declared in
+# lifecycle_sequencer (005-R35, R37): order and timeouts of the manager sequence. Declared in
 # specs/000-system/contracts/topics.yaml.
 lifecycle_sequencer:
   ros__parameters:
-    managers: [lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional]
+    # Only managers that have nodes (a Nav2 manager with node_names [] aborts); skeleton.launch.py overrides this list
+    # (core only without nav:=true). lifecycle_manager_optional joins when spec 009 gives it nodes.
+    managers: [lifecycle_manager_core, lifecycle_manager_nav]
     manager_startup_timeout_s: 30.0
     manager_shutdown_timeout_s: 15.0

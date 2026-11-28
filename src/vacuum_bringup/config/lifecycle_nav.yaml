@@ -1,8 +1,11 @@
-# lifecycle_manager_nav (T521, 005-R35, Q-09): planner_server, controller_server, bt_navigator (T510 fills the
-# list in; until then the manager is empty and trivially active). Started by lifecycle_sequencer, never by itself
+# lifecycle_manager_nav (005-R35, Q-09): controller_server, planner_server, bt_navigator (same list as NAV_NODES of nav.launch.py, which
+# skeleton.launch.py includes with nav:=true). Started by lifecycle_sequencer, never by itself
 # (autostart: false), and only after lifecycle_manager_core is active.
 lifecycle_manager_nav:
   ros__parameters:
     autostart: false
+    # 0.0 on purpose: lifecycle_sequencer checks the managers only at startup (005-R36), so a bond break at run time
+    # would reset the Nav2 nodes while the sequencer still reports ALL_ACTIVE; and a 4 s bond on a loaded runner or
+    # the 0.09x simulator can break spuriously. A dead Nav2 node is safe anyway (no goal, the mux input times out).
     bond_timeout: 0.0
-    node_names: []
+    node_names: [controller_server, planner_server, bt_navigator]

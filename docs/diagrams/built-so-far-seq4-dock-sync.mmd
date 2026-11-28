@@ -1,0 +1,31 @@
+%% Sequence 4: end of cleaning, docking, sync at the base. Mechanism of the return (Q-12) is a candidate and unverified. Cloud side is spec 009b, planned; sync diagram f5-dock-sync.mmd.
+sequenceDiagram
+  autonumber
+  participant S as supervisor (built)
+  participant B as behaviour_server (IA368II)
+  participant A as autodocking_server (IA368II)
+  participant M as twist_mux
+  participant Y as myrobot_server (simulated battery and base, D-08)
+  participant Q as MQTT bridge (PLANNED, optional manager)
+  participant K as Mosquitto and MinIO on K3s (PLANNED)
+  participant P as escape policy (PLANNED, spec 008)
+
+  S-->>S: cover_room result arrives, Notification COVERAGE_DONE or COVERAGE_FAILED, submode NONE (005-R30)
+  S->>B: request docking without extending Mode (Q-12, candidate /myRobot/start_stop stop, unverified)
+  B-->>S: /myRobot/behaviour/mode = AUTODOCKING
+  Y-->>A: /myRobot/charging_base/strengthSignal and relativeAngle
+  A->>M: /myRobot/mux/docking Twist (priority 40)
+  Note over S,M: a StuckEvent in AUTODOCKING also triggers escape (001-R07)
+  B-->>S: mode = CHARGING, battery_state rises
+  B-->>S: mode = CHARGED
+  Note over Q,P: Art. VII, cloud is optional, the robot already cleaned without it
+  Q->>K: publish recorded stuck events (MQTT QoS 1)
+  K-->>Q: PUBACK
+  Q->>K: GET weights, If-None-Match current ETag
+  alt unchanged
+    K-->>Q: 304 Not Modified
+  else new approved weights
+    K-->>Q: 200 weights and new ETag
+    Q->>P: reload weights, only while mode is CHARGED
+  end
+  Note over Q,K: network failure means retry at the next dock, the robot never waits for the cloud

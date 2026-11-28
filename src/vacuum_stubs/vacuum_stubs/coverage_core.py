@@ -1,4 +1,4 @@
-"""Pure logic of the coverage_server stub (T010, 001-R06). No ROS imports (D-18)."""
+"""Pure logic of the coverage_server stub (001-R06). No ROS imports (D-18)."""
 from typing import Tuple
 
 MAX_FAKE_RATIO = 0.99     # a stub never claims the room is finished

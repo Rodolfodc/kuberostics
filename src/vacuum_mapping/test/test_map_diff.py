@@ -1,4 +1,4 @@
-"""T325: MapDiff tests (003-R34), on small synthetic grids. No ROS, no files."""
+"""MapDiff tests (003-R34), on small synthetic grids. No ROS, no files."""
 import dataclasses
 
 import numpy as np

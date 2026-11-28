@@ -1,4 +1,4 @@
-"""T521: 005-R39 (and the static part of 005-R35): every node of skeleton.launch.py that is not on the plain list
+"""Node classification test: 005-R39 (and the static part of 005-R35): every node of skeleton.launch.py that is not on the plain list
 (config/node_classification.yaml, the copy of docs/lifecycle-managers.md) must be a lifecycle node named in the
 node_names of a lifecycle manager config. The launch description is built, never launched.
 """
@@ -80,7 +80,7 @@ def test_005_R35_manager_configs_exist_and_only_the_core_autostarts_alone(manage
 def test_005_R35_the_sequencer_parameters_match_the_manager_roles():
     from vacuum_bringup.manager_sequencer import MANAGER_ROLES
     params = load('lifecycle_sequencer.yaml')['lifecycle_sequencer']['ros__parameters']
-    assert params['managers'] == ['lifecycle_manager_core', 'lifecycle_manager_nav', 'lifecycle_manager_optional']
+    assert params['managers'] == ['lifecycle_manager_core', 'lifecycle_manager_nav']
     assert set(params['managers']) <= set(MANAGER_ROLES)
     assert params['manager_startup_timeout_s'] == 30.0
     assert params['manager_shutdown_timeout_s'] == 15.0

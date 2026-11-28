@@ -1,4 +1,4 @@
-"""ManagerSequencer (T521, spec 005, 005-R35 to R37, D-26): pure Python, no ROS imports.
+"""ManagerSequencer (spec 005, 005-R35 to R37, D-26): pure Python, no ROS imports.
 
 It decides in which order the lifecycle managers are started and stopped and what a failure means. It does
 not talk to ROS and it never sleeps: the caller injects
@@ -154,7 +154,13 @@ class ManagerSequencer:
                  log: Callable[[str, str], None] = _noop_log,
                  notify: Callable[[Severity, str, str], None] = _noop_notify,
                  startup_timeout_s: float = 30.0,
-                 shutdown_timeout_s: float = 15.0):
+                 shutdown_timeout_s: float = 15.0,
+                 has_nodes: Optional[Callable[[str], bool]] = None,
+                 reply_grace_s: float = 5.0):
+        """`has_nodes(manager)` says whether a non-core manager manages any node; one without nodes is skipped
+        (not started, not a failure: the Nav2 manager does not answer its startup command with an empty list)."""
+        self._has_nodes = has_nodes
+        self._reply_grace_s = reply_grace_s     # extra is_active poll after a startup reply timed out
         self._specs = list(specs)
         self._call = call
         self._wait_active = wait_active
@@ -208,6 +214,10 @@ class ManagerSequencer:
                 self._results.append(StepResult(spec.name, Action.STARTUP, Outcome.SKIPPED, 0.0, reason))
                 self._log('warn', f'{spec.name}: not started ({reason})')
                 continue
+            if spec.role is not Role.CORE and self._has_nodes is not None and not self._has_nodes(spec.name):
+                self._results.append(StepResult(spec.name, Action.STARTUP, Outcome.SKIPPED, 0.0, 'no nodes'))
+                self._log('info', f'{spec.name}: no nodes configured, skipped')
+                continue
             self._set_state(_STARTING[spec.role])
             self._attempted.append(spec)
             result = self._start_one(spec)
@@ -235,6 +245,15 @@ class ManagerSequencer:
         deadline = t0 + self._startup_timeout_s
         outcome = self._call(spec.name, Action.STARTUP, self._startup_timeout_s)
         detail = 'startup command'
+        if outcome is Outcome.TIMEOUT:
+            # A reply can be lost under load (rclpy: "failed to send response (timeout)") although the manager did
+            # start: ask is_active before calling it a failure (a reply that arrived with success=false is not
+            # second-guessed). Bounded by reply_grace_s.
+            self._log('warn', f'{spec.name}: no reply to the startup command, polling is_active for '
+                              f'{self._reply_grace_s:.1f} s before giving up')
+            if self._wait_active(spec.name, self._reply_grace_s) is Outcome.OK:
+                self._log('info', f'{spec.name}: active although the startup reply was lost')
+                return StepResult(spec.name, Action.STARTUP, Outcome.OK, self._clock() - t0)
         if outcome is Outcome.OK:
             remaining = deadline - self._clock()
             if remaining <= 0.0:

@@ -1,7 +1,7 @@
 name: ci
+# Manual fallback only: the automatic check is the local CI (scripts/ci-local.sh, status context ci/local).
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -17,13 +17,16 @@ jobs:
       - name: Build the ${{ matrix.distro }} image
         run: docker build -t vacuum-ci:${{ matrix.distro }} docker/${{ matrix.distro }}
       # Same logic as local runs: rosdep install, colcon build, colcon test; no CoppeliaSim.
+      # On failure the job log prints, per failed test, the tail of its captured output plus the repro command.
       - name: Build and test
         run: ROS_IMAGE=vacuum-ci:${{ matrix.distro }} TEST_OUT="$RUNNER_TEMP/test-out" scripts/test-docker.sh ${{ matrix.distro }}
-      # JUnit XML, colcon test logs and the failing-test dump, to diagnose intermittent failures.
-      - name: Upload test results
+      # Failure diagnostics: summary.txt, console.log, environment.txt (cpus, load, RMW, ROS_DOMAIN_ID, ros2 doctor),
+      # JUnit XML, colcon log/ (per-package stdout_stderr), ROS node logs. Paths redacted by the scripts. Never in git.
+      - name: Upload failure diagnostics
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: test-results-${{ matrix.distro }}
           path: ${{ runner.temp }}/test-out
+          retention-days: 14
           if-no-files-found: warn

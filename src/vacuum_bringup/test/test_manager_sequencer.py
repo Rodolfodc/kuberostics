@@ -1,4 +1,4 @@
-"""Unit tests of ManagerSequencer (T521, spec 005, D-26): pure Python, simulated clock, fake managers.
+"""Unit tests of ManagerSequencer (spec 005, D-26): pure Python, simulated clock, fake managers.
 
 Every test name cites the requirement it verifies (Art. VIII).
 """
@@ -117,10 +117,11 @@ def test_005_R35_wait_budget_is_what_is_left_of_the_startup_timeout_after_the_ca
     assert managers.calls[0][2] == pytest.approx(30.0)
 
 
-def test_005_R35_a_call_that_takes_the_whole_timeout_leaves_no_wait_and_fails_the_step():
+def test_005_R35_a_call_that_takes_the_whole_timeout_gets_only_the_grace_poll_and_fails_the_step():
     seq, managers, _, _ = build({(NAV, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    managers.active_script[NAV] = Outcome.TIMEOUT
     seq.run_startup()
-    assert NAV not in dict(managers.waits)
+    assert dict(managers.waits)[NAV] == pytest.approx(5.0)          # reply_grace_s, not the (used up) timeout
     assert next(r for r in seq.results if r.manager == NAV).outcome is Outcome.TIMEOUT
 
 
@@ -370,3 +371,90 @@ def test_005_R36_stop_guard_lost_reported_before_startup_is_applied_after_it():
     assert managers.calls == []
     seq.run_startup()
     assert (NAV, Action.PAUSE) in pairs(managers)
+
+
+def build_with_empty(empty):
+    clock = FakeClock()
+    managers = FakeManagers(clock)
+    rec = Recorder()
+    seq = ManagerSequencer(default_specs([CORE, NAV, OPT]), managers.call, managers.wait_active, clock,
+                           rec.log, rec.notify, has_nodes=lambda manager: manager not in empty)
+    return seq, managers, rec
+
+
+def test_005_R35_a_manager_without_nodes_is_skipped_and_is_not_a_failure():
+    seq, managers, rec = build_with_empty({NAV, OPT})
+    assert seq.run_startup() is State.ALL_ACTIVE
+    assert startups(managers) == [CORE]
+    assert dict(managers.waits).keys() == {CORE}
+    skipped = [r for r in seq.results if r.outcome is Outcome.SKIPPED]
+    assert [r.manager for r in skipped] == [NAV, OPT] and all('no nodes' in r.detail for r in skipped)
+    assert not any(code.endswith('UNAVAILABLE') for _, code in rec.notes)
+    assert any(f'{NAV}: no nodes configured, skipped' in message for _, message in rec.logs)
+
+
+def test_005_R35_an_empty_manager_in_the_middle_does_not_block_the_next_one():
+    seq, managers, _ = build_with_empty({NAV})
+    assert seq.run_startup() is State.ALL_ACTIVE
+    assert startups(managers) == [CORE, OPT]
+
+
+def test_005_R37_a_skipped_manager_is_not_shut_down():
+    seq, managers, _ = build_with_empty({OPT})
+    seq.run_startup()
+    seq.run_shutdown()
+    assert (OPT, Action.SHUTDOWN) not in pairs(managers)
+
+
+def test_005_R36_the_core_manager_is_never_skipped():
+    seq, managers, _ = build_with_empty({CORE})
+    seq.run_startup()
+    assert startups(managers)[0] == CORE
+
+
+def test_005_R35_without_has_nodes_every_manager_is_started_as_before():
+    seq, managers, _, _ = build()
+    assert seq.run_startup() is State.ALL_ACTIVE
+    assert startups(managers) == [CORE, NAV, OPT]
+
+
+def test_005_R35_telemetry_tells_skipped_from_active_and_failed():
+    seq, managers, _ = build_with_empty({NAV})
+    managers.active_script[OPT] = Outcome.TIMEOUT
+    seq.run_startup()
+    metrics = seq.metrics()
+    assert metrics[f'startup_{CORE}_outcome'] == 'OK'
+    assert metrics[f'startup_{NAV}_outcome'] == 'SKIPPED'
+    assert metrics[f'startup_{OPT}_outcome'] == 'TIMEOUT'
+    assert seq.state is State.DEGRADED_OPTIONAL      # the skipped one did not degrade anything
+
+
+# ---- a lost reply (rclpy "failed to send response (timeout)" under load) must not be taken for a failure
+
+def test_005_R36_lost_startup_reply_but_manager_became_active_is_success():
+    seq, managers, rec, clock = build({(NAV, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    assert seq.run_startup() is State.ALL_ACTIVE
+    result = next(r for r in seq.results if r.manager == NAV and r.action is Action.STARTUP)
+    assert result.outcome is Outcome.OK
+    assert any('reply' in message and NAV in message for _, message in rec.logs)
+    assert not any(code.endswith('UNAVAILABLE') for _, code in rec.notes)
+
+
+def test_005_R36_lost_startup_reply_and_manager_never_active_is_still_a_timeout():
+    seq, managers, rec, clock = build({(NAV, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    managers.active_script[NAV] = (Outcome.TIMEOUT, 5.0)
+    assert seq.run_startup() is State.DEGRADED_NAV
+    result = next(r for r in seq.results if r.manager == NAV and r.action is Action.STARTUP)
+    assert result.outcome is Outcome.TIMEOUT
+    assert clock.now <= 30.0 + 5.0 + 1e-9                      # the extra poll is bounded by reply_grace_s
+
+
+def test_005_R36_lost_core_startup_reply_is_recovered_too():
+    seq, managers, _, _ = build({(CORE, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    assert seq.run_startup() is State.ALL_ACTIVE
+
+
+def test_005_R36_a_failed_startup_reply_is_not_second_guessed():
+    seq, managers, _, _ = build({(NAV, Action.STARTUP): Outcome.FAILED})
+    assert seq.run_startup() is State.DEGRADED_NAV
+    assert managers.waits.count((NAV, 30.0)) == 0 and NAV not in dict(managers.waits)

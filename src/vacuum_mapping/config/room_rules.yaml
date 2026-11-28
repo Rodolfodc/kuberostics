@@ -1,0 +1,13 @@
+# Detection class -> room label, with the weight of one observation (003-R21, T314).
+# PLACEHOLDER classes: the real ontology comes with spec 004. Keys are lowercase detector class names
+# (COCO names, no "("), because /detections_markers carries them lowercased (specs/009a-offload/markers-format.md).
+rules:
+  refrigerator: {label: kitchen, weight: 2.0}
+  oven: {label: kitchen, weight: 1.0}
+  sink: {label: kitchen, weight: 1.0}
+  microwave: {label: kitchen, weight: 1.0}
+  dining table: {label: dining_room, weight: 1.0}
+  bed: {label: bedroom, weight: 2.0}
+  couch: {label: living_room, weight: 1.0}
+  tv: {label: living_room, weight: 1.0}
+  toilet: {label: bathroom, weight: 2.0}

@@ -1,4 +1,4 @@
-"""T306 (part): RoomSegmenter tests (003-R16, R17), synthetic grids, door_width_m = 0.9."""
+"""RoomSegmenter tests (003-R16, R17), synthetic grids, door_width_m = 0.9."""
 import time
 
 import numpy as np

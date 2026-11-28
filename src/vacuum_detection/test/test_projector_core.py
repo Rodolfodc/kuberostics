@@ -1,4 +1,4 @@
-"""T905: ProjectorCore tests with a synthetic TF buffer (transform at the photo timestamp, drop without TF).
+"""ProjectorCore tests with a synthetic TF buffer (transform at the photo timestamp, drop without TF).
 
 Each test cites the requirement it verifies (Art. VIII). No ROS.
 """
