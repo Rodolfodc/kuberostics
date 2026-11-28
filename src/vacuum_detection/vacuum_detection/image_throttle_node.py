@@ -1,4 +1,4 @@
-"""`image_throttle` LifecycleNode (T909, spec 009a-R03, R11): thin glue over `ThrottleCore` and `encode_jpeg`.
+"""`image_throttle` LifecycleNode (spec 009a-R03, R11): thin glue over `ThrottleCore` and `encode_jpeg`.
 
 RGB image in, JPEG `CompressedImage` out at `image_rate_hz`, header copied (it is the timestamp echo the selector
 and the projector rely on). Depth never goes through here. The rate does not depend on the breaker state (R11).
@@ -45,7 +45,7 @@ class ImageThrottleNode(LifecycleNode):
         self._pub_telemetry = self.create_lifecycle_publisher(
             DiagnosticArray, '/myRobot/telemetry/image_throttle', 10)
         self._sub = self.create_subscription(
-            Image, self.get_parameter('input_topic').value, self._on_image, 10)
+            Image, self.get_parameter('input_topic').value, self._on_image, QOS_SENSOR)
         log.info('configured')
         return TransitionCallbackReturn.SUCCESS
 

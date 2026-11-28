@@ -1,4 +1,4 @@
-"""T014, spec 001: live graph, scenario 3 with the escape stub on `outcome: hang` (the escape never ends, so
+"""Live-graph test (spec 001), scenario 3 with the escape stub on `outcome: hang` (the escape never ends, so
 the supervisor's `escape_timeout_s` must fire).
 
 `outcome` and `escape_timeout_s` are set on the running nodes through their parameter services before the

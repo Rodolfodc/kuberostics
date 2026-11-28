@@ -1,4 +1,4 @@
-"""T909: smoke test of the image_throttle node glue (rate logic: test_throttle_core.py, JPEG: test_image_codec.py).
+"""Smoke test of the image_throttle node glue (rate logic: test_throttle_core.py, JPEG: test_image_codec.py).
 
 Needs rclpy, numpy and OpenCV (skipped otherwise). In-process, no launch.
 """
@@ -105,5 +105,37 @@ def test_009a_R03_node_survives_an_undecodable_frame_counts_it_and_keeps_sending
         return values.get('encode_errors')
 
     assert spin_until(executor, lambda: errors() == '1')
+    node.destroy_node()
+    helper.destroy_node()
+
+
+def test_009a_R03_node_receives_frames_from_a_best_effort_camera_publisher(ros):
+    """/camera has contract profile `default` (reliable) but a sensor driver may publish best-effort: a best-effort
+    subscriber accepts both, a reliable one would receive nothing from the second kind."""
+    node = ImageThrottleNode(parameter_overrides=[Parameter('image_rate_hz', value=50.0)])
+    helper = rclpy.create_node('throttle_best_effort_helper')
+    out = []
+    helper.create_subscription(CompressedImage, '/myRobot/perception/rgb_throttled/compressed', out.append,
+                               qos_profile_sensor_data)
+    pub = helper.create_publisher(Image, '/camera', qos_profile_sensor_data)      # BEST_EFFORT
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
+    executor.add_node(helper)
+    node.trigger_configure()
+    node.trigger_activate()
+    assert spin_until(executor, lambda: pub.get_subscription_count() > 0)
+    sec = [10]
+
+    def publish_frame():
+        msg = Image(height=4, width=4, encoding='rgb8', step=12, data=bytes(48))
+        msg.header.stamp.sec = sec[0]
+        sec[0] += 1
+        pub.publish(msg)
+
+    end = time.monotonic() + 10.0
+    while time.monotonic() < end and not out:             # best effort may drop: keep publishing
+        publish_frame()
+        executor.spin_once(timeout_sec=0.05)
+    assert out, 'no frame arrived from the best-effort publisher'
     node.destroy_node()
     helper.destroy_node()

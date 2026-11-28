@@ -1,0 +1,8 @@
+// zenoh-bridge-ros2dds, cloud side (009a-R19): only the detections go out, only the compressed RGB comes in.
+// Loaded into the ConfigMap `bridge-cloud` by infra/modules/workloads. Keep in sync with robot.json5 (scripts/check-cloud.sh).
+{
+  plugins: { ros2dds: { allow: {
+    publishers:  ["/myRobot/perception/detections/cloud"],
+    subscribers: ["/myRobot/perception/rgb_throttled/compressed"],
+  } } },
+}
