@@ -80,7 +80,7 @@ def test_005_R35_manager_configs_exist_and_only_the_core_autostarts_alone(manage
 def test_005_R35_the_sequencer_parameters_match_the_manager_roles():
     from vacuum_bringup.manager_sequencer import MANAGER_ROLES
     params = load('lifecycle_sequencer.yaml')['lifecycle_sequencer']['ros__parameters']
-    assert params['managers'] == ['lifecycle_manager_core', 'lifecycle_manager_nav', 'lifecycle_manager_optional']
+    assert params['managers'] == ['lifecycle_manager_core', 'lifecycle_manager_nav']
     assert set(params['managers']) <= set(MANAGER_ROLES)
     assert params['manager_startup_timeout_s'] == 30.0
     assert params['manager_shutdown_timeout_s'] == 15.0

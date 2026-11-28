@@ -27,37 +27,54 @@ declared on Jazzy:
   RegulatedPurePursuitController, SimpleGoalChecker, SimpleProgressChecker, ObstacleLayer, InflationLayer,
   StaticLayer) are identical on both. The BT `Timeout` decorator is BehaviorTree.CPP built in on both.
 """
+import atexit
 import os
+import shutil
 import tempfile
 
 import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import IfCondition
+from launch.logging import get_logger
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
-from vacuum_bringup.slowdown import parse_factor, scale_bt_xml, scale_nav_params
+from vacuum_bringup.slowdown import count_bt_timeouts, parse_factor, scale_bt_xml, scale_nav_params, scaled_keys
 
 NAV_CMD_VEL = '/myRobot/mux/nav'
 NAV_NODES = ['controller_server', 'planner_server', 'bt_navigator']
 
 
-def slowed_files(params_path, bt_path, factor, directory=None):
-    """(params_path, bt_path) to launch with: the inputs for factor 1.0, else overlay copies with scaled timeouts."""
+def slowed_files(params_path, bt_path, factor, directory=None, log=None):
+    """(params_path, bt_path) to launch with: the inputs for factor 1.0, else overlay copies with scaled timeouts.
+
+    The overlay directory is created here when `directory` is None and removed at exit of the launch process (the
+    nodes read the files at start and on configure, before the launch ends). `log(message)` receives a warning when
+    a custom params_file or BT has nothing to scale (default: the launch logger)."""
     factor = parse_factor(factor)
     if factor == 1.0:
         return params_path, bt_path
-    directory = directory or tempfile.mkdtemp(prefix='nav_slowdown_')
+    log = log or get_logger('vacuum_bringup.nav').warning
+    if directory is None:
+        directory = tempfile.mkdtemp(prefix='nav_slowdown_')
+        atexit.register(shutil.rmtree, directory, ignore_errors=True)
+    os.makedirs(directory, exist_ok=True)
     with open(params_path) as f:
-        scaled = scale_nav_params(yaml.safe_load(f), factor)
+        loaded = yaml.safe_load(f)
+    if not scaled_keys(loaded):
+        log(f'sim_slowdown={factor}: params_file {params_path} has nothing to scale (none of the timeouts of '
+            'vacuum_bringup/slowdown.py NAV_TIMEOUT_PARAMS is set); its values are used as they are')
+    scaled = scale_nav_params(loaded, factor)
     out_params = os.path.join(directory, 'nav2_params_slow.yaml')
     with open(out_params, 'w') as f:
         yaml.safe_dump(scaled, f, sort_keys=False)
     with open(bt_path) as f:
         text = f.read()
+    if count_bt_timeouts(text) == 0:
+        log(f'sim_slowdown={factor}: bt_xml {bt_path} has no Timeout decorator to scale; it is used as it is')
     out_bt = os.path.join(directory, 'nav_bt_slow.xml')
     with open(out_bt, 'w') as f:
         f.write(scale_bt_xml(text, factor))

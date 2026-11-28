@@ -149,7 +149,11 @@ def test_our_nodes_always_start(entities, package, executable):
     """001-R01, 001-R12: stop_guard in particular must never be optional (D-22)."""
     node = by_executable(entities, executable)
     assert node.node_package == package
-    assert not is_conditional(node)
+    if executable == 'coverage_server':
+        # the stub is replaced only by the real coverage_server (real_coverage:=true), never dropped
+        assert node.condition.__class__.__name__ == 'UnlessCondition'
+    else:
+        assert not is_conditional(node)
 
 
 def test_twist_mux_is_the_only_publisher_of_cmd_vel(entities):

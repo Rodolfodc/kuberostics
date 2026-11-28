@@ -29,7 +29,7 @@ from std_srvs.srv import Trigger
 from vacuum_interfaces.msg import Notification
 
 from vacuum_bringup.manager_sequencer import (
-    Action, GuardWatch, ManagerSequencer, Outcome, Severity, State, default_specs)
+    Action, GuardWatch, ManagerSequencer, Outcome, Severity, State, deactivation_result, default_specs)
 
 COMMANDS = {
     Action.STARTUP: ManageLifecycleNodes.Request.STARTUP,
@@ -44,8 +44,7 @@ SERVICE_WAIT_S = 1.0
 class SequencerNode(Node):
     def __init__(self):
         super().__init__('lifecycle_sequencer')
-        self.declare_parameter('managers', [
-            'lifecycle_manager_core', 'lifecycle_manager_nav', 'lifecycle_manager_optional'])
+        self.declare_parameter('managers', ['lifecycle_manager_core', 'lifecycle_manager_nav'])
         self.declare_parameter('manager_startup_timeout_s', 30.0)
         self.declare_parameter('manager_shutdown_timeout_s', 15.0)
         self.declare_parameter('telemetry_rate_hz', 1.0)
@@ -65,6 +64,7 @@ class SequencerNode(Node):
         self._watch = GuardWatch(min_spacing_s=0.9 * self._poll_period_s)
         self.sequencer = ManagerSequencer(
             default_specs(names), self._call, self._wait_active, time.monotonic, self._log, self._notify,
+            has_nodes=self._has_nodes,
             startup_timeout_s=float(self.get_parameter('manager_startup_timeout_s').value),
             shutdown_timeout_s=float(self.get_parameter('manager_shutdown_timeout_s').value))
         period = 1.0 / max(0.1, float(self.get_parameter('telemetry_rate_hz').value))
@@ -115,6 +115,16 @@ class SequencerNode(Node):
             return outcome
         return Outcome.OK if response is not None and response.success else Outcome.FAILED
 
+    def _has_nodes(self, manager: str) -> bool:
+        """False only when the manager answers with an empty `node_names`; unreachable counts as having nodes so
+        the normal startup path reports the failure."""
+        request = GetParameters.Request(names=['node_names'])
+        outcome, response = self._call_once(GetParameters, f'/{manager}/get_parameters', request,
+                                            float(self.get_parameter('manager_startup_timeout_s').value))
+        if outcome is not Outcome.OK or response is None or not response.values:
+            return True
+        return len(response.values[0].string_array_value) > 0
+
     def _deactivate_nodes(self, manager: str, timeout_s: float) -> Outcome:
         """Deactivates every node of `manager` that is still active (names from its `node_names` parameter)."""
         deadline = time.monotonic() + timeout_s
@@ -135,8 +145,18 @@ class SequencerNode(Node):
             change = ChangeState.Request()
             change.transition.id = Transition.TRANSITION_DEACTIVATE
             outcome, done = self._call_once(ChangeState, f'/{name}/change_state', change, left())
-            self._log('info', f'{manager}: deactivated {name}: {outcome.value}')
-            if outcome is not Outcome.OK or not done.success:
+            active_after = None
+            if outcome is Outcome.TIMEOUT:
+                # the reply can be lost although the transition happened: confirm with get_state
+                self._log('warn', f'{manager}: no reply to deactivate {name}, checking its state')
+                confirm_outcome, confirmed = self._call_once(GetState, f'/{name}/get_state', GetState.Request(), 2.0)
+                if confirm_outcome is Outcome.OK:
+                    active_after = confirmed.current_state.id == LifecycleState.PRIMARY_STATE_ACTIVE
+            verdict = deactivation_result(outcome, outcome is Outcome.OK and done.success, active_after)
+            self._log('info', f'{manager}: deactivated {name}: {verdict.value}'
+                              + (' (reply lost, node confirmed not active)' if outcome is Outcome.TIMEOUT
+                                 and verdict is Outcome.OK else ''))
+            if verdict is not Outcome.OK:
                 result = Outcome.FAILED
         return result
 

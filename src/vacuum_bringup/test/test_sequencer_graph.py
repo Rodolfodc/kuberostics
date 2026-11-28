@@ -165,6 +165,7 @@ class Graph:
                             + [(ManageLifecycleNodes, f'/{m}/manage_nodes', m) for m in GRAPH])
         self._spawn('lifecycle_sequencer', [
             'ros2', 'run', 'vacuum_bringup', 'lifecycle_sequencer', *ros,
+            '-p', 'managers:=[lifecycle_manager_core, lifecycle_manager_nav, lifecycle_manager_optional]',
             '-p', f'manager_startup_timeout_s:={self.startup_timeout_s}', '-p', 'manager_shutdown_timeout_s:=15.0'])
 
     def _wait_services(self, services, timeout_s=TIMEOUT_S, max_respawns=3):

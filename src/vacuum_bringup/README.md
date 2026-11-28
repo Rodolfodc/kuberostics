@@ -5,7 +5,7 @@ Launch files and configuration of the system, plus the lifecycle sequencer (spec
 ## The lifecycle sequencer
 
 Three Nav2 lifecycle managers bring the nodes up: `lifecycle_manager_core` (stop_guard first, supervisor last),
-`lifecycle_manager_nav` and `lifecycle_manager_optional`. The `lifecycle_sequencer` starts them in that order, each
+`lifecycle_manager_nav` and `lifecycle_manager_optional` (the last is not launched while it has no nodes). The `lifecycle_sequencer` starts them in that order, each
 one only when the previous one reports `is_active` (or after `manager_startup_timeout_s`), and stops them in
 reverse order on shutdown, so `stop_guard` is the last to go down. It is a **plain node on purpose** (D-26): it
 only orchestrates managers.
@@ -35,8 +35,7 @@ sequence stays within `manager_shutdown_timeout_s` (each step gets an equal shar
 ros2 launch vacuum_bringup skeleton.launch.py with_sequencer:=true   # default false: lifecycle_manager_core autostarts alone
 ```
 
-With `with_sequencer:=true` the launch adds `lifecycle_manager_nav`, `lifecycle_manager_optional` (both
-`autostart: false`, empty node lists until the Nav2 nodes (spec 005) and the cloud/MQTT nodes (spec 009) fill them in) and the sequencer, and
+With `with_sequencer:=true` the launch adds the sequencer and, with `nav:=true`, `lifecycle_manager_nav` (`autostart: false`, the three Nav2 nodes); `lifecycle_manager_optional` is not launched until the cloud/MQTT nodes (spec 009) give it nodes (a Nav2 manager with an empty `node_names` aborts), and
 `lifecycle_manager_core` starts with `autostart: false`.
 
 ### How to add a manager
@@ -69,9 +68,14 @@ cd src/vacuum_bringup && python3 -m pytest test/test_manager_sequencer.py
 nodes; the whole goal sits under a `Timeout` of 180 s, 005-R34). One YAML serves Jazzy (Nav2 1.3.x) and Lyrical
 (1.5.x): Nav2 ignores undeclared parameters, and the differences are listed in the launch file docstring.
 Arguments: `autostart` (default true; false when `lifecycle_sequencer` starts the manager), `with_manager`,
-`params_file`, `bt_xml`, `sim_slowdown` (below). `skeleton.launch.py` does not include it yet and `lifecycle_nav.yaml` still has an empty
-`node_names` (the sequencer wiring is a later task). `nav.launch.py` sets `bond_timeout: 0.0` on its manager, so a
-crashed Nav2 node is not detected by the manager; the sequencer wiring follow-up must restore a bond timeout.
+`params_file`, `bt_xml`, `sim_slowdown` (below). `skeleton.launch.py nav:=true` includes it (default `false`, nothing changes without it); with
+`with_sequencer:=true` the include starts no manager of its own and `lifecycle_manager_nav` (`config/lifecycle_nav.yaml`:
+`controller_server`, `planner_server`, `bt_navigator`) is started by the sequencer after the core manager; without
+`nav` no nav manager is launched and the sequencer lists only `lifecycle_manager_core`. A Nav2 `lifecycle_manager` with `node_names: []` aborts at startup (exit -6), so no manager without nodes is launched (`lifecycle_manager_optional` neither, until spec 009); `ManagerSequencer` additionally skips (log `X: no nodes configured, skipped`, telemetry `startup_X_outcome=SKIPPED`, no state change) a listed manager that reports no nodes. `/map` and the `map -> odom` TF come from
+outside. `bond_timeout` stays 0.0 on purpose: the sequencer checks the managers only at startup (005-R36), so a bond
+break at run time would reset Nav2 while the sequencer still says ALL_ACTIVE, and a 4 s bond can break spuriously on a
+loaded runner or the slow simulator. A dead Nav2 node is safe anyway (no goal; the mux input times out).
+`real_coverage:=true` swaps the coverage stub for the real `coverage_server` (`autostart` false, the core manager starts it).
 
 #### Slow simulator: `sim_slowdown`
 
@@ -87,7 +91,7 @@ ros2 launch vacuum_bringup nav.launch.py sim_slowdown:=11     # 15 s -> 165 s, 1
 ros2 launch vacuum_coverage coverage.launch.py sim_slowdown:=11   # waypoint_timeout_s 120 -> 1320 s
 ```
 
-Use the same factor on both launches (factor about 1 / real-time factor). The supervisor and skeleton timeouts
+`skeleton.launch.py sim_slowdown:=<factor>` forwards it to both (nav and real_coverage). The overlay directory is removed when the launch exits; a custom `params_file` or `bt_xml` with nothing to scale logs a warning. Use the same factor on both launches (factor about 1 / real-time factor). The supervisor and skeleton timeouts
 (`escape_timeout_s`, `dock_request_timeout_s`, `feedback_stale_s`) are not scaled: the skeleton launches only
 the stubs, and the real escape and stuck nodes do not exist yet.
 

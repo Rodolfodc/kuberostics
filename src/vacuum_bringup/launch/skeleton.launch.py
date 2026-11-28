@@ -2,6 +2,7 @@
 
     ros2 launch vacuum_bringup skeleton.launch.py [with_ia368ii:=false] [with_wheel_bridge:=false]
                                                   [with_teleop:=false] [with_sequencer:=true]
+                                                  [nav:=true] [real_coverage:=true] [sim_slowdown:=11]
                                                   [wheel_bridge:=vacuum]
 
 Blocks, each built by its own function:
@@ -12,17 +13,20 @@ Blocks, each built by its own function:
                                                 of my_robot_pkg (D-06; with_ia368ii and with_wheel_bridge), wheel_bridge:=vacuum
                                                 is the same-name replacement of vacuum_sim_bridge for the combined model
                                                 (D-27; with_wheel_bridge only, it does not need the IA368II checkout)
+  - nav.launch.py                            (nav, default false): Nav2 under lifecycle_manager_nav; sim_slowdown is
+                                                forwarded to it and to the real coverage launch (real_coverage)
   - teleop_twist_keyboard                     (with_teleop; needs a terminal on stdin)
-  - lifecycle_sequencer + nav/optional managers (with_sequencer, default false): the three managers start
-    in order core -> nav -> optional (005-R35); lifecycle_manager_core then runs with autostart false
+  - lifecycle_sequencer + nav manager (with_sequencer, default false): the managers that have nodes start in
+    order core -> nav (005-R35; optional is not launched while it has no nodes, see sequencer_nodes()); lifecycle_manager_core then runs with autostart false
 
 The IA368II packages are not in rosdep (they come from `vcs import`, Art. II), so everything that references
 them is conditional and resolved lazily: this file imports and builds without them, and the launch_testing
 the live-graph tests run with `with_ia368ii:=false` or against the installed checkout.
 """
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterValue
@@ -69,9 +73,17 @@ def launch_arguments():
                                           'vacuum_sim_bridge (vacuum, D-27); only one runs, they share the node name'),
         DeclareLaunchArgument('with_teleop', default_value='true',
                               description='Start teleop_twist_keyboard (needs a terminal)'),
+        DeclareLaunchArgument('nav', default_value='false',
+                              description='Include nav.launch.py (Nav2 under lifecycle_manager_nav, 005-R35); needs '
+                                          '/map and the map -> odom TF from outside'),
+        DeclareLaunchArgument('real_coverage', default_value='false',
+                              description='Run the real coverage_server of vacuum_coverage instead of the stub'),
+        DeclareLaunchArgument('sim_slowdown', default_value='1.0',
+                              description='Factor > 0 forwarded to nav and coverage launches: scales their '
+                                          'wall-clock timeouts for a slow simulator (1.0 = real time)'),
         DeclareLaunchArgument('with_sequencer', default_value='false',
-                              description='Start lifecycle_sequencer plus lifecycle_manager_nav and '
-                                          '_optional, and let the sequencer (not autostart) start the managers'),
+                              description='Start lifecycle_sequencer (plus lifecycle_manager_nav with nav:=true) '
+                                          'and let the sequencer (not autostart) start the managers'),
     ]
 
 
@@ -88,8 +100,9 @@ def ia368ii_nodes(condition):
     return nodes
 
 
-def core_nodes():
-    nodes = [Node(package=package, executable=executable, name=executable, output='screen')
+def core_nodes(stub_coverage):
+    nodes = [Node(package=package, executable=executable, name=executable, output='screen',
+                  condition=stub_coverage if executable == 'coverage_server' else None)
              for package, executable in CORE_NODES]
     nodes.append(Node(
         package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_core',
@@ -102,17 +115,47 @@ def core_nodes():
     return nodes
 
 
-def sequencer_nodes(condition):
-    """The other two managers (autostart false, in their YAML) and the sequencer that starts all three."""
+def sequencer_nodes(nav_condition, no_nav_condition):
+    """The sequencer and the managers it starts (autostart false, in their YAML).
+
+    A Nav2 lifecycle_manager with `node_names: []` ABORTS at startup (exit -6: the empty YAML array has no
+    type), so a manager without nodes is never launched and never listed: lifecycle_manager_optional (cloud and
+    MQTT nodes, spec 009) is not launched until it has nodes, and lifecycle_manager_nav only with nav:=true. The
+    sequencer's `managers` parameter is overridden to match (ManagerSequencer also skips a live manager that
+    reports no nodes, but that cannot happen with a Nav2 manager)."""
     def config(name):
         return PathJoinSubstitution([FindPackageShare('vacuum_bringup'), 'config', name])
-    nodes = [Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name=manager,
-                  output='screen', parameters=[config(f'{manager.replace("lifecycle_manager", "lifecycle")}.yaml')],
-                  condition=condition)
-             for manager in ('lifecycle_manager_nav', 'lifecycle_manager_optional')]
-    nodes.append(Node(package='vacuum_bringup', executable='lifecycle_sequencer', name='lifecycle_sequencer',
-                      output='screen', parameters=[config('lifecycle_sequencer.yaml')], condition=condition))
-    return nodes
+
+    def sequencer(managers, cond):
+        return Node(package='vacuum_bringup', executable='lifecycle_sequencer', name='lifecycle_sequencer',
+                    output='screen', parameters=[config('lifecycle_sequencer.yaml'), {'managers': managers}],
+                    condition=cond)
+    return [Node(package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_nav',
+                 output='screen', parameters=[config('lifecycle_nav.yaml')], condition=nav_condition),
+            sequencer(['lifecycle_manager_core', 'lifecycle_manager_nav'], nav_condition),
+            sequencer(['lifecycle_manager_core'], no_nav_condition)]
+
+
+def nav_include(condition):
+    """Nav2 (005-R35): controller/planner/bt_navigator from nav.launch.py. With the sequencer the nav manager of
+    sequencer_nodes() (config/lifecycle_nav.yaml, same node list) starts them, so the include starts none."""
+    return IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('vacuum_bringup'), 'launch',
+                                                            'nav.launch.py'])),
+        launch_arguments={
+            'with_manager': PythonExpression(["'", LaunchConfiguration('with_sequencer'), "' != 'true'"]),
+            'autostart': 'true',
+            'sim_slowdown': LaunchConfiguration('sim_slowdown'),
+        }.items(), condition=condition)
+
+
+def coverage_include(condition):
+    """The real coverage_server in place of the stub (same node name, so lifecycle_manager_core starts it)."""
+    return IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('vacuum_coverage'), 'launch',
+                                                            'coverage.launch.py'])),
+        launch_arguments={'autostart': 'false', 'sim_slowdown': LaunchConfiguration('sim_slowdown')}.items(),
+        condition=condition)
 
 
 def twist_mux_node():
@@ -157,11 +200,20 @@ def generate_launch_description():
          LaunchConfiguration('wheel_bridge'), "' == 'vacuum'"]))
     with_teleop = IfCondition(LaunchConfiguration('with_teleop'))
     with_sequencer = IfCondition(LaunchConfiguration('with_sequencer'))
+    with_nav = IfCondition(LaunchConfiguration('nav'))
+    seq_and_nav = IfCondition(PythonExpression(
+        ["'", LaunchConfiguration('with_sequencer'), "' == 'true' and '", LaunchConfiguration('nav'), "' == 'true'"]))
+    seq_no_nav = IfCondition(PythonExpression(
+        ["'", LaunchConfiguration('with_sequencer'), "' == 'true' and '", LaunchConfiguration('nav'), "' != 'true'"]))
+    real_coverage = IfCondition(LaunchConfiguration('real_coverage'))
+    stub_coverage = UnlessCondition(LaunchConfiguration('real_coverage'))
     return LaunchDescription([
         *launch_arguments(),
         *ia368ii_nodes(with_ia368ii),
-        *core_nodes(),
-        *sequencer_nodes(with_sequencer),
+        *core_nodes(stub_coverage),
+        *sequencer_nodes(seq_and_nav, seq_no_nav),
+        nav_include(with_nav),
+        coverage_include(real_coverage),
         twist_mux_node(),
         wheel_bridge_node(with_bridge),
         vacuum_wheel_bridge_node(with_vacuum_bridge),
