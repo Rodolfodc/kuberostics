@@ -252,12 +252,30 @@ class ManagerSequencer:
         return self._state
 
     def _start_one(self, spec: ManagerSpec) -> StepResult:
-        """`startup_timeout_s` is a per-reply budget: the command may use all of it, then (reply lost) is_active is
-        polled for `reply_grace_s` more, so the worst case is startup_timeout_s + reply_grace_s. After a normal reply
-        the is_active wait gets only what is left of startup_timeout_s. The grace poll is skipped once an abort was
-        requested, and `wait_active` itself must return early on abort (the node's does)."""
+        """`startup_timeout_s` is a per-reply budget. The command may use all of it; if its reply is lost,
+        is_active is polled for `reply_grace_s` more (the manager may have started). If it is still not active the
+        request itself may have been lost (the first request after a service appears sometimes is), so the command
+        is sent ONCE more with the same budget and the same grace poll. Worst case:
+        2 * (startup_timeout_s + reply_grace_s). After a normal reply the is_active wait gets only what is left of
+        startup_timeout_s. The grace polls and the resend are skipped once an abort was requested, and
+        `wait_active` itself must return early on abort (the node's does).
+        """
         t0 = self._clock()
-        deadline = t0 + self._startup_timeout_s
+        note = ''
+        outcome, detail = self._command_and_wait(spec)
+        if outcome is Outcome.TIMEOUT and detail == 'startup command' and not self._abort:   # no reply
+            self._log('warn', f'{spec.name}: reply lost and manager not active, resending startup')
+            note = 'startup resent once'
+            outcome, detail = self._command_and_wait(spec)
+        if outcome is not Outcome.OK and note:
+            detail = f'{detail}; {note}'
+        return StepResult(spec.name, Action.STARTUP, outcome, self._clock() - t0,
+                          detail if outcome is not Outcome.OK else note)
+
+    def _command_and_wait(self, spec: ManagerSpec):
+        """One startup command and the wait for is_active; (outcome, detail). TIMEOUT means no reply and not
+        active after the grace poll (the only outcome that is worth a resend)."""
+        deadline = self._clock() + self._startup_timeout_s
         outcome = self._call(spec.name, Action.STARTUP, self._startup_timeout_s)
         detail = 'startup command'
         if outcome is Outcome.TIMEOUT and not self._abort:
@@ -268,16 +286,15 @@ class ManagerSequencer:
                               f'{self._reply_grace_s:.1f} s before giving up')
             if self._wait_active(spec.name, self._reply_grace_s) is Outcome.OK:
                 self._log('info', f'{spec.name}: active although the startup reply was lost')
-                return StepResult(spec.name, Action.STARTUP, Outcome.OK, self._clock() - t0)
-        if outcome is Outcome.OK:
+                return Outcome.OK, ''
+        elif outcome is Outcome.OK:
             remaining = deadline - self._clock()
             if remaining <= 0.0:
                 outcome, detail = Outcome.TIMEOUT, 'startup command used the whole timeout'
             else:
                 outcome = self._wait_active(spec.name, remaining)
                 detail = 'is_active'
-        return StepResult(spec.name, Action.STARTUP, outcome, self._clock() - t0,
-                          detail if outcome is not Outcome.OK else '')
+        return outcome, detail
 
     def _on_failure(self, spec: ManagerSpec) -> State:
         """The rule of 005-R36 for the role of the failed manager."""

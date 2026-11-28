@@ -447,7 +447,7 @@ def test_005_R36_lost_startup_reply_and_manager_never_active_is_still_a_timeout(
     assert seq.run_startup() is State.DEGRADED_NAV
     result = next(r for r in seq.results if r.manager == NAV and r.action is Action.STARTUP)
     assert result.outcome is Outcome.TIMEOUT
-    assert clock.now <= 30.0 + 5.0 + 1e-9                      # the extra poll is bounded by reply_grace_s
+    assert clock.now <= 2 * (30.0 + 5.0) + 1e-9                # one resend, each with the grace poll
     assert dict(managers.waits)[NAV] == 5.0
 
 
@@ -478,11 +478,11 @@ def test_005_R36_no_grace_poll_when_an_abort_arrives_during_the_lost_reply():
     assert NAV not in dict(managers.waits)
 
 
-def test_005_R36_startup_timeout_is_per_reply_worst_case_adds_the_grace():
+def test_005_R36_startup_timeout_is_per_reply_worst_case_is_twice_budget_plus_grace():
     seq, managers, _, clock = build({(CORE, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
     managers.active_script[CORE] = (Outcome.TIMEOUT, 5.0)
     seq.run_startup()
-    assert clock.now == pytest.approx(35.0)
+    assert clock.now == pytest.approx(70.0)               # 2 * (startup_timeout_s + reply_grace_s)
 
 
 @pytest.mark.parametrize('outcome,success,active_after,expected', [
@@ -495,3 +495,72 @@ def test_005_R36_startup_timeout_is_per_reply_worst_case_adds_the_grace():
 ])
 def test_005_R37_deactivation_result_confirms_a_lost_reply_with_the_node_state(outcome, success, active_after, expected):
     assert deactivation_result(outcome, success, active_after) is expected
+
+
+def build_dropping_first_request(drop_requests=1):
+    """Managers whose first `drop_requests` startup commands never reach the manager (request lost: no reply and the
+    manager does not start); is_active is false until a command got through."""
+    clock = FakeClock()
+    state = {'sent': 0, 'started': False}
+    calls = []
+    rec = Recorder()
+
+    def call(manager, action, timeout_s):
+        calls.append((manager, action))
+        if action is Action.STARTUP and manager == NAV:
+            state['sent'] += 1
+            if state['sent'] <= drop_requests:
+                clock.now += timeout_s
+                return Outcome.TIMEOUT
+            state['started'] = True
+        return Outcome.OK
+
+    def wait_active(manager, timeout_s):
+        if manager == NAV and not state['started']:
+            clock.now += timeout_s
+            return Outcome.TIMEOUT
+        return Outcome.OK
+
+    seq = ManagerSequencer(default_specs([CORE, NAV]), call, wait_active, clock, rec.log, rec.notify)
+    return seq, calls, rec, clock
+
+
+def test_005_R36_a_lost_request_is_resent_once_and_the_manager_starts():
+    seq, calls, rec, _ = build_dropping_first_request(drop_requests=1)
+    assert seq.run_startup() is State.ALL_ACTIVE
+    assert calls.count((NAV, Action.STARTUP)) == 2
+    assert any('reply lost and manager not active, resending startup' in m and NAV in m for _, m in rec.logs)
+    result = next(r for r in seq.results if r.manager == NAV)
+    assert result.outcome is Outcome.OK and 'resent' in result.detail
+
+
+def test_005_R36_two_lost_requests_still_end_in_timeout_within_the_bound():
+    seq, calls, _, clock = build_dropping_first_request(drop_requests=2)
+    assert seq.run_startup() is State.DEGRADED_NAV
+    assert calls.count((NAV, Action.STARTUP)) == 2              # resent once, not forever
+    result = next(r for r in seq.results if r.manager == NAV)
+    assert result.outcome is Outcome.TIMEOUT and 'resent' in result.detail
+    assert clock.now <= 2 * (30.0 + 5.0) + 1e-9
+
+
+def test_005_R36_a_reply_that_arrived_but_manager_never_active_is_not_resent():
+    seq, managers, _, _ = build()
+    managers.active_script[NAV] = (Outcome.TIMEOUT, 30.0)
+    seq.run_startup()
+    assert startups(managers).count(NAV) == 1
+
+
+def test_005_R36_no_resend_after_an_abort():
+    clock = FakeClock()
+    managers = FakeManagers(clock, {(NAV, Action.STARTUP): (Outcome.TIMEOUT, 30.0)})
+    holder = []
+
+    def call(manager, action, timeout_s):
+        outcome = managers.call(manager, action, timeout_s)
+        if manager == NAV:
+            holder[0].request_abort()
+        return outcome
+
+    holder.append(ManagerSequencer(default_specs([CORE, NAV]), call, managers.wait_active, clock))
+    holder[0].run_startup()
+    assert startups(managers).count(NAV) == 1
