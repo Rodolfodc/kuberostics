@@ -33,6 +33,12 @@ variable "weights_url" {
   default     = ""
 }
 
+variable "model_file" {
+  description = "Weights file name in the weights volume (yolo11x.pt in the cloud; yolo11n.pt for a CPU-only local cluster that cannot meet the age limits with yolo11x)."
+  type        = string
+  default     = "yolo11x.pt"
+}
+
 variable "enable_cloud_sync" {
   description = "Deploy the MQTT broker and the policy-weights store (scaffold of the cloud cycle). Needs the Secrets documented in infra/README.md."
   type        = bool

@@ -41,8 +41,8 @@ RUN apt-get update -qq \
       ros-${ROS_DISTRO}-ros2bag ros-${ROS_DISTRO}-rosbag2-py ros-${ROS_DISTRO}-rosbag2-storage-default-plugins \
  && rm -rf /var/lib/apt/lists/*
 
-COPY docker/detector/entrypoint.sh docker/detector/liveness.sh /opt/detector/
-RUN chmod 0755 /opt/detector/entrypoint.sh /opt/detector/liveness.sh \
+COPY docker/detector/entrypoint.sh docker/detector/liveness.sh docker/detector/run-cloud.sh /opt/detector/
+RUN chmod 0755 /opt/detector/entrypoint.sh /opt/detector/liveness.sh /opt/detector/run-cloud.sh \
  && useradd --system --uid 10001 --create-home detector \
  && mkdir -p /weights /tmp/ultralytics && chown detector /weights /tmp/ultralytics
 USER 10001

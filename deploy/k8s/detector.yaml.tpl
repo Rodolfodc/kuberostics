@@ -9,7 +9,12 @@ data:
   detector.yaml: |
     detector_cloud:
       ros__parameters:
-        model: ${model_file}
+        backend: ultralytics
+        weights: /weights/${model_file}
+        device: cpu
+        input_type: compressed
+        input_topic: /myRobot/perception/rgb_throttled/compressed
+        output_topic: /myRobot/perception/detections/cloud
 %{ if transport == "bridge" ~}
 ---
 apiVersion: v1
@@ -73,7 +78,9 @@ spec:
         - name: detector
           image: ${detector_image}
           imagePullPolicy: ${image_pull_policy}
-          args: ["ros2", "run", "vacuum_detection", "detector", "--ros-args", "-r", "__node:=detector_cloud", "--params-file", "/config/detector.yaml"]
+          workingDir: /tmp   # the image WORKDIR was removed after the build; the root filesystem is read-only
+          # run-cloud.sh starts the node and drives its lifecycle (configure, activate): the node has no autostart.
+          args: ["/opt/detector/run-cloud.sh", "/config/detector.yaml"]
 %{ if transport == "rmw_zenoh" ~}
           env:
             - {name: RMW_IMPLEMENTATION, value: rmw_zenoh_cpp}
@@ -104,6 +111,10 @@ spec:
           env:
             - {name: ROS_AUTOMATIC_DISCOVERY_RANGE, value: LOCALHOST}
             - {name: ROS_DISTRO, value: ${ros_distro}}
+            # Re-announce the DDS participant every second: with the default interval a node that starts after the bridge
+            # (the detector needs tens of seconds to load its model) is not discovered and no route is created.
+            - name: CYCLONEDDS_URI
+              value: "<CycloneDDS><Domain><Discovery><SPDPInterval>1s</SPDPInterval></Discovery></Domain></CycloneDDS>"
           args: ["-l", "tcp/0.0.0.0:7447", "--no-multicast-scouting", "--rest-http-port", "8000", "-c", "/cfg/bridge.json5"]
           ports: [{containerPort: 7447}]
           resources:
