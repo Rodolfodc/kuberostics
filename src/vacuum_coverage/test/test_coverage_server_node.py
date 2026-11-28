@@ -308,24 +308,30 @@ def test_R16_two_simultaneous_goals_accept_exactly_one(system):
 def _transition(s, transition_id):
     """Sends a ChangeState request through the real lifecycle service; returns Response.success."""
     client = s.probe.create_client(ChangeState, '/coverage_server/change_state')
-    assert client.wait_for_service(timeout_sec=30.0)
-    request = ChangeState.Request()
-    request.transition.id = transition_id
-    for _ in range(5):                  # a client that is new to the graph can miss its first response
-        future = client.call_async(request)
-        if wait_for(future.done, 3.0):
-            return future.result().success
-    raise AssertionError('no response from the lifecycle service')
+    try:
+        assert client.wait_for_service(timeout_sec=60.0)
+        request = ChangeState.Request()
+        request.transition.id = transition_id
+        for _ in range(5):                  # a client that is new to the graph can miss its first response
+            future = client.call_async(request)
+            if wait_for(future.done, 3.0):
+                return future.result().success
+        raise AssertionError('no response from the lifecycle service')
+    finally:
+        s.probe.destroy_client(client)      # short-lived clients pile up in the graph otherwise (discovery cost)
 
 
 def _state(s):
     client = s.probe.create_client(GetState, '/coverage_server/get_state')
-    assert client.wait_for_service(timeout_sec=30.0)
-    for _ in range(5):
-        future = client.call_async(GetState.Request())
-        if wait_for(future.done, 3.0):
-            return future.result().current_state.id
-    raise AssertionError('no response from get_state')
+    try:
+        assert client.wait_for_service(timeout_sec=60.0)
+        for _ in range(5):
+            future = client.call_async(GetState.Request())
+            if wait_for(future.done, 3.0):
+                return future.result().current_state.id
+        raise AssertionError('no response from get_state')
+    finally:
+        s.probe.destroy_client(client)
 
 
 def test_R27_redundant_lifecycle_transitions_are_refused_and_the_node_survives(system):
