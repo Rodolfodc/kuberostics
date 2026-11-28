@@ -15,7 +15,9 @@
   <test_depend>launch</test_depend>
   <test_depend>launch_testing</test_depend>
   <test_depend>std_srvs</test_depend>
-  <test_depend>vacuum_bringup</test_depend>
+  <!-- Not a test_depend on vacuum_bringup: it would close a cycle (bringup -> coverage -> contract_tests -> bringup)
+       that colcon refuses to order. The live tests only read bringup's share directory at run time, and the
+       whole workspace is installed when they run. -->
   <test_depend>vacuum_interfaces</test_depend>
 
   <export>
