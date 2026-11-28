@@ -228,3 +228,26 @@ def test_wheel_bridge_condition(entities, ia368ii, bridge, impl, stock, vacuum):
     context.launch_configurations['wheel_bridge'] = impl
     assert by_executable(entities, 'my_robot_cmd_vel_node', 'my_robot_pkg').condition.evaluate(context) is stock
     assert by_executable(entities, 'my_robot_cmd_vel_node', 'vacuum_sim_bridge').condition.evaluate(context) is vacuum
+
+
+def evaluate(condition, **arguments):
+    from launch.actions import SetLaunchConfiguration
+    context = LaunchContext()
+    for key, value in arguments.items():
+        SetLaunchConfiguration(key, value).visit(context)
+    return condition.evaluate(context)
+
+
+def declared_default(entities, name):
+    return next(e for e in entities if isinstance(e, DeclareLaunchArgument) and e.name == name).default_value
+
+
+def test_map_tf_default_false_and_included_behind_the_flag(entities):
+    """map -> my_robot_odom is opt-in (existing graphs are unchanged)."""
+    from launch.actions import IncludeLaunchDescription
+    assert text(declared_default(entities, 'map_tf')) == 'false'
+    assert text(declared_default(entities, 'map_source')) == 'static'
+    include = next(e for e in entities if isinstance(e, IncludeLaunchDescription)
+                   and any(k == 'map_source' for k, _ in e.launch_arguments))
+    assert evaluate(include.condition, map_tf='true') is True
+    assert evaluate(include.condition, map_tf='false') is False
