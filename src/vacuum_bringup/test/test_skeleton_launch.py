@@ -307,7 +307,7 @@ def test_001_R12_stubs_and_real_nodes_share_the_names_the_core_manager_lists(ent
         / 'stuck_escape.launch.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    real = {text(a.node_name) for a in module.generate_launch_description().entities
+    real = {name_of(a) for a in module.generate_launch_description().entities
             if type(a).__name__ == 'LifecycleNode'}
     stubs = {name_of(by_executable(entities, e, 'vacuum_stubs')) for e in ('escape_server', 'stuck_detector')}
     listed = set(yaml.safe_load(CORE_CONFIG.read_text())['lifecycle_manager_core']['ros__parameters']['node_names'])
