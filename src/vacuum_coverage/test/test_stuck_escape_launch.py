@@ -9,7 +9,6 @@ The domain ID comes from conftest.py (range 1-5, this package, serialized with i
 import os
 import threading
 import time
-import warnings
 import unittest
 
 import launch_testing
@@ -23,7 +22,7 @@ from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.events.process import ProcessExited
 from lifecycle_msgs.msg import State, Transition
-from lifecycle_msgs.srv import ChangeState, GetState
+from lifecycle_msgs.srv import GetState
 from rclpy.action import ActionClient
 from rclpy.action.client import GoalStatus
 from rclpy.executors import MultiThreadedExecutor
@@ -32,6 +31,7 @@ from vacuum_contract_tests.graph import endpoints
 from vacuum_interfaces.action import Escape
 from vacuum_interfaces.msg import StuckEvent
 
+from lifecycle_client import change_state
 from world_fixtures import FakeWorld, forward_command_publisher, wait_for
 
 OWNERS = {'stuck_detector', 'escape_server'}
@@ -50,8 +50,6 @@ def generate_test_description():
 
 
 class TestStuckEscapeAlone(unittest.TestCase):
-    nudges = 0       # how many times the autostart workaround fired in this run
-
     @classmethod
     def setUpClass(cls):
         cls.context = rclpy.Context()
@@ -62,8 +60,6 @@ class TestStuckEscapeAlone(unittest.TestCase):
         cls.probe.create_subscription(StuckEvent, '/myRobot/stuck', cls.events.append, 10)
         cls.get_state = {n: cls.probe.create_client(GetState, f'/{n}/get_state')
                          for n in ('stuck_detector', 'escape_server')}
-        cls.change_state = {n: cls.probe.create_client(ChangeState, f'/{n}/change_state')
-                            for n in ('stuck_detector', 'escape_server')}
         cls.client = ActionClient(cls.probe, Escape, '/myRobot/escape')
         cls.cmd, _ = forward_command_publisher(cls.probe, 0.2)
         cls.executor = MultiThreadedExecutor(num_threads=6, context=cls.context)
@@ -91,22 +87,16 @@ class TestStuckEscapeAlone(unittest.TestCase):
         return [e.process_name for e in self.proc_info if isinstance(e, ProcessExited)]
 
     def _nudge(self, name):
-        """Lifecycle reply lost under load (rclpy "failed to send response (timeout)" on the first change_state
-        reply; root cause in rclpy/executor, not a node bug): launch_ros then never sees the transition and the
-        autostart chain stalls. The test finishes the chain itself, from the state the node is in, so the rest of
-        the test still checks the real processes. Every use is logged and counted so a CI run that needed it is
-        visible."""
+        """Lifecycle request or reply lost under load (root cause in rclpy/executor, not a node bug): launch_ros
+        then never sees the transition and the autostart chain stalls. The test finishes the chain itself, from
+        the state the node is in, with the shared helper (which logs and counts every resend)."""
         state = self._state(name)
-        step = {State.PRIMARY_STATE_UNCONFIGURED: Transition.TRANSITION_CONFIGURE,
-                State.PRIMARY_STATE_INACTIVE: Transition.TRANSITION_ACTIVATE}.get(state)
-        if step is not None and self.change_state[name].service_is_ready():
-            type(self).nudges += 1
-            warnings.warn(f'autostart workaround #{type(self).nudges}: {name} stalled in state {state}, sending '
-                          f'transition {step} (lifecycle reply lost under load)')
-            print(f'WARNING: autostart workaround #{type(self).nudges} for {name} (state {state}, '
-                  f'transition {step})', flush=True)
-            future = self.change_state[name].call_async(ChangeState.Request(transition=Transition(id=step)))
-            wait_for(future.done, 10.0)
+        step = {State.PRIMARY_STATE_UNCONFIGURED: (Transition.TRANSITION_CONFIGURE, State.PRIMARY_STATE_INACTIVE),
+                State.PRIMARY_STATE_INACTIVE: (Transition.TRANSITION_ACTIVATE, State.PRIMARY_STATE_ACTIVE)
+                }.get(state)
+        if step is not None:
+            print(f'WARNING: autostart workaround for {name} stalled in state {state}', flush=True)
+            change_state(self.probe, f'/{name}', step[0], step[1])
 
     def _wait_active(self, total_s=180.0, nudge_after_s=40.0):
         start = time.monotonic()

@@ -15,11 +15,11 @@ import pytest
 rclpy = pytest.importorskip('rclpy')
 
 from geometry_msgs.msg import Twist  # noqa: E402
-from lifecycle_msgs.msg import Transition  # noqa: E402
-from lifecycle_msgs.srv import ChangeState, GetState  # noqa: E402
+from lifecycle_msgs.msg import State, Transition  # noqa: E402
 from rclpy.action import ActionClient  # noqa: E402
 from vacuum_interfaces.action import Escape  # noqa: E402
 
+from lifecycle_client import change_state, spin_waiter, wait_ready  # noqa: E402
 from world_fixtures import QOS  # noqa: E402
 
 CODE = 'from vacuum_coverage.escape_server_node import main; main()'
@@ -32,11 +32,6 @@ def _spin_until(node, done, timeout):
     while not done() and time.monotonic() < end:
         rclpy.spin_once(node, timeout_sec=0.05)
     return done()
-
-
-def _change(node, client, transition_id):
-    fut = client.call_async(ChangeState.Request(transition=Transition(id=transition_id)))
-    assert _spin_until(node, fut.done, 20.0) and fut.result().success
 
 
 @pytest.mark.parametrize('goal_running', [False, True])
@@ -55,12 +50,12 @@ def test_005_R12_escape_server_exits_on_sigint_with_a_brake_and_no_rcl_errors(go
     msgs = []
     node.create_subscription(Twist, '/myRobot/mux/escape', msgs.append, QOS)
     try:
-        get_state = node.create_client(GetState, '/escape_server/get_state')
-        assert get_state.wait_for_service(timeout_sec=60.0), 'escape_server never came up'
-        client = node.create_client(ChangeState, '/escape_server/change_state')
-        assert client.wait_for_service(timeout_sec=60.0)
-        _change(node, client, Transition.TRANSITION_CONFIGURE)
-        _change(node, client, Transition.TRANSITION_ACTIVATE)
+        wait = spin_waiter(node)
+        assert wait_ready(node, '/escape_server', wait, total_s=60.0), 'escape_server never came up'
+        assert change_state(node, '/escape_server', Transition.TRANSITION_CONFIGURE,
+                            State.PRIMARY_STATE_INACTIVE, wait)
+        assert change_state(node, '/escape_server', Transition.TRANSITION_ACTIVATE,
+                            State.PRIMARY_STATE_ACTIVE, wait)
         if goal_running:
             action = ActionClient(node, Escape, '/myRobot/escape')
             assert action.wait_for_server(timeout_sec=30.0)
