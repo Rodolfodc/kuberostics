@@ -1,7 +1,7 @@
-"""T013: structure tests of launch/skeleton.launch.py (001-R01, 001-R02, 001-R12, 001-R13).
+"""Structure tests of launch/skeleton.launch.py (001-R01, 001-R02, 001-R12, 001-R13).
 
 The launch description is built, never launched: no ROS graph, no IA368II checkout and no simulator are needed.
-What really runs (is_active, mux behaviour) is verified by launch_testing in T014.
+What really runs (is_active, mux behaviour) is verified by the live-graph launch_testing tests (test_graph_*.py).
 """
 import importlib.util
 import pathlib
@@ -41,8 +41,9 @@ def nodes(entities):
     return [e for e in entities if isinstance(e, Node)]
 
 
-def by_executable(entities, executable):
-    found = [n for n in nodes(entities) if n.node_executable == executable]
+def by_executable(entities, executable, package=None):
+    found = [n for n in nodes(entities) if n.node_executable == executable
+             and (package is None or n.node_package == package)]
     assert len(found) == 1, f'expected exactly one {executable}, found {len(found)}'
     return found[0]
 
@@ -78,7 +79,7 @@ def is_conditional(node):
 def test_launch_arguments_are_declared(entities):
     """001-R01: optional blocks are switched by arguments, so the file works without IA368II or simulator."""
     declared = {e.name for e in entities if isinstance(e, DeclareLaunchArgument)}
-    assert {'with_ia368ii', 'with_wheel_bridge', 'with_teleop'} <= declared
+    assert {'with_ia368ii', 'with_wheel_bridge', 'with_teleop', 'wheel_bridge'} <= declared
 
 
 IA368II_EXECUTABLES = ['myrobot_server', 'behaviour_server', 'cleaning_server', 'autodocking_server',
@@ -148,14 +149,18 @@ def test_our_nodes_always_start(entities, package, executable):
     """001-R01, 001-R12: stop_guard in particular must never be optional (D-22)."""
     node = by_executable(entities, executable)
     assert node.node_package == package
-    assert not is_conditional(node)
+    if executable in ('coverage_server', 'escape_server', 'stuck_detector'):
+        # a stub is replaced only by the real node (real_coverage / real_nodes), never dropped
+        assert node.condition is not None
+    else:
+        assert not is_conditional(node)
 
 
 def test_twist_mux_is_the_only_publisher_of_cmd_vel(entities):
     """Art. VI, D-03, 001-R10: only twist_mux has /myRobot/cmd_vel as an output.
 
-    This checks remap targets only. The real proof is the T005 contract test (max_publishers on the live
-    graph) and the T014 graph check.
+    This checks remap targets only. The real proof is the contract test (max_publishers on the live
+    graph) and the live-graph checks.
     """
     mux = by_executable(entities, 'twist_mux')
     assert not is_conditional(mux)
@@ -179,8 +184,15 @@ def test_every_ia368ii_publisher_of_cmd_vel_is_remapped_away(entities):
 
 def test_wheel_bridge(entities):
     """D-06, 001-R13."""
-    node = by_executable(entities, 'my_robot_cmd_vel_node')
-    assert node.node_package == 'my_robot_pkg'
+    node = by_executable(entities, 'my_robot_cmd_vel_node', 'my_robot_pkg')
+    assert ('/cmd_vel', CMD_VEL) in remaps(node)
+    assert is_conditional(node)
+
+
+def test_vacuum_wheel_bridge(entities):
+    """D-27, 001-R23: the same-name replacement of vacuum_sim_bridge, remapped to the mux output like the stock one."""
+    node = by_executable(entities, 'my_robot_cmd_vel_node', 'vacuum_sim_bridge')
+    assert name_of(node) == name_of(by_executable(entities, 'my_robot_cmd_vel_node', 'my_robot_pkg'))
     assert ('/cmd_vel', CMD_VEL) in remaps(node)
     assert is_conditional(node)
 
@@ -196,18 +208,108 @@ def test_teleop(entities):
 
 
 def test_launch_file_is_installed():
-    """setup.py installs launch/ and config/ (T013)."""
+    """setup.py installs launch/ and config/."""
     source = (PKG / 'setup.py').read_text()
     assert "'launch'" in source and "'config'" in source
     assert "launch/*.py" in source and "config/*.yaml" in source
 
 
-@pytest.mark.parametrize('ia368ii,bridge,expected', [
-    ('true', 'true', True), ('true', 'false', False), ('false', 'true', False), ('false', 'false', False)])
-def test_wheel_bridge_condition(entities, ia368ii, bridge, expected):
-    """001-R13: the bridge starts only when with_ia368ii and with_wheel_bridge are both true."""
+@pytest.mark.parametrize('ia368ii,bridge,impl,stock,vacuum', [
+    ('true', 'true', 'stock', True, False), ('true', 'false', 'stock', False, False),
+    ('false', 'true', 'stock', False, False), ('false', 'false', 'stock', False, False),
+    ('true', 'true', 'vacuum', False, True), ('false', 'true', 'vacuum', False, True),
+    ('true', 'false', 'vacuum', False, False)])
+def test_wheel_bridge_condition(entities, ia368ii, bridge, impl, stock, vacuum):
+    """001-R13, D-27: the stock bridge starts only when with_ia368ii and with_wheel_bridge are true and wheel_bridge is
+    stock; ours when with_wheel_bridge is true and wheel_bridge is vacuum. Never both."""
     context = LaunchContext()
     context.launch_configurations['with_ia368ii'] = ia368ii
     context.launch_configurations['with_wheel_bridge'] = bridge
-    condition = by_executable(entities, 'my_robot_cmd_vel_node').condition
-    assert condition.evaluate(context) is expected
+    context.launch_configurations['wheel_bridge'] = impl
+    assert by_executable(entities, 'my_robot_cmd_vel_node', 'my_robot_pkg').condition.evaluate(context) is stock
+    assert by_executable(entities, 'my_robot_cmd_vel_node', 'vacuum_sim_bridge').condition.evaluate(context) is vacuum
+
+
+def evaluate(condition, **arguments):
+    from launch.actions import SetLaunchConfiguration
+    context = LaunchContext()
+    for key, value in arguments.items():
+        SetLaunchConfiguration(key, value).visit(context)
+    return condition.evaluate(context)
+
+
+def declared_default(entities, name):
+    return next(e for e in entities if isinstance(e, DeclareLaunchArgument) and e.name == name).default_value
+
+
+def test_map_tf_default_false_and_included_behind_the_flag(entities):
+    """map -> my_robot_odom is opt-in (existing graphs are unchanged)."""
+    from launch.actions import IncludeLaunchDescription
+    assert text(declared_default(entities, 'map_tf')) == 'false'
+    assert text(declared_default(entities, 'map_source')) == 'static'
+    include = next(e for e in entities if isinstance(e, IncludeLaunchDescription)
+                   and any(k == 'map_source' for k, _ in e.launch_arguments))
+    assert evaluate(include.condition, map_tf='true') is True
+    assert evaluate(include.condition, map_tf='false') is False
+
+
+# ---- real_nodes (001-R01, 005-R28, 005-R33): the real escape_server and stuck_detector in place of the stubs
+def _context(**configs):
+    context = LaunchContext()
+    context.launch_configurations.update({'real_coverage': 'false', 'real_nodes': 'false', 'sim_slowdown': '1.0',
+                                          'with_sequencer': 'false', **configs})
+    return context
+
+
+def _includes(entities, fragment):
+    from launch.actions import IncludeLaunchDescription
+    return [e for e in entities if isinstance(e, IncludeLaunchDescription)
+            and fragment in text(e._IncludeLaunchDescription__launch_description_source.location)]
+
+
+def test_001_R01_real_nodes_is_declared_and_off_by_default(entities):
+    declared = {e.name: text(e.default_value) for e in entities if isinstance(e, DeclareLaunchArgument)}
+    assert declared['real_nodes'] == 'false'
+
+
+@pytest.mark.parametrize('real_nodes,real_coverage,stub_runs,real_runs', [
+    ('false', 'false', True, False),
+    ('true', 'false', False, True),
+    ('false', 'true', True, False),
+    ('true', 'true', False, True)])
+def test_005_R33_real_nodes_swaps_exactly_one_variant_of_escape_and_stuck(
+        entities, real_nodes, real_coverage, stub_runs, real_runs):
+    context = _context(real_nodes=real_nodes, real_coverage=real_coverage)
+    for executable in ('escape_server', 'stuck_detector'):
+        stub = by_executable(entities, executable, 'vacuum_stubs')
+        assert stub.condition.evaluate(context) is stub_runs, executable
+    (include,) = _includes(entities, 'stuck_escape.launch.py')
+    assert include.condition.evaluate(context) is real_runs
+    args = {text(k, context): text(v, context) for k, v in include.launch_arguments}
+    assert args['autostart'].lower() == 'false'      # lifecycle_manager_core / the sequencer start them
+
+
+@pytest.mark.parametrize('real_nodes,real_coverage,real_runs', [
+    ('false', 'false', False), ('true', 'false', True), ('false', 'true', True), ('true', 'true', True)])
+def test_005_R35_real_nodes_implies_real_coverage(entities, real_nodes, real_coverage, real_runs):
+    context = _context(real_nodes=real_nodes, real_coverage=real_coverage)
+    stub = by_executable(entities, 'coverage_server', 'vacuum_stubs')
+    (include,) = _includes(entities, 'coverage.launch.py')
+    assert include.condition.evaluate(context) is real_runs
+    assert stub.condition.evaluate(context) is (not real_runs)
+
+
+def test_001_R12_stubs_and_real_nodes_share_the_names_the_core_manager_lists(entities):
+    """The manager list is the same for both variants, so the real launch must use the stub names."""
+    from ament_index_python.packages import get_package_share_directory
+    spec = importlib.util.spec_from_file_location(
+        'stuck_escape', pathlib.Path(get_package_share_directory('vacuum_coverage')) / 'launch'
+        / 'stuck_escape.launch.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    real = {name_of(a) for a in module.generate_launch_description().entities
+            if type(a).__name__ == 'LifecycleNode'}
+    stubs = {name_of(by_executable(entities, e, 'vacuum_stubs')) for e in ('escape_server', 'stuck_detector')}
+    listed = set(yaml.safe_load(CORE_CONFIG.read_text())['lifecycle_manager_core']['ros__parameters']['node_names'])
+    assert real == stubs == {'escape_server', 'stuck_detector'}
+    assert stubs <= listed

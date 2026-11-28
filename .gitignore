@@ -22,3 +22,16 @@ docs/diagrams/archify/*.json
 deploy/measurements/**/*.log
 deploy/measurements/**/*.csv
 **/local-logs/
+
+# Model weights and rosbags are never committed (supplied by volume at run time; bags are local measurement output)
+*.pt
+*.onnx
+*.mcap
+*.db3
+.tf-render/
+
+# Chaos run output (rosbags, kills.csv, reports): local only
+tools/chaos/local-logs/
+
+# Coverage data
+.coverage

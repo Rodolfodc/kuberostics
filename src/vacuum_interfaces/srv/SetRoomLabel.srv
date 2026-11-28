@@ -1,0 +1,5 @@
+string id           # Room.id
+string label
+---
+bool success        # false for an unknown id (003-R23)
+string message
