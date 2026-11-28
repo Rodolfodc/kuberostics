@@ -76,6 +76,7 @@ outside (`map_tf:=true` on `skeleton.launch.py`, or `map_tf.launch.py`, provides
 break at run time would reset Nav2 while the sequencer still says ALL_ACTIVE, and a 4 s bond can break spuriously on a
 loaded runner or the slow simulator. A dead Nav2 node is safe anyway (no goal; the mux input times out).
 `real_coverage:=true` swaps the coverage stub for the real `coverage_server` (`autostart` false, the core manager starts it).
+`real_nodes:=true` also swaps the `escape_server` and `stuck_detector` stubs for the real ones of `vacuum_coverage` (`stuck_escape.launch.py`, `autostart` false, same node names) and implies `real_coverage`.
 
 #### Slow simulator: `sim_slowdown`
 

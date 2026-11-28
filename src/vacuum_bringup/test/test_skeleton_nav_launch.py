@@ -82,7 +82,7 @@ def test_005_R35_real_coverage_replaces_the_stub_and_is_off_by_default(entities)
     args, _ = args_of(include)
     assert args['autostart'].lower() == 'false'         # lifecycle_manager_core starts it
     context = LaunchContext()
-    context.launch_configurations['real_coverage'] = 'false'
+    context.launch_configurations.update({'real_coverage': 'false', 'real_nodes': 'false'})
     assert include.condition.evaluate(context) is False
     from launch_ros.actions import Node
     stub = [e for e in entities if isinstance(e, Node) and e.node_executable == 'coverage_server']

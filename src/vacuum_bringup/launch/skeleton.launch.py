@@ -2,7 +2,7 @@
 
     ros2 launch vacuum_bringup skeleton.launch.py [with_ia368ii:=false] [with_wheel_bridge:=false]
                                                   [with_teleop:=false] [with_sequencer:=true]
-                                                  [nav:=true] [real_coverage:=true] [sim_slowdown:=11]
+                                                  [nav:=true] [real_coverage:=true] [real_nodes:=true] [sim_slowdown:=11]
                                                   [wheel_bridge:=vacuum] [map_tf:=true] [map_source:=static]
 
 Blocks, each built by its own function:
@@ -87,6 +87,9 @@ def launch_arguments():
                               description='Source of map -> my_robot_odom when map_tf is true (slam: not integrated)'),
         DeclareLaunchArgument('real_coverage', default_value='false',
                               description='Run the real coverage_server of vacuum_coverage instead of the stub'),
+        DeclareLaunchArgument('real_nodes', default_value='false',
+                              description='Run the real escape_server and stuck_detector of vacuum_coverage instead '
+                                          'of the stubs (same node names); implies real_coverage'),
         DeclareLaunchArgument('sim_slowdown', default_value='1.0',
                               description='Factor > 0 forwarded to nav and coverage launches: scales their '
                                           'wall-clock timeouts for a slow simulator (1.0 = real time)'),
@@ -109,9 +112,16 @@ def ia368ii_nodes(condition):
     return nodes
 
 
-def core_nodes(stub_coverage):
+STUB_CONDITION = {'coverage_server': 'coverage', 'escape_server': 'nodes', 'stuck_detector': 'nodes'}
+
+
+def core_nodes(stub_coverage, stub_nodes):
+    """Our core nodes. Stubs of coverage_server (real_coverage or real_nodes) and of escape_server and
+    stuck_detector (real_nodes) run only when their real replacement does not; the node names, and so
+    config/lifecycle_core.yaml, are the same for both variants."""
+    conditions = {'coverage': stub_coverage, 'nodes': stub_nodes}
     nodes = [Node(package=package, executable=executable, name=executable, output='screen',
-                  condition=stub_coverage if executable == 'coverage_server' else None)
+                  condition=conditions.get(STUB_CONDITION.get(executable)))
              for package, executable in CORE_NODES]
     nodes.append(Node(
         package='nav2_lifecycle_manager', executable='lifecycle_manager', name='lifecycle_manager_core',
@@ -165,6 +175,15 @@ def coverage_include(condition):
                                                             'coverage.launch.py'])),
         launch_arguments={'autostart': 'false', 'sim_slowdown': LaunchConfiguration('sim_slowdown')}.items(),
         condition=condition)
+
+
+def stuck_escape_include(condition):
+    """The real stuck_detector and escape_server in place of the stubs (same node names, so
+    lifecycle_manager_core, or the sequencer through it, starts them: autostart false)."""
+    return IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare('vacuum_coverage'), 'launch',
+                                                            'stuck_escape.launch.py'])),
+        launch_arguments={'autostart': 'false'}.items(), condition=condition)
 
 
 def map_tf_include(condition):
@@ -221,15 +240,23 @@ def generate_launch_description():
         ["'", LaunchConfiguration('with_sequencer'), "' == 'true' and '", LaunchConfiguration('nav'), "' == 'true'"]))
     seq_no_nav = IfCondition(PythonExpression(
         ["'", LaunchConfiguration('with_sequencer'), "' == 'true' and '", LaunchConfiguration('nav'), "' != 'true'"]))
-    real_coverage = IfCondition(LaunchConfiguration('real_coverage'))
-    stub_coverage = UnlessCondition(LaunchConfiguration('real_coverage'))
+    # real_nodes implies real_coverage
+    real_coverage = IfCondition(PythonExpression(
+        ["'", LaunchConfiguration('real_coverage'), "' == 'true' or '", LaunchConfiguration('real_nodes'),
+         "' == 'true'"]))
+    stub_coverage = UnlessCondition(PythonExpression(
+        ["'", LaunchConfiguration('real_coverage'), "' == 'true' or '", LaunchConfiguration('real_nodes'),
+         "' == 'true'"]))
+    real_nodes = IfCondition(LaunchConfiguration('real_nodes'))
+    stub_nodes = UnlessCondition(LaunchConfiguration('real_nodes'))
     return LaunchDescription([
         *launch_arguments(),
         *ia368ii_nodes(with_ia368ii),
-        *core_nodes(stub_coverage),
+        *core_nodes(stub_coverage, stub_nodes),
         *sequencer_nodes(seq_and_nav, seq_no_nav),
         nav_include(with_nav),
         coverage_include(real_coverage),
+        stuck_escape_include(real_nodes),
         map_tf_include(IfCondition(LaunchConfiguration('map_tf'))),
         twist_mux_node(),
         wheel_bridge_node(with_bridge),

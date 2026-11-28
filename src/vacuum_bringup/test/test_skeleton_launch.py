@@ -149,9 +149,9 @@ def test_our_nodes_always_start(entities, package, executable):
     """001-R01, 001-R12: stop_guard in particular must never be optional (D-22)."""
     node = by_executable(entities, executable)
     assert node.node_package == package
-    if executable == 'coverage_server':
-        # the stub is replaced only by the real coverage_server (real_coverage:=true), never dropped
-        assert node.condition.__class__.__name__ == 'UnlessCondition'
+    if executable in ('coverage_server', 'escape_server', 'stuck_detector'):
+        # a stub is replaced only by the real node (real_coverage / real_nodes), never dropped
+        assert node.condition is not None
     else:
         assert not is_conditional(node)
 
@@ -251,3 +251,65 @@ def test_map_tf_default_false_and_included_behind_the_flag(entities):
                    and any(k == 'map_source' for k, _ in e.launch_arguments))
     assert evaluate(include.condition, map_tf='true') is True
     assert evaluate(include.condition, map_tf='false') is False
+
+
+# ---- real_nodes (001-R01, 005-R28, 005-R33): the real escape_server and stuck_detector in place of the stubs
+def _context(**configs):
+    context = LaunchContext()
+    context.launch_configurations.update({'real_coverage': 'false', 'real_nodes': 'false', 'sim_slowdown': '1.0',
+                                          'with_sequencer': 'false', **configs})
+    return context
+
+
+def _includes(entities, fragment):
+    from launch.actions import IncludeLaunchDescription
+    return [e for e in entities if isinstance(e, IncludeLaunchDescription)
+            and fragment in text(e._IncludeLaunchDescription__launch_description_source.location)]
+
+
+def test_001_R01_real_nodes_is_declared_and_off_by_default(entities):
+    declared = {e.name: text(e.default_value) for e in entities if isinstance(e, DeclareLaunchArgument)}
+    assert declared['real_nodes'] == 'false'
+
+
+@pytest.mark.parametrize('real_nodes,real_coverage,stub_runs,real_runs', [
+    ('false', 'false', True, False),
+    ('true', 'false', False, True),
+    ('false', 'true', True, False),
+    ('true', 'true', False, True)])
+def test_005_R33_real_nodes_swaps_exactly_one_variant_of_escape_and_stuck(
+        entities, real_nodes, real_coverage, stub_runs, real_runs):
+    context = _context(real_nodes=real_nodes, real_coverage=real_coverage)
+    for executable in ('escape_server', 'stuck_detector'):
+        stub = by_executable(entities, executable, 'vacuum_stubs')
+        assert stub.condition.evaluate(context) is stub_runs, executable
+    (include,) = _includes(entities, 'stuck_escape.launch.py')
+    assert include.condition.evaluate(context) is real_runs
+    args = {text(k, context): text(v, context) for k, v in include.launch_arguments}
+    assert args['autostart'].lower() == 'false'      # lifecycle_manager_core / the sequencer start them
+
+
+@pytest.mark.parametrize('real_nodes,real_coverage,real_runs', [
+    ('false', 'false', False), ('true', 'false', True), ('false', 'true', True), ('true', 'true', True)])
+def test_005_R35_real_nodes_implies_real_coverage(entities, real_nodes, real_coverage, real_runs):
+    context = _context(real_nodes=real_nodes, real_coverage=real_coverage)
+    stub = by_executable(entities, 'coverage_server', 'vacuum_stubs')
+    (include,) = _includes(entities, 'coverage.launch.py')
+    assert include.condition.evaluate(context) is real_runs
+    assert stub.condition.evaluate(context) is (not real_runs)
+
+
+def test_001_R12_stubs_and_real_nodes_share_the_names_the_core_manager_lists(entities):
+    """The manager list is the same for both variants, so the real launch must use the stub names."""
+    from ament_index_python.packages import get_package_share_directory
+    spec = importlib.util.spec_from_file_location(
+        'stuck_escape', pathlib.Path(get_package_share_directory('vacuum_coverage')) / 'launch'
+        / 'stuck_escape.launch.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    real = {text(a.node_name) for a in module.generate_launch_description().entities
+            if type(a).__name__ == 'LifecycleNode'}
+    stubs = {name_of(by_executable(entities, e, 'vacuum_stubs')) for e in ('escape_server', 'stuck_detector')}
+    listed = set(yaml.safe_load(CORE_CONFIG.read_text())['lifecycle_manager_core']['ros__parameters']['node_names'])
+    assert real == stubs == {'escape_server', 'stuck_detector'}
+    assert stubs <= listed
